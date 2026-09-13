@@ -5,6 +5,12 @@ on:
     # GitHub Actions uses UTC. This runs every five minutes.
     - cron: "*/5 * * * *"
   workflow_dispatch:
+    inputs:
+      test_telegram:
+        description: "Send one Telegram test message"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -40,6 +46,39 @@ jobs:
 
       - name: Install dependencies
         run: python -m pip install -r requirements.txt
+
+      - name: Send one Telegram test message
+        if: ${{ inputs.test_telegram == true }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import urllib.parse
+          import urllib.request
+
+          token = os.environ["TELEGRAM_BOT_TOKEN"]
+          chat_id = os.environ["TELEGRAM_CHAT_ID"]
+          body = urllib.parse.urlencode(
+              {
+                  "chat_id": chat_id,
+                  "text": "✅ EdgeX監視のテスト通知です。Telegram送信は正常です。",
+              }
+          ).encode("utf-8")
+          request = urllib.request.Request(
+              f"https://api.telegram.org/bot{token}/sendMessage",
+              data=body,
+              headers={"Content-Type": "application/x-www-form-urlencoded"},
+              method="POST",
+          )
+          try:
+              with urllib.request.urlopen(request, timeout=20) as response:
+                  payload = json.loads(response.read().decode("utf-8"))
+          except Exception as exc:
+              raise SystemExit(f"Telegram test failed: {type(exc).__name__}") from exc
+          if not isinstance(payload, dict) or not payload.get("ok"):
+              raise SystemExit("Telegram test failed: API returned an error")
+          print("Telegram test message sent")
+          PY
 
       - name: Scan all tradable EdgeX contracts
         run: python app.py --once --once-timeout 90 --log-level INFO
