@@ -1,0 +1,29 @@
+{
+  "alerts": {
+    "30000004:MINUTE_5:1789307400000:up": {
+      "candle_time_ms": 1789307400000,
+      "contract_id": "30000004",
+      "contract_name": "EDGEUSDC",
+      "direction": "up",
+      "interval": "MINUTE_5",
+      "sent_at_ms": 1789307898397
+    },
+    "30000041:MINUTE_5:1789307400000:up": {
+      "candle_time_ms": 1789307400000,
+      "contract_id": "30000041",
+      "contract_name": "HYPEUSDC",
+      "direction": "up",
+      "interval": "MINUTE_5",
+      "sent_at_ms": 1789307899061
+    },
+    "30000052:MINUTE_5:1789307400000:up": {
+      "candle_time_ms": 1789307400000,
+      "contract_id": "30000052",
+      "contract_name": "ZECUSDC",
+      "direction": "up",
+      "interval": "MINUTE_5",
+      "sent_at_ms": 1789307899655
+    }
+  },
+  "processed_candles": {}
+}
