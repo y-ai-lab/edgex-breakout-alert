@@ -82,6 +82,8 @@ TELEGRAM_CHAT_ID = 通知先のchat_id
 3. `Actions` タブで `EdgeX breakout scan` を選び、`Run workflow` で手動実行して確認する
 4. 問題がなければ、以後は5分ごとの自動実行に任せる
 
+Telegram接続だけを確認したい場合は、手動実行フォームの `test_telegram` を `true` にします。この場合だけテスト通知を1通送信し、その後に通常のスキャンを実行します。
+
 ワークフローはTelegram認証情報をSecretsから読み込みます。認証情報をソースコード、`.env`、ログへ書き込みません。重複通知防止用の `data/edgex_alert_state.json` だけを必要時にリポジトリへ保存します。
 
 Publicリポジトリの標準GitHub-hosted runnerだけを使うため、VPS・有料API・有料runnerは不要です。GitHub Actionsの実行時刻は混雑状況によって遅れることがあります。
