@@ -1,0 +1,59 @@
+name: EdgeX breakout scan
+
+on:
+  schedule:
+    # GitHub Actions uses UTC. This runs every five minutes.
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: edgex-breakout-scan
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      DRY_RUN: "false"
+      STATE_BACKEND: json
+      STATE_FILE: data/edgex_alert_state.json
+      EDGE_X_INTERVALS: MINUTE_5
+      EDGE_X_INCLUDE_HIDDEN: "true"
+      TIMEZONE: Asia/Tokyo
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Scan all tradable EdgeX contracts
+        run: python app.py --once --once-timeout 90 --log-level INFO
+
+      - name: Commit notification deduplication state
+        if: ${{ success() }}
+        run: |
+          if [ -z "$(git status --porcelain -- data/edgex_alert_state.json)" ]; then
+            echo "No state change"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/edgex_alert_state.json
+          git commit -m "chore: update EdgeX alert state"
+          git pull --rebase origin main
+          git push
