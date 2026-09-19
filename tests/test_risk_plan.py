@@ -113,6 +113,7 @@ class RiskPlanTests(unittest.TestCase):
         self.assertAlmostEqual(plan.size, 10.0)
         self.assertAlmostEqual(plan.max_loss, 50.0)
         self.assertAlmostEqual(plan.actual_risk_fraction, 0.05)
+        self.assertLessEqual(plan.max_loss, plan.risk_budget)
         self.assertAlmostEqual(plan.tp_1r, 105.0)
         self.assertAlmostEqual(plan.tp_target, 110.0)
         self.assertFalse(plan.margin_capped)
