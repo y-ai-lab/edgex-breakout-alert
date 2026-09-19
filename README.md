@@ -73,16 +73,13 @@ EdgeXのPrivate REST APIを読み取り専用で使える場合、ブレイク�
 
 初期設定では、Entryはシグナル確定足の終値、SLは上抜けならシグナル足の安値、下抜けならシグナル足の高値です。SL到達時の損失が口座Equityの5%以下になるよう枚数を算出し、1Rと2Rの価格・損益もTelegramへ表示します。証拠金や最大注文枚数で縮小された場合は、実際のリスク率も併記します。
 
-口座資産はEdgeX V2の `/api/v2/private/account/getAccountAsset` から取得します。GitHub Actionsでは次の4つをRepository Secretsへ登録します。
+APIキーがない場合は、EdgeX画面に表示される現在の口座資産をGitHub ActionsのRepository Secret `EDGEX_EQUITY_USDC` に入れます。これだけで「Equity × 5%」のSLリスク基準から枚数を計算できます。
 
-```text
-EDGEX_ACCOUNT_ID
-EDGEX_API_KEY
-EDGEX_API_PASSPHRASE
-EDGEX_API_SECRET
-```
+任意で `EDGEX_AVAILABLE_BALANCE_USDC` と `EDGEX_LEVERAGE` も設定すると、証拠金上限を考慮して枚数を縮小できます。未設定の場合は証拠金上限の自動判定はせず、5%リスク基準の理論枚数を通知します。
 
-これらが未設定または取得失敗でも、従来のブレイクアウト通知は継続し、リスク指示だけを省略します。取引用Private Key / Signer Keyはこの機能では使用しません。
+Private REST APIの認証情報を持っている場合のみ、`EDGEX_ACCOUNT_ID` / `EDGEX_API_KEY` / `EDGEX_API_PASSPHRASE` / `EDGEX_API_SECRET` を使った自動取得も利用できます。手入力の `EDGEX_EQUITY_USDC` がある場合はそちらを優先します。
+
+いずれの方式でも自動発注は行いません。
 
 調整値は `.env.example` の `EDGE_X_RISK_PER_TRADE`、`EDGE_X_STOP_METHOD`、`EDGE_X_TP_R_MULTIPLE` で変更できます。
 
