@@ -59,6 +59,33 @@ Telegram未設定で動作確認するときは、次のようにします。通
 python app.py --dry-run --log-level DEBUG
 ```
 
+## 5%リスクのエントリー指示
+
+EdgeXのPrivate REST APIを読み取り専用で使える場合、ブレイク通知へ口座資産ベースのエントリー指示を追加します。自動発注は行いません。
+
+計算は次の順です。
+
+```text
+リスク予算 = EdgeX TotalEquity × 5%
+理論枚数 = リスク予算 ÷ |Entry - SL|
+最終枚数 = min(理論枚数, 利用可能証拠金×現在レバレッジ÷Entry, EdgeX最大注文枚数)
+```
+
+初期設定では、Entryはシグナル確定足の終値、SLは上抜けならシグナル足の安値、下抜けならシグナル足の高値です。SL到達時の損失が口座Equityの5%以下になるよう枚数を算出し、1Rと2Rの価格・損益もTelegramへ表示します。証拠金や最大注文枚数で縮小された場合は、実際のリスク率も併記します。
+
+口座資産はEdgeX V2の `/api/v2/private/account/getAccountAsset` から取得します。GitHub Actionsでは次の4つをRepository Secretsへ登録します。
+
+```text
+EDGEX_ACCOUNT_ID
+EDGEX_API_KEY
+EDGEX_API_PASSPHRASE
+EDGEX_API_SECRET
+```
+
+これらが未設定または取得失敗でも、従来のブレイクアウト通知は継続し、リスク指示だけを省略します。取引用Private Key / Signer Keyはこの機能では使用しません。
+
+調整値は `.env.example` の `EDGE_X_RISK_PER_TRADE`、`EDGE_X_STOP_METHOD`、`EDGE_X_TP_R_MULTIPLE` で変更できます。
+
 ## Telegramの準備
 
 1. Telegramで `@BotFather` を開き、`/newbot` でBotを作成する
