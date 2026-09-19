@@ -9,8 +9,12 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import base64
+import hashlib
+import hmac
 import json
 import logging
+import math
 import os
 import signal
 import sqlite3
@@ -124,6 +128,27 @@ def _format_usd(value: float | None) -> str:
     return f"${value:,.4f}"
 
 
+def _floor_to_step(value: float, step: float | None) -> float:
+    if value <= 0:
+        return 0.0
+    if step is None or step <= 0:
+        return value
+    return math.floor((value + step * 1e-9) / step) * step
+
+
+def _edgex_hmac_signature(
+    api_secret: str,
+    timestamp: str,
+    method: str,
+    request_uri: str,
+    body: str,
+) -> str:
+    """Mirror the official EdgeX V2 SDK HMAC signing flow."""
+    message = f"{timestamp}{method.upper()}{request_uri}{body}"
+    secret_bytes = base64.b64encode(api_secret.encode("utf-8"))
+    return hmac.new(secret_bytes, message.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
 def _interval_label(interval: str) -> str:
     labels = {
         "MINUTE_1": "1分",
@@ -166,6 +191,25 @@ class Settings:
     telegram_token: str | None
     telegram_chat_id: str | None
     dry_run: bool
+    account_id: str | None
+    api_key: str | None
+    api_passphrase: str | None
+    api_secret: str | None
+    collateral_coin_id: str
+    risk_per_trade: float
+    stop_method: str
+    tp_r_multiple: float
+
+    @property
+    def account_risk_enabled(self) -> bool:
+        return all(
+            (
+                self.account_id,
+                self.api_key,
+                self.api_passphrase,
+                self.api_secret,
+            )
+        )
 
     @classmethod
     def from_env(cls, *, dry_run_override: bool | None = None) -> "Settings":
@@ -203,6 +247,21 @@ class Settings:
         if state_backend not in {"sqlite", "json"}:
             raise ValueError("STATE_BACKEND must be sqlite or json")
         state_file = Path(os.getenv("STATE_FILE", "data/edgex_alert_state.json"))
+
+        risk_per_trade = _env_float("EDGE_X_RISK_PER_TRADE", 0.05)
+        if not 0 < risk_per_trade < 1:
+            raise ValueError("EDGE_X_RISK_PER_TRADE must be greater than 0 and less than 1")
+        stop_method = os.getenv("EDGE_X_STOP_METHOD", "signal_candle").strip().lower()
+        if stop_method not in {"signal_candle", "breakout_level"}:
+            raise ValueError("EDGE_X_STOP_METHOD must be signal_candle or breakout_level")
+        tp_r_multiple = _env_float("EDGE_X_TP_R_MULTIPLE", 2.0)
+        if tp_r_multiple <= 0:
+            raise ValueError("EDGE_X_TP_R_MULTIPLE must be greater than 0")
+
+        def optional_env(name: str) -> str | None:
+            value = os.getenv(name)
+            return value.strip() if value and value.strip() else None
+
         return cls(
             api_base_url=os.getenv(
                 "EDGE_X_API_BASE_URL", "https://edgex-prod-v2.edgex.exchange"
@@ -229,6 +288,14 @@ class Settings:
             telegram_token=token,
             telegram_chat_id=chat_id,
             dry_run=dry_run,
+            account_id=optional_env("EDGEX_ACCOUNT_ID"),
+            api_key=optional_env("EDGEX_API_KEY"),
+            api_passphrase=optional_env("EDGEX_API_PASSPHRASE"),
+            api_secret=optional_env("EDGEX_API_SECRET"),
+            collateral_coin_id=os.getenv("EDGE_X_COLLATERAL_COIN_ID", "1000").strip() or "1000",
+            risk_per_trade=risk_per_trade,
+            stop_method=stop_method,
+            tp_r_multiple=tp_r_multiple,
         )
 
 
@@ -239,6 +306,11 @@ class Contract:
     quote_coin: str
     enable_trade: bool
     enable_display: bool
+    step_size: float | None = None
+    min_order_size: float | None = None
+    max_order_size: float | None = None
+    max_long_leverage: float | None = None
+    max_short_leverage: float | None = None
 
 
 @dataclass(frozen=True)
@@ -298,6 +370,29 @@ class Candle:
             value=value,
             trades=trades,
         )
+
+
+@dataclass(frozen=True)
+class RiskPlan:
+    equity: float
+    available_balance: float | None
+    risk_fraction: float
+    risk_budget: float
+    entry_price: float
+    stop_loss: float
+    size: float
+    theoretical_size: float
+    notional: float
+    max_loss: float
+    actual_risk_fraction: float
+    tp_1r: float
+    tp_target: float
+    profit_1r: float
+    profit_target: float
+    tp_r_multiple: float
+    leverage: float | None
+    margin_capped: bool
+    size_capped: bool
 
 
 @dataclass(frozen=True)
@@ -370,10 +465,206 @@ class EdgeXClient:
                 quote_coin=coins.get(quote_coin_id, quote_coin_id or "USDC"),
                 enable_trade=True,
                 enable_display=_boolish(item.get("enableDisplay"), True),
+                step_size=_number(item.get("stepSize")),
+                min_order_size=_number(item.get("minOrderSize")),
+                max_order_size=_number(item.get("maxOrderSize")),
+                max_long_leverage=_number(item.get("maxLongLeverage")),
+                max_short_leverage=_number(item.get("maxShortLeverage")),
             )
         if not contracts:
             raise RuntimeError("EdgeX metadata returned no tradable contracts")
         return contracts
+
+    def _get_private_json_sync(
+        self, path: str, params: dict[str, str]
+    ) -> dict[str, Any]:
+        if not self.settings.account_risk_enabled:
+            raise RuntimeError("EdgeX private API credentials are not configured")
+
+        sorted_pairs = sorted(params.items())
+        body_str = "&".join(f"{key}={value}" for key, value in sorted_pairs)
+        query = urllib.parse.urlencode(sorted_pairs)
+        timestamp = str(int(time.time() * 1000))
+        signature = _edgex_hmac_signature(
+            self.settings.api_secret or "",
+            timestamp,
+            "GET",
+            path,
+            body_str,
+        )
+        request = urllib.request.Request(
+            f"{self.settings.api_base_url}{path}?{query}",
+            headers={
+                "Accept": "application/json",
+                "User-Agent": "edgex-breakout-alert/1.0",
+                "X-edgeX-Api-Key": self.settings.api_key or "",
+                "X-edgeX-Passphrase": self.settings.api_passphrase or "",
+                "X-edgeX-Signature": signature,
+                "X-edgeX-Timestamp": timestamp,
+            },
+            method="GET",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                body = response.read()
+        except urllib.error.URLError as exc:
+            raise RuntimeError(f"EdgeX private API request failed: {exc}") from exc
+        try:
+            payload = json.loads(body.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise RuntimeError("EdgeX private API returned invalid JSON") from exc
+        if not isinstance(payload, dict) or payload.get("code") != "SUCCESS":
+            message = payload.get("msg") if isinstance(payload, dict) else payload
+            raise RuntimeError(f"EdgeX private API error: {message}")
+        return payload
+
+    async def get_account_asset(self) -> dict[str, Any]:
+        if not self.settings.account_id:
+            raise RuntimeError("EDGEX_ACCOUNT_ID is not configured")
+        return await asyncio.to_thread(
+            self._get_private_json_sync,
+            "/api/v2/private/account/getAccountAsset",
+            {"accountId": self.settings.account_id},
+        )
+
+
+def _account_asset_metrics(
+    payload: dict[str, Any],
+    collateral_coin_id: str,
+) -> tuple[float, float | None, dict[str, Any]]:
+    data = payload.get("data")
+    if not isinstance(data, dict):
+        raise RuntimeError("EdgeX account asset response has no data object")
+
+    models = data.get("collateralAssetModelList") or []
+    if not isinstance(models, list):
+        models = []
+    chosen: dict[str, Any] | None = None
+    for item in models:
+        if isinstance(item, dict) and str(item.get("coinId", "")) == collateral_coin_id:
+            chosen = item
+            break
+    if chosen is None:
+        chosen = next(
+            (
+                item
+                for item in models
+                if isinstance(item, dict) and _number(item.get("totalEquity")) is not None
+            ),
+            None,
+        )
+    if chosen is None:
+        raise RuntimeError("EdgeX account asset response has no collateral equity model")
+
+    equity = _number(chosen.get("totalEquity"))
+    available = _number(chosen.get("availableBalance"))
+    if equity is None or equity <= 0:
+        raise RuntimeError("EdgeX totalEquity is missing or not positive")
+    account = data.get("account") if isinstance(data.get("account"), dict) else {}
+    return equity, available, account
+
+
+def _account_leverage(
+    account: dict[str, Any],
+    contract: Contract,
+    direction: str,
+) -> float | None:
+    per_contract = account.get("contractIdToTradeSetting")
+    setting: dict[str, Any] | None = None
+    if isinstance(per_contract, dict):
+        candidate = per_contract.get(contract.contract_id)
+        if isinstance(candidate, dict):
+            setting = candidate
+    if setting is None and isinstance(account.get("defaultTradeSetting"), dict):
+        setting = account["defaultTradeSetting"]
+
+    leverage = _number(setting.get("leverage")) if setting else None
+    market_max = (
+        contract.max_long_leverage if direction == "up" else contract.max_short_leverage
+    )
+    if leverage is not None and leverage <= 0:
+        leverage = None
+    if leverage is not None and market_max is not None and market_max > 0:
+        leverage = min(leverage, market_max)
+    return leverage
+
+
+def build_risk_plan(
+    signal: Signal,
+    account_asset: dict[str, Any],
+    settings: Settings,
+) -> RiskPlan:
+    equity, available_balance, account = _account_asset_metrics(
+        account_asset, settings.collateral_coin_id
+    )
+    entry = signal.candle.close
+    if settings.stop_method == "breakout_level":
+        stop = signal.breakout_level
+    else:
+        stop = signal.candle.low if signal.direction == "up" else signal.candle.high
+
+    stop_distance = abs(entry - stop)
+    if entry <= 0 or stop_distance <= 0:
+        raise RuntimeError("Signal has no usable stop distance for risk sizing")
+
+    risk_budget = equity * settings.risk_per_trade
+    theoretical_size = risk_budget / stop_distance
+    size = theoretical_size
+    margin_capped = False
+    size_capped = False
+
+    leverage = _account_leverage(account, signal.contract, signal.direction)
+    if available_balance is not None and available_balance > 0 and leverage is not None:
+        margin_size = available_balance * leverage / entry
+        if margin_size < size:
+            size = margin_size
+            margin_capped = True
+
+    if signal.contract.max_order_size is not None and signal.contract.max_order_size > 0:
+        if signal.contract.max_order_size < size:
+            size = signal.contract.max_order_size
+            size_capped = True
+
+    size = _floor_to_step(size, signal.contract.step_size)
+    if size <= 0:
+        raise RuntimeError("Calculated EdgeX order size rounded to zero")
+    if (
+        signal.contract.min_order_size is not None
+        and signal.contract.min_order_size > 0
+        and size < signal.contract.min_order_size
+    ):
+        raise RuntimeError(
+            f"Calculated size {size} is below EdgeX minimum {signal.contract.min_order_size}"
+        )
+
+    notional = size * entry
+    max_loss = size * stop_distance
+    actual_risk_fraction = max_loss / equity
+    direction_sign = 1.0 if signal.direction == "up" else -1.0
+    tp_1r = entry + direction_sign * stop_distance
+    tp_target = entry + direction_sign * stop_distance * settings.tp_r_multiple
+
+    return RiskPlan(
+        equity=equity,
+        available_balance=available_balance,
+        risk_fraction=settings.risk_per_trade,
+        risk_budget=risk_budget,
+        entry_price=entry,
+        stop_loss=stop,
+        size=size,
+        theoretical_size=theoretical_size,
+        notional=notional,
+        max_loss=max_loss,
+        actual_risk_fraction=actual_risk_fraction,
+        tp_1r=tp_1r,
+        tp_target=tp_target,
+        profit_1r=max_loss,
+        profit_target=max_loss * settings.tp_r_multiple,
+        tp_r_multiple=settings.tp_r_multiple,
+        leverage=leverage,
+        margin_capped=margin_capped,
+        size_capped=size_capped,
+    )
 
 
 class StateStore:
@@ -596,7 +887,12 @@ class TelegramNotifier:
         await asyncio.to_thread(self._send_sync, text)
 
 
-def format_signal(signal: Signal, timezone_name: str) -> str:
+def format_signal(
+    signal: Signal,
+    timezone_name: str,
+    risk_plan: RiskPlan | None = None,
+    risk_note: str | None = None,
+) -> str:
     try:
         tz = ZoneInfo(timezone_name)
     except Exception:
@@ -604,22 +900,51 @@ def format_signal(signal: Signal, timezone_name: str) -> str:
     timestamp = datetime.fromtimestamp(signal.candle.time_ms / 1000, tz=timezone.utc).astimezone(tz)
     direction_label = "上抜け" if signal.direction == "up" else "下抜け"
     sign = "+" if signal.breakout_pct >= 0 else ""
-    return "\n".join(
+    lines = [
+        "🚨 EdgeX 出来高ブレイクアウト",
+        f"銘柄: {signal.contract.contract_name}",
+        f"方向: {direction_label}",
+        f"時間足: {_interval_label(signal.interval)}足",
+        f"確定時刻: {timestamp:%Y-%m-%d %H:%M:%S} {timezone_name}",
+        f"終値: {_format_number(signal.candle.close)} {signal.contract.quote_coin}",
+        f"突破基準: {_format_number(signal.breakout_level)}",
+        f"突破幅: {sign}{signal.breakout_pct:.2f}%",
+        f"出来高: {_format_usd(signal.candle.value)}",
+        f"平均比: {signal.volume_ratio:.2f}倍（過去{signal.volume_lookback}本平均）",
+    ]
+    if risk_plan is not None:
+        lines.extend(
+            [
+                "",
+                "📐 5%リスク エントリー指示",
+                f"EdgeX Equity: {_format_usd(risk_plan.equity)}",
+                f"リスク予算: {_format_usd(risk_plan.risk_budget)} ({risk_plan.risk_fraction * 100:.1f}%)",
+                f"Entry目安: {_format_number(risk_plan.entry_price)}",
+                f"SL: {_format_number(risk_plan.stop_loss)}",
+                f"枚数: {_format_number(risk_plan.size)}",
+                f"想定Notional: {_format_usd(risk_plan.notional)}",
+                f"SL損失: -{_format_usd(risk_plan.max_loss)} ({risk_plan.actual_risk_fraction * 100:.2f}%)",
+                f"1R: {_format_number(risk_plan.tp_1r)} / +{_format_usd(risk_plan.profit_1r)}",
+                f"{risk_plan.tp_r_multiple:g}R: {_format_number(risk_plan.tp_target)} / +{_format_usd(risk_plan.profit_target)}",
+            ]
+        )
+        if risk_plan.margin_capped:
+            leverage_text = (
+                f"{risk_plan.leverage:g}x" if risk_plan.leverage is not None else "現在設定"
+            )
+            lines.append(f"証拠金上限で縮小: {leverage_text}")
+        if risk_plan.size_capped:
+            lines.append("EdgeX最大注文枚数で縮小")
+    elif risk_note:
+        lines.extend(["", f"📐 5%リスク指示: {risk_note}"])
+
+    lines.extend(
         [
-            "🚨 EdgeX 出来高ブレイクアウト",
-            f"銘柄: {signal.contract.contract_name}",
-            f"方向: {direction_label}",
-            f"時間足: {_interval_label(signal.interval)}足",
-            f"確定時刻: {timestamp:%Y-%m-%d %H:%M:%S} {timezone_name}",
-            f"終値: {_format_number(signal.candle.close)} {signal.contract.quote_coin}",
-            f"突破基準: {_format_number(signal.breakout_level)}",
-            f"突破幅: {sign}{signal.breakout_pct:.2f}%",
-            f"出来高: {_format_usd(signal.candle.value)}",
-            f"平均比: {signal.volume_ratio:.2f}倍（過去{signal.volume_lookback}本平均）",
             "通知のみ（自動発注なし）",
             "https://pro.edgex.exchange/",
         ]
     )
+    return "\n".join(lines)
 
 
 class BreakoutDetector:
@@ -707,6 +1032,9 @@ class BreakoutService:
         self.once_timeout_seconds = max(15.0, once_timeout_seconds)
         self.expected_snapshot_keys: set[tuple[str, str]] = set()
         self.snapshot_seen: set[tuple[str, str]] = set()
+        self._account_asset_loaded = False
+        self._account_asset: dict[str, Any] | None = None
+        self._account_asset_error: str | None = None
 
     async def close(self) -> None:
         self.store.close()
@@ -793,6 +1121,20 @@ class BreakoutService:
         if signal is not None:
             await self._send_signal(signal)
 
+    async def _get_account_asset_for_risk(self) -> dict[str, Any] | None:
+        if self._account_asset_loaded:
+            return self._account_asset
+        self._account_asset_loaded = True
+        if not self.settings.account_risk_enabled:
+            self._account_asset_error = "EdgeX口座APIのSecrets未設定"
+            return None
+        try:
+            self._account_asset = await self.client.get_account_asset()
+        except Exception as exc:
+            self._account_asset_error = "EdgeX口座資産を取得できませんでした"
+            LOGGER.warning("EdgeX account asset lookup failed: %s", exc)
+        return self._account_asset
+
     async def _send_signal(self, signal: Signal) -> None:
         if self.store.alert_exists(signal.key):
             return
@@ -805,7 +1147,22 @@ class BreakoutService:
                 if signal.candle.time_ms - last_alert < cooldown_ms:
                     LOGGER.info("Cooldown skipped: %s", signal.key)
                     return
-        message = format_signal(signal, self.settings.timezone_name)
+        account_asset = await self._get_account_asset_for_risk()
+        risk_plan: RiskPlan | None = None
+        risk_note = self._account_asset_error
+        if account_asset is not None:
+            try:
+                risk_plan = build_risk_plan(signal, account_asset, self.settings)
+            except Exception as exc:
+                risk_note = "5%リスク枚数を計算できませんでした"
+                LOGGER.warning("Risk plan calculation failed for %s: %s", signal.key, exc)
+
+        message = format_signal(
+            signal,
+            self.settings.timezone_name,
+            risk_plan=risk_plan,
+            risk_note=risk_note,
+        )
         await self.notifier.send(message)
         self.store.save_alert(signal, int(time.time() * 1000))
         LOGGER.info(
@@ -1021,12 +1378,14 @@ async def _async_main(args: argparse.Namespace) -> None:
         except (NotImplementedError, RuntimeError):
             pass
     LOGGER.info(
-        "Starting EdgeX breakout scanner: mode=%s intervals=%s lookback=%d volume_multiplier=%.2f min_breakout=%.2f%% dry_run=%s state=%s",
+        "Starting EdgeX breakout scanner: mode=%s intervals=%s lookback=%d volume_multiplier=%.2f min_breakout=%.2f%% risk=%.2f%% account_risk=%s dry_run=%s state=%s",
         "scheduled-once" if args.once else "continuous",
         ",".join(settings.intervals),
         settings.breakout_lookback,
         settings.volume_multiplier,
         settings.min_breakout_pct,
+        settings.risk_per_trade * 100,
+        settings.account_risk_enabled,
         settings.dry_run,
         settings.state_backend,
     )

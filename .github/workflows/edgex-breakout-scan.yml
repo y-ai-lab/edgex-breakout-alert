@@ -26,6 +26,13 @@ jobs:
     env:
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      EDGEX_ACCOUNT_ID: ${{ secrets.EDGEX_ACCOUNT_ID }}
+      EDGEX_API_KEY: ${{ secrets.EDGEX_API_KEY }}
+      EDGEX_API_PASSPHRASE: ${{ secrets.EDGEX_API_PASSPHRASE }}
+      EDGEX_API_SECRET: ${{ secrets.EDGEX_API_SECRET }}
+      EDGE_X_RISK_PER_TRADE: "0.05"
+      EDGE_X_STOP_METHOD: signal_candle
+      EDGE_X_TP_R_MULTIPLE: "2.0"
       DRY_RUN: "false"
       STATE_BACKEND: json
       STATE_FILE: data/edgex_alert_state.json
@@ -46,6 +53,9 @@ jobs:
 
       - name: Install dependencies
         run: python -m pip install -r requirements.txt
+
+      - name: Run unit tests
+        run: python -m unittest discover -s tests -v
 
       - name: Send one Telegram test message
         if: ${{ inputs.test_telegram == true }}
