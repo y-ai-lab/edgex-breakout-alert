@@ -26,6 +26,9 @@ jobs:
     env:
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      EDGEX_EQUITY_USDC: ${{ secrets.EDGEX_EQUITY_USDC }}
+      EDGEX_AVAILABLE_BALANCE_USDC: ${{ secrets.EDGEX_AVAILABLE_BALANCE_USDC }}
+      EDGEX_LEVERAGE: ${{ secrets.EDGEX_LEVERAGE }}
       EDGEX_ACCOUNT_ID: ${{ secrets.EDGEX_ACCOUNT_ID }}
       EDGEX_API_KEY: ${{ secrets.EDGEX_API_KEY }}
       EDGEX_API_PASSPHRASE: ${{ secrets.EDGEX_API_PASSPHRASE }}

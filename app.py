@@ -196,6 +196,9 @@ class Settings:
     api_passphrase: str | None
     api_secret: str | None
     collateral_coin_id: str
+    manual_equity_usdc: float | None
+    manual_available_balance_usdc: float | None
+    manual_leverage: float | None
     risk_per_trade: float
     stop_method: str
     tp_r_multiple: float
@@ -210,6 +213,10 @@ class Settings:
                 self.api_secret,
             )
         )
+
+    @property
+    def manual_risk_enabled(self) -> bool:
+        return self.manual_equity_usdc is not None and self.manual_equity_usdc > 0
 
     @classmethod
     def from_env(cls, *, dry_run_override: bool | None = None) -> "Settings":
@@ -258,6 +265,16 @@ class Settings:
         if tp_r_multiple <= 0:
             raise ValueError("EDGE_X_TP_R_MULTIPLE must be greater than 0")
 
+        manual_equity_usdc = _number(os.getenv("EDGEX_EQUITY_USDC"))
+        manual_available_balance_usdc = _number(os.getenv("EDGEX_AVAILABLE_BALANCE_USDC"))
+        manual_leverage = _number(os.getenv("EDGEX_LEVERAGE"))
+        if manual_equity_usdc is not None and manual_equity_usdc <= 0:
+            raise ValueError("EDGEX_EQUITY_USDC must be greater than 0")
+        if manual_available_balance_usdc is not None and manual_available_balance_usdc <= 0:
+            raise ValueError("EDGEX_AVAILABLE_BALANCE_USDC must be greater than 0")
+        if manual_leverage is not None and manual_leverage <= 0:
+            raise ValueError("EDGEX_LEVERAGE must be greater than 0")
+
         def optional_env(name: str) -> str | None:
             value = os.getenv(name)
             return value.strip() if value and value.strip() else None
@@ -293,6 +310,9 @@ class Settings:
             api_passphrase=optional_env("EDGEX_API_PASSPHRASE"),
             api_secret=optional_env("EDGEX_API_SECRET"),
             collateral_coin_id=os.getenv("EDGE_X_COLLATERAL_COIN_ID", "1000").strip() or "1000",
+            manual_equity_usdc=manual_equity_usdc,
+            manual_available_balance_usdc=manual_available_balance_usdc,
+            manual_leverage=manual_leverage,
             risk_per_trade=risk_per_trade,
             stop_method=stop_method,
             tp_r_multiple=tp_r_multiple,
@@ -526,6 +546,29 @@ class EdgeXClient:
             "/api/v2/private/account/getAccountAsset",
             {"accountId": self.settings.account_id},
         )
+
+
+def _manual_account_asset(settings: Settings) -> dict[str, Any]:
+    if not settings.manual_risk_enabled:
+        raise RuntimeError("EDGEX_EQUITY_USDC is not configured")
+    model: dict[str, Any] = {
+        "coinId": settings.collateral_coin_id,
+        "totalEquity": str(settings.manual_equity_usdc),
+    }
+    if settings.manual_available_balance_usdc is not None:
+        model["availableBalance"] = str(settings.manual_available_balance_usdc)
+
+    account: dict[str, Any] = {}
+    if settings.manual_leverage is not None:
+        account["defaultTradeSetting"] = {"leverage": str(settings.manual_leverage)}
+
+    return {
+        "code": "SUCCESS",
+        "data": {
+            "account": account,
+            "collateralAssetModelList": [model],
+        },
+    }
 
 
 def _account_asset_metrics(
@@ -1125,8 +1168,12 @@ class BreakoutService:
         if self._account_asset_loaded:
             return self._account_asset
         self._account_asset_loaded = True
+        if self.settings.manual_risk_enabled:
+            self._account_asset = _manual_account_asset(self.settings)
+            return self._account_asset
+
         if not self.settings.account_risk_enabled:
-            self._account_asset_error = "EdgeX口座APIのSecrets未設定"
+            self._account_asset_error = "EdgeX口座資産未設定（EDGEX_EQUITY_USDC）"
             return None
         try:
             self._account_asset = await self.client.get_account_asset()
@@ -1378,13 +1425,14 @@ async def _async_main(args: argparse.Namespace) -> None:
         except (NotImplementedError, RuntimeError):
             pass
     LOGGER.info(
-        "Starting EdgeX breakout scanner: mode=%s intervals=%s lookback=%d volume_multiplier=%.2f min_breakout=%.2f%% risk=%.2f%% account_risk=%s dry_run=%s state=%s",
+        "Starting EdgeX breakout scanner: mode=%s intervals=%s lookback=%d volume_multiplier=%.2f min_breakout=%.2f%% risk=%.2f%% manual_risk=%s account_risk=%s dry_run=%s state=%s",
         "scheduled-once" if args.once else "continuous",
         ",".join(settings.intervals),
         settings.breakout_lookback,
         settings.volume_multiplier,
         settings.min_breakout_pct,
         settings.risk_per_trade * 100,
+        settings.manual_risk_enabled,
         settings.account_risk_enabled,
         settings.dry_run,
         settings.state_backend,

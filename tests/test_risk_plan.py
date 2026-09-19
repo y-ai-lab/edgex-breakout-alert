@@ -11,6 +11,7 @@ from app import (
     Settings,
     Signal,
     _edgex_hmac_signature,
+    _manual_account_asset,
     build_risk_plan,
     format_signal,
 )
@@ -62,7 +63,19 @@ def settings():
         "EDGE_X_TP_R_MULTIPLE": "2.0",
         "EDGE_X_COLLATERAL_COIN_ID": "1000",
     }
-    with patch.dict(os.environ, env, clear=False):
+    with patch.dict(os.environ, env, clear=True):
+        return Settings.from_env(dry_run_override=True)
+
+
+def manual_settings():
+    env = {
+        "EDGEX_EQUITY_USDC": "1000",
+        "EDGE_X_RISK_PER_TRADE": "0.05",
+        "EDGE_X_STOP_METHOD": "signal_candle",
+        "EDGE_X_TP_R_MULTIPLE": "2.0",
+        "EDGE_X_COLLATERAL_COIN_ID": "1000",
+    }
+    with patch.dict(os.environ, env, clear=True):
         return Settings.from_env(dry_run_override=True)
 
 
@@ -117,6 +130,16 @@ class RiskPlanTests(unittest.TestCase):
         self.assertAlmostEqual(plan.tp_1r, 105.0)
         self.assertAlmostEqual(plan.tp_target, 110.0)
         self.assertFalse(plan.margin_capped)
+
+    def test_manual_equity_works_without_api_credentials(self):
+        cfg = manual_settings()
+        self.assertTrue(cfg.manual_risk_enabled)
+        self.assertFalse(cfg.account_risk_enabled)
+        plan = build_risk_plan(make_signal(), _manual_account_asset(cfg), cfg)
+        self.assertAlmostEqual(plan.equity, 1000.0)
+        self.assertAlmostEqual(plan.risk_budget, 50.0)
+        self.assertAlmostEqual(plan.size, 10.0)
+        self.assertAlmostEqual(plan.max_loss, 50.0)
 
     def test_margin_cap_never_exceeds_five_percent_loss(self):
         signal = make_signal(close=100.0, low=99.5)
