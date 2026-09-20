@@ -1,5 +1,21 @@
 {
   "alerts": {
+    "30000001:MINUTE_15:1789921800000:up": {
+      "candle_time_ms": 1789921800000,
+      "contract_id": "30000001",
+      "contract_name": "BTCUSDC",
+      "direction": "up",
+      "interval": "MINUTE_15",
+      "sent_at_ms": 1789923029365
+    },
+    "30000002:MINUTE_15:1789921800000:up": {
+      "candle_time_ms": 1789921800000,
+      "contract_id": "30000002",
+      "contract_name": "ETHUSDC",
+      "direction": "up",
+      "interval": "MINUTE_15",
+      "sent_at_ms": 1789923030036
+    },
     "30000002:MINUTE_5:1789872900000:down": {
       "candle_time_ms": 1789872900000,
       "contract_id": "30000002",
@@ -7,6 +23,14 @@
       "direction": "down",
       "interval": "MINUTE_5",
       "sent_at_ms": 1789873240494
+    },
+    "30000003:MINUTE_15:1789921800000:up": {
+      "candle_time_ms": 1789921800000,
+      "contract_id": "30000003",
+      "contract_name": "SOLUSDC",
+      "direction": "up",
+      "interval": "MINUTE_15",
+      "sent_at_ms": 1789923030721
     },
     "30000003:MINUTE_5:1789872900000:down": {
       "candle_time_ms": 1789872900000,
@@ -31,6 +55,14 @@
       "direction": "down",
       "interval": "MINUTE_5",
       "sent_at_ms": 1789873241563
+    },
+    "30000014:MINUTE_15:1789921800000:up": {
+      "candle_time_ms": 1789921800000,
+      "contract_id": "30000014",
+      "contract_name": "MSTRUSDC",
+      "direction": "up",
+      "interval": "MINUTE_15",
+      "sent_at_ms": 1789923031415
     },
     "30000014:MINUTE_5:1789872900000:down": {
       "candle_time_ms": 1789872900000,
@@ -64,6 +96,14 @@
       "interval": "MINUTE_15",
       "sent_at_ms": 1789894076557
     },
+    "30000041:MINUTE_15:1789921800000:up": {
+      "candle_time_ms": 1789921800000,
+      "contract_id": "30000041",
+      "contract_name": "HYPEUSDC",
+      "direction": "up",
+      "interval": "MINUTE_15",
+      "sent_at_ms": 1789923032142
+    },
     "30000041:MINUTE_5:1789307400000:up": {
       "candle_time_ms": 1789307400000,
       "contract_id": "30000041",
@@ -88,6 +128,14 @@
       "interval": "MINUTE_5",
       "sent_at_ms": 1789873243279
     },
+    "30000050:MINUTE_15:1789921800000:up": {
+      "candle_time_ms": 1789921800000,
+      "contract_id": "30000050",
+      "contract_name": "BNBUSDC",
+      "direction": "up",
+      "interval": "MINUTE_15",
+      "sent_at_ms": 1789923032834
+    },
     "30000050:MINUTE_5:1789872900000:down": {
       "candle_time_ms": 1789872900000,
       "contract_id": "30000050",
@@ -95,6 +143,14 @@
       "direction": "down",
       "interval": "MINUTE_5",
       "sent_at_ms": 1789873243900
+    },
+    "30000051:MINUTE_15:1789921800000:up": {
+      "candle_time_ms": 1789921800000,
+      "contract_id": "30000051",
+      "contract_name": "XRPUSDC",
+      "direction": "up",
+      "interval": "MINUTE_15",
+      "sent_at_ms": 1789923033499
     },
     "30000051:MINUTE_5:1789872900000:down": {
       "candle_time_ms": 1789872900000,
@@ -112,6 +168,14 @@
       "interval": "MINUTE_5",
       "sent_at_ms": 1789307899655
     },
+    "30000053:MINUTE_15:1789921800000:up": {
+      "candle_time_ms": 1789921800000,
+      "contract_id": "30000053",
+      "contract_name": "DOGEUSDC",
+      "direction": "up",
+      "interval": "MINUTE_15",
+      "sent_at_ms": 1789923034141
+    },
     "30000053:MINUTE_5:1789872900000:down": {
       "candle_time_ms": 1789872900000,
       "contract_id": "30000053",
@@ -120,6 +184,14 @@
       "interval": "MINUTE_5",
       "sent_at_ms": 1789873245069
     },
+    "30000054:MINUTE_15:1789921800000:up": {
+      "candle_time_ms": 1789921800000,
+      "contract_id": "30000054",
+      "contract_name": "SUIUSDC",
+      "direction": "up",
+      "interval": "MINUTE_15",
+      "sent_at_ms": 1789923034785
+    },
     "30000054:MINUTE_5:1789872900000:down": {
       "candle_time_ms": 1789872900000,
       "contract_id": "30000054",
@@ -127,6 +199,22 @@
       "direction": "down",
       "interval": "MINUTE_5",
       "sent_at_ms": 1789873245601
+    },
+    "30000055:MINUTE_15:1789921800000:up": {
+      "candle_time_ms": 1789921800000,
+      "contract_id": "30000055",
+      "contract_name": "LINKUSDC",
+      "direction": "up",
+      "interval": "MINUTE_15",
+      "sent_at_ms": 1789923035444
+    },
+    "30000058:MINUTE_15:1789921800000:up": {
+      "candle_time_ms": 1789921800000,
+      "contract_id": "30000058",
+      "contract_name": "ENAUSDC",
+      "direction": "up",
+      "interval": "MINUTE_15",
+      "sent_at_ms": 1789923036191
     },
     "30000058:MINUTE_5:1789872900000:down": {
       "candle_time_ms": 1789872900000,
@@ -183,6 +271,22 @@
       "direction": "down",
       "interval": "MINUTE_5",
       "sent_at_ms": 1789873247774
+    },
+    "30000070:MINUTE_15:1789921800000:up": {
+      "candle_time_ms": 1789921800000,
+      "contract_id": "30000070",
+      "contract_name": "TAOUSDC",
+      "direction": "up",
+      "interval": "MINUTE_15",
+      "sent_at_ms": 1789923036875
+    },
+    "30000100:MINUTE_15:1789921800000:up": {
+      "candle_time_ms": 1789921800000,
+      "contract_id": "30000100",
+      "contract_name": "NEARUSDC",
+      "direction": "up",
+      "interval": "MINUTE_15",
+      "sent_at_ms": 1789923037635
     },
     "30000136:MINUTE_5:1789872900000:down": {
       "candle_time_ms": 1789872900000,
