@@ -548,12 +548,16 @@ class EdgeXClient:
         )
 
 
-def _manual_account_asset(settings: Settings) -> dict[str, Any]:
-    if not settings.manual_risk_enabled:
-        raise RuntimeError("EDGEX_EQUITY_USDC is not configured")
+def _manual_account_asset(
+    settings: Settings,
+    equity_usdc: float | None = None,
+) -> dict[str, Any]:
+    equity = equity_usdc if equity_usdc is not None else settings.manual_equity_usdc
+    if equity is None or equity <= 0:
+        raise RuntimeError("EdgeX equity is not configured")
     model: dict[str, Any] = {
         "coinId": settings.collateral_coin_id,
-        "totalEquity": str(settings.manual_equity_usdc),
+        "totalEquity": str(equity),
     }
     if settings.manual_available_balance_usdc is not None:
         model["availableBalance"] = str(settings.manual_available_balance_usdc)
@@ -738,6 +742,10 @@ class StateStore:
                 volume_value REAL NOT NULL,
                 volume_ratio REAL NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS runtime_state (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );
             """
         )
         self.connection.commit()
@@ -802,6 +810,41 @@ class StateStore:
         )
         self.connection.commit()
 
+    def get_runtime_equity(self) -> float | None:
+        row = self.connection.execute(
+            "SELECT value FROM runtime_state WHERE key='equity_usdc'"
+        ).fetchone()
+        return _number(row[0]) if row else None
+
+    def set_runtime_equity(self, equity: float) -> None:
+        self.connection.execute(
+            """
+            INSERT INTO runtime_state(key, value) VALUES ('equity_usdc', ?)
+            ON CONFLICT(key) DO UPDATE SET value=excluded.value
+            """,
+            (str(equity),),
+        )
+        self.connection.commit()
+
+    def get_telegram_update_offset(self) -> int | None:
+        row = self.connection.execute(
+            "SELECT value FROM runtime_state WHERE key='telegram_update_offset'"
+        ).fetchone()
+        try:
+            return int(row[0]) if row else None
+        except (TypeError, ValueError):
+            return None
+
+    def set_telegram_update_offset(self, offset: int) -> None:
+        self.connection.execute(
+            """
+            INSERT INTO runtime_state(key, value) VALUES ('telegram_update_offset', ?)
+            ON CONFLICT(key) DO UPDATE SET value=excluded.value
+            """,
+            (str(int(offset)),),
+        )
+        self.connection.commit()
+
     def close(self) -> None:
         self.connection.close()
 
@@ -820,6 +863,7 @@ class JsonStateStore:
         self.state: dict[str, Any] = {
             "processed_candles": {},
             "alerts": {},
+            "runtime": {},
         }
         if not self.path.exists():
             return
@@ -829,7 +873,7 @@ class JsonStateStore:
             raise RuntimeError(f"Invalid state file: {self.path}") from exc
         if not isinstance(loaded, dict):
             raise RuntimeError(f"Invalid state file: {self.path}")
-        for key in ("processed_candles", "alerts"):
+        for key in ("processed_candles", "alerts", "runtime"):
             if isinstance(loaded.get(key), dict):
                 self.state[key] = loaded[key]
 
@@ -890,6 +934,24 @@ class JsonStateStore:
         }
         self._write()
 
+    def get_runtime_equity(self) -> float | None:
+        return _number(self.state["runtime"].get("equity_usdc"))
+
+    def set_runtime_equity(self, equity: float) -> None:
+        self.state["runtime"]["equity_usdc"] = float(equity)
+        self._write()
+
+    def get_telegram_update_offset(self) -> int | None:
+        value = self.state["runtime"].get("telegram_update_offset")
+        try:
+            return int(value) if value is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    def set_telegram_update_offset(self, offset: int) -> None:
+        self.state["runtime"]["telegram_update_offset"] = int(offset)
+        self._write()
+
     def close(self) -> None:
         return
 
@@ -899,16 +961,18 @@ class TelegramNotifier:
         self.settings = settings
 
     @property
-    def enabled(self) -> bool:
-        return bool(self.settings.telegram_token and self.settings.telegram_chat_id and not self.settings.dry_run)
+    def configured(self) -> bool:
+        return bool(self.settings.telegram_token and self.settings.telegram_chat_id)
 
-    def _send_sync(self, text: str) -> None:
-        if not self.settings.telegram_token or not self.settings.telegram_chat_id:
-            raise RuntimeError("Telegram credentials are missing")
-        url = f"https://api.telegram.org/bot{self.settings.telegram_token}/sendMessage"
-        body = urllib.parse.urlencode(
-            {"chat_id": self.settings.telegram_chat_id, "text": text}
-        ).encode("utf-8")
+    @property
+    def enabled(self) -> bool:
+        return bool(self.configured and not self.settings.dry_run)
+
+    def _api_sync(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
+        if not self.settings.telegram_token:
+            raise RuntimeError("Telegram bot token is missing")
+        url = f"https://api.telegram.org/bot{self.settings.telegram_token}/{method}"
+        body = urllib.parse.urlencode(params).encode("utf-8")
         request = urllib.request.Request(
             url,
             data=body,
@@ -921,7 +985,35 @@ class TelegramNotifier:
         except (urllib.error.URLError, UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise RuntimeError(f"Telegram request failed: {exc}") from exc
         if not isinstance(payload, dict) or not payload.get("ok"):
-            raise RuntimeError(f"Telegram API error: {payload.get('description') if isinstance(payload, dict) else payload}")
+            raise RuntimeError(
+                f"Telegram API error: {payload.get('description') if isinstance(payload, dict) else payload}"
+            )
+        return payload
+
+    def _send_sync(self, text: str) -> None:
+        if not self.settings.telegram_chat_id:
+            raise RuntimeError("Telegram chat ID is missing")
+        self._api_sync(
+            "sendMessage",
+            {"chat_id": self.settings.telegram_chat_id, "text": text},
+        )
+
+    def _get_updates_sync(self, offset: int | None) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {
+            "timeout": 0,
+            "limit": 100,
+            "allowed_updates": json.dumps(["message"]),
+        }
+        if offset is not None:
+            params["offset"] = offset
+        payload = self._api_sync("getUpdates", params)
+        result = payload.get("result") or []
+        return [item for item in result if isinstance(item, dict)]
+
+    async def get_updates(self, offset: int | None) -> list[dict[str, Any]]:
+        if not self.enabled:
+            return []
+        return await asyncio.to_thread(self._get_updates_sync, offset)
 
     async def send(self, text: str) -> None:
         if not self.enabled:
@@ -988,6 +1080,24 @@ def format_signal(
         ]
     )
     return "\n".join(lines)
+
+
+def parse_equity_command(text: str) -> tuple[str, float | None] | None:
+    raw = text.strip()
+    if not raw:
+        return None
+    parts = raw.split()
+    command = parts[0].lower().split("@", 1)[0]
+    if command not in {"/equity", "/balance", "残高"}:
+        return None
+    if len(parts) == 1:
+        return ("show", None)
+    if len(parts) != 2:
+        return ("invalid", None)
+    value = _number(parts[1].replace(",", ""))
+    if value is None or value <= 0 or value > 100_000_000:
+        return ("invalid", None)
+    return ("set", value)
 
 
 class BreakoutDetector:
@@ -1164,12 +1274,89 @@ class BreakoutService:
         if signal is not None:
             await self._send_signal(signal)
 
+    def _current_equity(self) -> float | None:
+        runtime_equity = self.store.get_runtime_equity()
+        if runtime_equity is not None and runtime_equity > 0:
+            return runtime_equity
+        if self.settings.manual_risk_enabled:
+            return self.settings.manual_equity_usdc
+        return None
+
+    async def _sync_telegram_equity_commands(self) -> None:
+        if not self.notifier.enabled or not self.settings.telegram_chat_id:
+            return
+        try:
+            updates = await self.notifier.get_updates(self.store.get_telegram_update_offset())
+        except Exception as exc:
+            LOGGER.warning("Telegram equity command sync failed: %s", exc)
+            return
+        if not updates:
+            return
+
+        next_offset = self.store.get_telegram_update_offset()
+        authorized_chat_id = str(self.settings.telegram_chat_id)
+        for update in updates:
+            try:
+                update_id = int(update.get("update_id"))
+            except (TypeError, ValueError):
+                continue
+            next_offset = max(next_offset or 0, update_id + 1)
+            message = update.get("message")
+            if not isinstance(message, dict):
+                continue
+            chat = message.get("chat")
+            if not isinstance(chat, dict) or str(chat.get("id")) != authorized_chat_id:
+                continue
+            text = message.get("text")
+            if not isinstance(text, str):
+                continue
+            command = parse_equity_command(text)
+            if command is None:
+                continue
+
+            action, value = command
+            if action == "set" and value is not None:
+                self.store.set_runtime_equity(value)
+                self._account_asset_loaded = False
+                self._account_asset = None
+                self._account_asset_error = None
+                risk_amount = value * self.settings.risk_per_trade
+                await self.notifier.send(
+                    "✅ EdgeX残高を更新しました\n"
+                    f"Equity: {_format_usd(value)}\n"
+                    f"1トレード最大リスク: {_format_usd(risk_amount)} "
+                    f"({self.settings.risk_per_trade * 100:.1f}%)"
+                )
+            elif action == "show":
+                current = self._current_equity()
+                if current is None:
+                    reply = "現在のEdgeX残高は未設定です。 /equity 24 の形式で送ってください。"
+                else:
+                    reply = (
+                        f"現在のEdgeX Equity: {_format_usd(current)}\n"
+                        f"5%リスク: {_format_usd(current * self.settings.risk_per_trade)}"
+                    )
+                await self.notifier.send(reply)
+            else:
+                await self.notifier.send(
+                    "形式: /equity 24.50\n"
+                    "確認だけなら /equity"
+                )
+
+        if next_offset is not None:
+            self.store.set_telegram_update_offset(next_offset)
+
     async def _get_account_asset_for_risk(self) -> dict[str, Any] | None:
         if self._account_asset_loaded:
             return self._account_asset
         self._account_asset_loaded = True
-        if self.settings.manual_risk_enabled:
-            self._account_asset = _manual_account_asset(self.settings)
+
+        current_equity = self._current_equity()
+        if current_equity is not None:
+            self._account_asset = _manual_account_asset(
+                self.settings,
+                equity_usdc=current_equity,
+            )
             return self._account_asset
 
         if not self.settings.account_risk_enabled:
@@ -1366,6 +1553,7 @@ class BreakoutService:
 
     async def run(self) -> None:
         try:
+            await self._sync_telegram_equity_commands()
             if self.run_once:
                 self.contracts = await self.client.get_contracts()
                 LOGGER.info(

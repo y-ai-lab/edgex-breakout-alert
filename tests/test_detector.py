@@ -26,6 +26,17 @@ def make_settings(**overrides):
         telegram_token=None,
         telegram_chat_id=None,
         dry_run=True,
+        account_id=None,
+        api_key=None,
+        api_passphrase=None,
+        api_secret=None,
+        collateral_coin_id="1000",
+        manual_equity_usdc=24.0,
+        manual_available_balance_usdc=None,
+        manual_leverage=None,
+        risk_per_trade=0.05,
+        stop_method="signal_candle",
+        tp_r_multiple=2.0,
     )
     values.update(overrides)
     return Settings(**values)
