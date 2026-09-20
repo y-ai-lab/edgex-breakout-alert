@@ -83,6 +83,26 @@ Private REST APIの認証情報を持っている場合のみ、`EDGEX_ACCOUNT_I
 
 調整値は `.env.example` の `EDGE_X_RISK_PER_TRADE`、`EDGE_X_STOP_METHOD`、`EDGE_X_TP_R_MULTIPLE` で変更できます。
 
+## Telegramから口座資産を更新
+
+APIキーがなくても、通知に使っているTelegram botへ残高を送るだけで、次回以降の5%リスク計算へ反映できます。
+
+```text
+/equity 31.50
+```
+
+botは次回の定期スキャン時にコマンドを読み取り、次のように返信します。
+
+```text
+✅ EdgeX残高を更新しました
+Equity: $31.5000
+1トレード最大リスク: $1.5750 (5.0%)
+```
+
+現在値だけ確認する場合は `/equity` を送ります。`/balance 31.50` または `残高 31.50` でも更新できます。
+
+更新値は `data/edgex_alert_state.json` に保存されるため、GitHub Actionsの実行環境が毎回作り直されても引き継がれます。コマンドは設定済みの `TELEGRAM_CHAT_ID` と一致するチャットからのみ受け付けます。反映は定期スキャン単位なので、通常は次の5分スキャン以降です。
+
 ## Telegramの準備
 
 1. Telegramで `@BotFather` を開き、`/newbot` でBotを作成する
