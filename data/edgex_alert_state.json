@@ -40,6 +40,14 @@
       "interval": "MINUTE_5",
       "sent_at_ms": 1789873242126
     },
+    "30000021:MINUTE_5:1789873200000:down": {
+      "candle_time_ms": 1789873200000,
+      "contract_id": "30000021",
+      "contract_name": "AMDUSDC",
+      "direction": "down",
+      "interval": "MINUTE_5",
+      "sent_at_ms": 1789873601305
+    },
     "30000041:MINUTE_5:1789307400000:up": {
       "candle_time_ms": 1789307400000,
       "contract_id": "30000041",
@@ -146,5 +154,8 @@
     }
   },
   "processed_candles": {},
-  "runtime": {}
+  "runtime": {
+    "equity_usdc": 24.0,
+    "telegram_update_offset": 347814589
+  }
 }
