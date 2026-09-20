@@ -39,7 +39,7 @@ jobs:
       DRY_RUN: "false"
       STATE_BACKEND: json
       STATE_FILE: data/edgex_alert_state.json
-      EDGE_X_INTERVALS: MINUTE_5
+      EDGE_X_INTERVALS: MINUTE_15
       EDGE_X_INCLUDE_HIDDEN: "true"
       TIMEZONE: Asia/Tokyo
 
