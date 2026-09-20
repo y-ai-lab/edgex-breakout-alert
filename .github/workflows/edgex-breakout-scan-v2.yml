@@ -2,8 +2,8 @@ name: EdgeX breakout scan v2
 
 on:
   schedule:
-    # GitHub Actions uses UTC. This runs every five minutes; workflow changes also trigger an immediate verification run.
-    - cron: "3-59/5 * * * *"
+    # GitHub Actions uses UTC. This runs every fifteen minutes, shortly after each 15-minute candle closes.nges also trigger an immediate verification run.
+    - cron: "3-59/15 * * * *"
   push:
     branches:
       - main
