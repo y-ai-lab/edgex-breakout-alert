@@ -2,7 +2,9 @@ import base64
 import hashlib
 import hmac
 import os
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from app import (
@@ -10,10 +12,12 @@ from app import (
     Contract,
     Settings,
     Signal,
+    JsonStateStore,
     _edgex_hmac_signature,
     _manual_account_asset,
     build_risk_plan,
     format_signal,
+    parse_equity_command,
 )
 
 
@@ -98,6 +102,31 @@ def account_asset(*, equity="1000", available="500", leverage="3"):
             ],
         },
     }
+
+
+class TelegramEquityTests(unittest.TestCase):
+    def test_parse_equity_set_show_and_aliases(self):
+        self.assertEqual(parse_equity_command("/equity 31.50"), ("set", 31.5))
+        self.assertEqual(parse_equity_command("/balance 40"), ("set", 40.0))
+        self.assertEqual(parse_equity_command("残高 24.25"), ("set", 24.25))
+        self.assertEqual(parse_equity_command("/equity"), ("show", None))
+        self.assertEqual(parse_equity_command("/equity@my_bot 29"), ("set", 29.0))
+        self.assertEqual(parse_equity_command("/equity nope"), ("invalid", None))
+        self.assertIsNone(parse_equity_command("hello"))
+
+    def test_json_state_persists_runtime_equity_and_offset(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "state.json"
+            store = JsonStateStore(path)
+            self.assertIsNone(store.get_runtime_equity())
+            self.assertIsNone(store.get_telegram_update_offset())
+            store.set_runtime_equity(31.5)
+            store.set_telegram_update_offset(123)
+            store.close()
+
+            loaded = JsonStateStore(path)
+            self.assertAlmostEqual(loaded.get_runtime_equity(), 31.5)
+            self.assertEqual(loaded.get_telegram_update_offset(), 123)
 
 
 class RiskPlanTests(unittest.TestCase):
