@@ -1,0 +1,119 @@
+name: EdgeX breakout scan v2
+
+on:
+  schedule:
+    # GitHub Actions uses UTC. This runs every five minutes.
+    - cron: "3-59/5 * * * *"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/edgex-breakout-scan-v2.yml"
+      - "app.py"
+      - "requirements.txt"
+      - "tests/**"
+  workflow_dispatch:
+    inputs:
+      test_telegram:
+        description: "Send one Telegram test message"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: edgex-breakout-scan-v2
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      EDGEX_EQUITY_USDC: "24"
+      EDGEX_AVAILABLE_BALANCE_USDC: ${{ secrets.EDGEX_AVAILABLE_BALANCE_USDC }}
+      EDGEX_LEVERAGE: ${{ secrets.EDGEX_LEVERAGE }}
+      EDGEX_ACCOUNT_ID: ${{ secrets.EDGEX_ACCOUNT_ID }}
+      EDGEX_API_KEY: ${{ secrets.EDGEX_API_KEY }}
+      EDGEX_API_PASSPHRASE: ${{ secrets.EDGEX_API_PASSPHRASE }}
+      EDGEX_API_SECRET: ${{ secrets.EDGEX_API_SECRET }}
+      EDGE_X_RISK_PER_TRADE: "0.05"
+      EDGE_X_STOP_METHOD: signal_candle
+      EDGE_X_TP_R_MULTIPLE: "2.0"
+      DRY_RUN: "false"
+      STATE_BACKEND: json
+      STATE_FILE: data/edgex_alert_state.json
+      EDGE_X_INTERVALS: MINUTE_5
+      EDGE_X_INCLUDE_HIDDEN: "true"
+      TIMEZONE: Asia/Tokyo
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Run unit tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Send one Telegram test message
+        if: ${{ inputs.test_telegram == true }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import urllib.parse
+          import urllib.request
+
+          token = os.environ["TELEGRAM_BOT_TOKEN"]
+          chat_id = os.environ["TELEGRAM_CHAT_ID"]
+          body = urllib.parse.urlencode(
+              {
+                  "chat_id": chat_id,
+                  "text": "✅ EdgeX監視のテスト通知です。Telegram送信は正常です。",
+              }
+          ).encode("utf-8")
+          request = urllib.request.Request(
+              f"https://api.telegram.org/bot{token}/sendMessage",
+              data=body,
+              headers={"Content-Type": "application/x-www-form-urlencoded"},
+              method="POST",
+          )
+          try:
+              with urllib.request.urlopen(request, timeout=20) as response:
+                  payload = json.loads(response.read().decode("utf-8"))
+          except Exception as exc:
+              raise SystemExit(f"Telegram test failed: {type(exc).__name__}") from exc
+          if not isinstance(payload, dict) or not payload.get("ok"):
+              raise SystemExit("Telegram test failed: API returned an error")
+          print("Telegram test message sent")
+          PY
+
+      - name: Scan all tradable EdgeX contracts
+        run: python app.py --once --once-timeout 90 --log-level INFO
+
+      - name: Commit notification deduplication state
+        if: ${{ success() }}
+        run: |
+          if [ -z "$(git status --porcelain -- data/edgex_alert_state.json)" ]; then
+            echo "No state change"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/edgex_alert_state.json
+          git commit -m "chore: update EdgeX alert state"
+          git pull --rebase origin main
+          git push
