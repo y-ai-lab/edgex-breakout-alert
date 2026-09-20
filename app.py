@@ -1002,7 +1002,7 @@ class TelegramNotifier:
         params: dict[str, Any] = {
             "timeout": 0,
             "limit": 100,
-            "allowed_updates": json.dumps(["message"]),
+            "allowed_updates": json.dumps(["message", "channel_post"]),
         }
         if offset is not None:
             params["offset"] = offset
@@ -1291,8 +1291,10 @@ class BreakoutService:
             LOGGER.warning("Telegram equity command sync failed: %s", exc)
             return
         if not updates:
+            LOGGER.info("Telegram command sync: 0 update(s)")
             return
 
+        LOGGER.info("Telegram command sync: %d update(s)", len(updates))
         next_offset = self.store.get_telegram_update_offset()
         authorized_chat_id = str(self.settings.telegram_chat_id)
         for update in updates:
@@ -1302,6 +1304,8 @@ class BreakoutService:
                 continue
             next_offset = max(next_offset or 0, update_id + 1)
             message = update.get("message")
+            if not isinstance(message, dict):
+                message = update.get("channel_post")
             if not isinstance(message, dict):
                 continue
             chat = message.get("chat")
