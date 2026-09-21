@@ -96,6 +96,14 @@
       "interval": "MINUTE_5",
       "sent_at_ms": 1789873601305
     },
+    "30000022:MINUTE_15:1789999200000:up": {
+      "candle_time_ms": 1789999200000,
+      "contract_id": "30000022",
+      "contract_name": "GOOGLUSDC",
+      "direction": "up",
+      "interval": "MINUTE_15",
+      "sent_at_ms": 1790000111725
+    },
     "30000041:MINUTE_15:1789893000000:down": {
       "candle_time_ms": 1789893000000,
       "contract_id": "30000041",
@@ -111,6 +119,14 @@
       "direction": "up",
       "interval": "MINUTE_15",
       "sent_at_ms": 1789923032142
+    },
+    "30000041:MINUTE_15:1789999200000:down": {
+      "candle_time_ms": 1789999200000,
+      "contract_id": "30000041",
+      "contract_name": "HYPEUSDC",
+      "direction": "down",
+      "interval": "MINUTE_15",
+      "sent_at_ms": 1790000112399
     },
     "30000041:MINUTE_5:1789307400000:up": {
       "candle_time_ms": 1789307400000,
@@ -231,6 +247,14 @@
       "direction": "down",
       "interval": "MINUTE_5",
       "sent_at_ms": 1789873246157
+    },
+    "30000063:MINUTE_15:1789999200000:down": {
+      "candle_time_ms": 1789999200000,
+      "contract_id": "30000063",
+      "contract_name": "PUMPUSDC",
+      "direction": "down",
+      "interval": "MINUTE_15",
+      "sent_at_ms": 1790000113091
     },
     "30000063:MINUTE_5:1789872900000:down": {
       "candle_time_ms": 1789872900000,
