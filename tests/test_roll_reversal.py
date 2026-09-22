@@ -1,10 +1,14 @@
 import os
+import tempfile
 import unittest
+from dataclasses import replace
+from pathlib import Path
 from unittest.mock import patch
 
 from app import (
     Candle,
     Contract,
+    JsonStateStore,
     RollReversalDetector,
     Settings,
     _manual_account_asset,
@@ -145,6 +149,48 @@ class RollReversalStrategyTests(unittest.TestCase):
         self.assertGreaterEqual(signal.rr, 2.0)
         self.assertGreater(signal.stop_loss_override, signal.candle.close)
         self.assertLess(signal.take_profit_override, signal.candle.close)
+
+    def test_same_roll_reversal_uses_same_persistent_alert_key(self):
+        entries = long_entries(98.0)
+        first = self.detector.detect(self.contract, long_monitor(), entries, entries[-1])
+        self.assertIsNotNone(first)
+        assert first is not None
+        later_candle = replace(
+            first.candle,
+            time_ms=first.candle.time_ms + 15 * 60 * 1000,
+            open=97.5,
+            high=99.0,
+            low=97.0,
+            close=98.5,
+        )
+        second = replace(first, candle=later_candle)
+        self.assertEqual(first.breakout_time_ms, second.breakout_time_ms)
+        self.assertNotEqual(first.candle.time_ms, second.candle.time_ms)
+        self.assertEqual(first.key, second.key)
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "state.json"
+            store = JsonStateStore(path)
+            store.save_alert(first, 1_800_000_000_000)
+            self.assertTrue(store.alert_exists(second.key))
+            store.close()
+
+            loaded = JsonStateStore(path)
+            self.assertTrue(loaded.alert_exists(second.key))
+            record = loaded.state["alerts"][first.key]
+            self.assertEqual(record["breakout_time_ms"], first.breakout_time_ms)
+            self.assertEqual(record["breakout_level"], first.breakout_level)
+
+    def test_new_4h_breakout_gets_new_alert_key(self):
+        entries = long_entries(98.0)
+        first = self.detector.detect(self.contract, long_monitor(), entries, entries[-1])
+        self.assertIsNotNone(first)
+        assert first is not None
+        second = replace(
+            first,
+            breakout_time_ms=first.breakout_time_ms + 4 * 60 * 60 * 1000,
+        )
+        self.assertNotEqual(first.key, second.key)
 
     def test_rr_below_two_is_filtered_out(self):
         entries = long_entries(102.0)
