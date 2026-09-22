@@ -1,0 +1,48 @@
+name: Probe historical coverage
+
+on:
+  push:
+    branches:
+      - backtest/180d-deduped
+    paths:
+      - ".github/workflows/history-coverage-probe.yml"
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe BTC history coverage
+        run: |
+          python - <<'PY'
+          import json, urllib.parse, urllib.request
+          from datetime import datetime, timezone
+          base="https://edgex-prod-v2.edgex.exchange"
+          begin=1774566900000
+          end=1790118900000
+          chunk=6*24*60*60*1000
+          times=[]
+          cursor=begin
+          while cursor<end:
+              ce=min(cursor+chunk,end)
+              params={
+                "contractId":"30000001",
+                "klineType":"MINUTE_15",
+                "priceType":"LAST_PRICE",
+                "size":"640",
+                "filterBeginKlineTimeInclusive":str(cursor),
+                "filterEndKlineTimeExclusive":str(ce),
+              }
+              url=base+"/api/v2/public/quote/getKline?"+urllib.parse.urlencode(params)
+              with urllib.request.urlopen(url, timeout=30) as r:
+                  p=json.load(r)
+              for row in (p.get("data") or {}).get("dataList") or []:
+                  try: times.append(int(row["klineTime"]))
+                  except: pass
+              cursor=ce
+          print("COUNT", len(set(times)))
+          if times:
+              lo=min(times); hi=max(times)
+              print("FIRST_MS", lo)
+              print("FIRST_UTC", datetime.fromtimestamp(lo/1000,tz=timezone.utc).isoformat())
+              print("LAST_UTC", datetime.fromtimestamp(hi/1000,tz=timezone.utc).isoformat())
+          PY
