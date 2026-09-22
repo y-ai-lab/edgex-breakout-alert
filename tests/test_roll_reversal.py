@@ -181,6 +181,25 @@ class RollReversalStrategyTests(unittest.TestCase):
             self.assertEqual(record["breakout_time_ms"], first.breakout_time_ms)
             self.assertEqual(record["breakout_level"], first.breakout_level)
 
+    def test_existing_pre_fix_alert_suppresses_same_current_setup(self):
+        entries = long_entries(98.0)
+        signal = self.detector.detect(self.contract, long_monitor(), entries, entries[-1])
+        self.assertIsNotNone(signal)
+        assert signal is not None
+        legacy_signal = replace(
+            signal,
+            strategy_name=None,
+            breakout_time_ms=None,
+        )
+        self.assertNotEqual(signal.key, legacy_signal.key)
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "state.json"
+            store = JsonStateStore(path)
+            store.save_alert(legacy_signal, 1_800_000_000_000)
+            self.assertFalse(store.alert_exists(signal.key))
+            self.assertTrue(store.setup_alert_exists(signal))
+
     def test_new_4h_breakout_gets_new_alert_key(self):
         entries = long_entries(98.0)
         first = self.detector.detect(self.contract, long_monitor(), entries, entries[-1])
