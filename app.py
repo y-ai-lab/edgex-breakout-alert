@@ -528,6 +528,12 @@ class Signal:
 
     @property
     def key(self) -> str:
+        if self.strategy_name and self.breakout_time_ms is not None:
+            return (
+                f"{self.contract.contract_id}:roll:"
+                f"{self.monitor_interval or 'HOUR_4'}:"
+                f"{self.breakout_time_ms}:{self.direction}"
+            )
         return f"{self.contract.contract_id}:{self.interval}:{self.candle.time_ms}:{self.direction}"
 
 
@@ -1045,6 +1051,9 @@ class JsonStateStore:
             "interval": signal.interval,
             "direction": signal.direction,
             "candle_time_ms": signal.candle.time_ms,
+            "breakout_time_ms": signal.breakout_time_ms,
+            "breakout_level": signal.breakout_level,
+            "strategy_name": signal.strategy_name,
             "sent_at_ms": int(sent_at_ms),
         }
         self._write()
@@ -1709,11 +1718,12 @@ class BreakoutService:
         await self.notifier.send(message)
         self.store.save_alert(signal, int(time.time() * 1000))
         LOGGER.info(
-            "Strategy alert sent: %s %s direction=%s rr=%s",
+            "Strategy alert sent: %s %s direction=%s rr=%s setup_key=%s",
             signal.contract.contract_name,
             signal.interval,
             signal.direction,
             f"{signal.rr:.2f}" if signal.rr is not None else "-",
+            signal.key,
         )
 
     async def _handle_message(self, raw: str) -> None:
