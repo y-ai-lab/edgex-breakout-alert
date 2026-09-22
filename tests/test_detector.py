@@ -37,6 +37,20 @@ def make_settings(**overrides):
         risk_per_trade=0.05,
         stop_method="signal_candle",
         tp_r_multiple=2.0,
+        monitor_interval="HOUR_4",
+        entry_interval="MINUTE_15",
+        trend_fast_ema=20,
+        trend_slow_ema=50,
+        roll_lookback=20,
+        roll_max_age=6,
+        retest_lookback=4,
+        atr_period=14,
+        atr_stop_buffer=0.5,
+        atr_target_buffer=0.25,
+        retest_atr_tolerance=0.35,
+        min_rr=2.0,
+        split_rr=3.0,
+        pullback_swing_lookback=5,
     )
     values.update(overrides)
     return Settings(**values)
