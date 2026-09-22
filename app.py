@@ -1,8 +1,10 @@
-"""EdgeX volume-confirmed breakout alert service.
+"""EdgeX multi-timeframe roll-reversal alert service.
 
-The service subscribes to EdgeX public kline streams for every contract that
-is currently tradable, evaluates only closed candles, and sends notifications
-to Telegram. It never places orders.
+The service monitors the 4-hour trend and recent role-reversal level, then
+uses 15-minute closed candles for pullback / rally entry confirmation. It
+sizes positions so the stop-loss risk stays at or below the configured
+fraction of current equity and sends Telegram instructions only. It never
+places orders.
 """
 
 from __future__ import annotations
@@ -168,6 +170,40 @@ def _interval_label(interval: str) -> str:
     return labels.get(interval, interval)
 
 
+def _ema(values: Iterable[float], period: int) -> float | None:
+    data = [float(value) for value in values]
+    if period <= 0 or len(data) < period:
+        return None
+    seed = sum(data[:period]) / period
+    multiplier = 2.0 / (period + 1.0)
+    ema = seed
+    for value in data[period:]:
+        ema = (value - ema) * multiplier + ema
+    return ema
+
+
+def _atr(candles: Iterable["Candle"], period: int) -> float | None:
+    ordered = sorted(candles, key=lambda item: item.time_ms)
+    if period <= 0 or len(ordered) < period + 1:
+        return None
+    true_ranges: list[float] = []
+    previous_close = ordered[0].close
+    for candle in ordered[1:]:
+        true_range = max(
+            candle.high - candle.low,
+            abs(candle.high - previous_close),
+            abs(candle.low - previous_close),
+        )
+        true_ranges.append(true_range)
+        previous_close = candle.close
+    if len(true_ranges) < period:
+        return None
+    atr = sum(true_ranges[:period]) / period
+    for true_range in true_ranges[period:]:
+        atr = ((atr * (period - 1)) + true_range) / period
+    return atr
+
+
 @dataclass(frozen=True)
 class Settings:
     api_base_url: str
@@ -202,17 +238,24 @@ class Settings:
     risk_per_trade: float
     stop_method: str
     tp_r_multiple: float
+    monitor_interval: str
+    entry_interval: str
+    trend_fast_ema: int
+    trend_slow_ema: int
+    roll_lookback: int
+    roll_max_age: int
+    retest_lookback: int
+    atr_period: int
+    atr_stop_buffer: float
+    atr_target_buffer: float
+    retest_atr_tolerance: float
+    min_rr: float
+    split_rr: float
+    pullback_swing_lookback: int
 
     @property
     def account_risk_enabled(self) -> bool:
-        return all(
-            (
-                self.account_id,
-                self.api_key,
-                self.api_passphrase,
-                self.api_secret,
-            )
-        )
+        return all((self.account_id, self.api_key, self.api_passphrase, self.api_secret))
 
     @property
     def manual_risk_enabled(self) -> bool:
@@ -220,25 +263,47 @@ class Settings:
 
     @classmethod
     def from_env(cls, *, dry_run_override: bool | None = None) -> "Settings":
-        raw_intervals = os.getenv("EDGE_X_INTERVALS", os.getenv("EDGE_X_INTERVAL", "MINUTE_5"))
-        intervals = tuple(dict.fromkeys(x.strip().upper() for x in raw_intervals.split(",") if x.strip()))
-        if not intervals:
-            raise ValueError("EDGE_X_INTERVALS must contain at least one interval")
+        monitor_interval = os.getenv("EDGE_X_MONITOR_INTERVAL", "HOUR_4").strip().upper()
+        entry_interval = os.getenv("EDGE_X_ENTRY_INTERVAL", "MINUTE_15").strip().upper()
+        unknown_strategy = sorted({monitor_interval, entry_interval} - set(INTERVAL_MS))
+        if unknown_strategy:
+            raise ValueError(f"Unsupported strategy interval(s): {', '.join(unknown_strategy)}")
+        if monitor_interval == entry_interval:
+            raise ValueError("Monitor and entry intervals must be different")
+
+        raw_intervals = os.getenv(
+            "EDGE_X_INTERVALS",
+            os.getenv("EDGE_X_INTERVAL", f"{monitor_interval},{entry_interval}"),
+        )
+        requested = [x.strip().upper() for x in raw_intervals.split(",") if x.strip()]
+        intervals = tuple(dict.fromkeys([*requested, monitor_interval, entry_interval]))
         unknown = sorted(set(intervals) - set(INTERVAL_MS))
         if unknown:
             raise ValueError(f"Unsupported EdgeX interval(s): {', '.join(unknown)}")
 
         breakout_lookback = _env_int("EDGE_X_BREAKOUT_LOOKBACK", 20)
         volume_lookback = _env_int("EDGE_X_VOLUME_LOOKBACK", 20)
-        if breakout_lookback < 2 or volume_lookback < 2:
-            raise ValueError("Lookback values must be at least 2")
+        trend_fast_ema = _env_int("EDGE_X_TREND_FAST_EMA", 20)
+        trend_slow_ema = _env_int("EDGE_X_TREND_SLOW_EMA", 50)
+        roll_lookback = _env_int("EDGE_X_ROLL_LOOKBACK", 20)
+        roll_max_age = _env_int("EDGE_X_ROLL_MAX_AGE", 6)
+        retest_lookback = _env_int("EDGE_X_RETEST_LOOKBACK", 4)
+        atr_period = _env_int("EDGE_X_ATR_PERIOD", 14)
+        pullback_swing_lookback = _env_int("EDGE_X_PULLBACK_SWING_LOOKBACK", 5)
+        if min(breakout_lookback, volume_lookback, trend_fast_ema, roll_lookback, atr_period) < 2:
+            raise ValueError("Strategy lookback values must be at least 2")
+        if trend_slow_ema <= trend_fast_ema:
+            raise ValueError("EDGE_X_TREND_SLOW_EMA must be greater than EDGE_X_TREND_FAST_EMA")
+        if min(roll_max_age, retest_lookback, pullback_swing_lookback) < 1:
+            raise ValueError("Strategy age/lookback values must be at least 1")
 
         history_size = _env_int(
             "EDGE_X_HISTORY_SIZE",
-            max(breakout_lookback, volume_lookback) + 30,
+            max(96, trend_slow_ema + roll_lookback + roll_max_age + 5, atr_period + 10),
         )
-        if history_size < max(breakout_lookback, volume_lookback) + 2:
-            raise ValueError("EDGE_X_HISTORY_SIZE is too small for the configured lookbacks")
+        minimum_history = max(trend_slow_ema + 2, roll_lookback + roll_max_age + 2, atr_period + 2)
+        if history_size < minimum_history:
+            raise ValueError("EDGE_X_HISTORY_SIZE is too small for the multi-timeframe strategy")
 
         dry_run = _env_bool("DRY_RUN", False) if dry_run_override is None else dry_run_override
         token = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -265,6 +330,18 @@ class Settings:
         if tp_r_multiple <= 0:
             raise ValueError("EDGE_X_TP_R_MULTIPLE must be greater than 0")
 
+        atr_stop_buffer = _env_float("EDGE_X_ATR_STOP_BUFFER", 0.5)
+        atr_target_buffer = _env_float("EDGE_X_ATR_TARGET_BUFFER", 0.25)
+        retest_atr_tolerance = _env_float("EDGE_X_RETEST_ATR_TOLERANCE", 0.35)
+        min_rr = _env_float("EDGE_X_MIN_RR", 2.0)
+        split_rr = _env_float("EDGE_X_SPLIT_RR", 3.0)
+        if min(atr_stop_buffer, atr_target_buffer, retest_atr_tolerance) < 0:
+            raise ValueError("ATR buffers/tolerance cannot be negative")
+        if min_rr < 2.0:
+            raise ValueError("EDGE_X_MIN_RR must be at least 2.0")
+        if split_rr < min_rr:
+            raise ValueError("EDGE_X_SPLIT_RR must be greater than or equal to EDGE_X_MIN_RR")
+
         manual_equity_usdc = _number(os.getenv("EDGEX_EQUITY_USDC"))
         manual_available_balance_usdc = _number(os.getenv("EDGEX_AVAILABLE_BALANCE_USDC"))
         manual_leverage = _number(os.getenv("EDGEX_LEVERAGE"))
@@ -280,19 +357,15 @@ class Settings:
             return value.strip() if value and value.strip() else None
 
         return cls(
-            api_base_url=os.getenv(
-                "EDGE_X_API_BASE_URL", "https://edgex-prod-v2.edgex.exchange"
-            ).rstrip("/"),
-            ws_url=os.getenv(
-                "EDGE_X_WS_URL", "wss://edgex-quote-prod-v2.edgex.exchange/api/v1/public/ws"
-            ),
+            api_base_url=os.getenv("EDGE_X_API_BASE_URL", "https://edgex-prod-v2.edgex.exchange").rstrip("/"),
+            ws_url=os.getenv("EDGE_X_WS_URL", "wss://edgex-quote-prod-v2.edgex.exchange/api/v1/public/ws"),
             intervals=intervals,
             breakout_lookback=breakout_lookback,
             volume_lookback=volume_lookback,
             volume_multiplier=max(0.0, _env_float("EDGE_X_VOLUME_MULTIPLIER", 1.5)),
             min_breakout_pct=max(0.0, _env_float("EDGE_X_MIN_BREAKOUT_PCT", 0.1)),
             min_volume_value=max(0.0, _env_float("EDGE_X_MIN_VOLUME_VALUE", 0.0)),
-            alert_cooldown_minutes=max(0, _env_int("EDGE_X_ALERT_COOLDOWN_MINUTES", 30)),
+            alert_cooldown_minutes=max(0, _env_int("EDGE_X_ALERT_COOLDOWN_MINUTES", 0)),
             metadata_refresh_seconds=max(300, _env_int("EDGE_X_METADATA_REFRESH_SECONDS", 3600)),
             reconnect_initial_seconds=max(1.0, _env_float("EDGE_X_RECONNECT_INITIAL_SECONDS", 2.0)),
             reconnect_max_seconds=max(5.0, _env_float("EDGE_X_RECONNECT_MAX_SECONDS", 60.0)),
@@ -316,6 +389,20 @@ class Settings:
             risk_per_trade=risk_per_trade,
             stop_method=stop_method,
             tp_r_multiple=tp_r_multiple,
+            monitor_interval=monitor_interval,
+            entry_interval=entry_interval,
+            trend_fast_ema=trend_fast_ema,
+            trend_slow_ema=trend_slow_ema,
+            roll_lookback=roll_lookback,
+            roll_max_age=roll_max_age,
+            retest_lookback=retest_lookback,
+            atr_period=atr_period,
+            atr_stop_buffer=atr_stop_buffer,
+            atr_target_buffer=atr_target_buffer,
+            retest_atr_tolerance=retest_atr_tolerance,
+            min_rr=min_rr,
+            split_rr=split_rr,
+            pullback_swing_lookback=pullback_swing_lookback,
         )
 
 
@@ -426,6 +513,18 @@ class Signal:
     volume_average: float
     volume_ratio: float
     volume_lookback: int
+    strategy_name: str | None = None
+    monitor_interval: str | None = None
+    ema_fast: float | None = None
+    ema_slow: float | None = None
+    atr_entry: float | None = None
+    atr_monitor: float | None = None
+    raw_target: float | None = None
+    stop_loss_override: float | None = None
+    take_profit_override: float | None = None
+    rr: float | None = None
+    breakout_time_ms: int | None = None
+    split_targets: tuple[tuple[float, float], ...] = ()
 
     @property
     def key(self) -> str:
@@ -645,10 +744,17 @@ def build_risk_plan(
         account_asset, settings.collateral_coin_id
     )
     entry = signal.candle.close
-    if settings.stop_method == "breakout_level":
+    if signal.stop_loss_override is not None:
+        stop = signal.stop_loss_override
+    elif settings.stop_method == "breakout_level":
         stop = signal.breakout_level
     else:
         stop = signal.candle.low if signal.direction == "up" else signal.candle.high
+
+    if signal.direction == "up" and stop >= entry:
+        raise RuntimeError("Long stop-loss must be below entry")
+    if signal.direction == "down" and stop <= entry:
+        raise RuntimeError("Short stop-loss must be above entry")
 
     stop_distance = abs(entry - stop)
     if entry <= 0 or stop_distance <= 0:
@@ -689,7 +795,16 @@ def build_risk_plan(
     actual_risk_fraction = max_loss / equity
     direction_sign = 1.0 if signal.direction == "up" else -1.0
     tp_1r = entry + direction_sign * stop_distance
-    tp_target = entry + direction_sign * stop_distance * settings.tp_r_multiple
+    if signal.take_profit_override is not None:
+        tp_target = signal.take_profit_override
+        if signal.direction == "up" and tp_target <= entry:
+            raise RuntimeError("Long take-profit must be above entry")
+        if signal.direction == "down" and tp_target >= entry:
+            raise RuntimeError("Short take-profit must be below entry")
+        target_r_multiple = abs(tp_target - entry) / stop_distance
+    else:
+        target_r_multiple = settings.tp_r_multiple
+        tp_target = entry + direction_sign * stop_distance * target_r_multiple
 
     return RiskPlan(
         equity=equity,
@@ -706,8 +821,8 @@ def build_risk_plan(
         tp_1r=tp_1r,
         tp_target=tp_target,
         profit_1r=max_loss,
-        profit_target=max_loss * settings.tp_r_multiple,
-        tp_r_multiple=settings.tp_r_multiple,
+        profit_target=max_loss * target_r_multiple,
+        tp_r_multiple=target_r_multiple,
         leverage=leverage,
         margin_capped=margin_capped,
         size_capped=size_capped,
@@ -1033,6 +1148,58 @@ def format_signal(
     except Exception:
         tz = timezone.utc
     timestamp = datetime.fromtimestamp(signal.candle.time_ms / 1000, tz=timezone.utc).astimezone(tz)
+
+    if signal.strategy_name:
+        long_side = signal.direction == "up"
+        setup_label = "押し目買い / LONG" if long_side else "戻り売り / SHORT"
+        trend_label = "上昇トレンド" if long_side else "下降トレンド"
+        lines = [
+            "🎯 EdgeX 4H→15M ロールリバーサル条件成立",
+            f"銘柄: {signal.contract.contract_name}",
+            f"方向: {setup_label}",
+            f"監視足: {_interval_label(signal.monitor_interval or 'HOUR_4')} / エントリー足: {_interval_label(signal.interval)}",
+            f"確定時刻: {timestamp:%Y-%m-%d %H:%M:%S} {timezone_name}",
+            f"4Hトレンド: {trend_label}",
+            f"EMA: {_format_number(signal.ema_fast)} / {_format_number(signal.ema_slow)}",
+            f"ロールリバーサル水準: {_format_number(signal.breakout_level)}",
+            f"15M ATR: {_format_number(signal.atr_entry)} / 4H ATR: {_format_number(signal.atr_monitor)}",
+        ]
+        if risk_plan is not None:
+            lines.extend(
+                [
+                    "",
+                    "📐 エントリー計画",
+                    f"EdgeX Equity: {_format_usd(risk_plan.equity)}",
+                    f"最大リスク: {_format_usd(risk_plan.risk_budget)} ({risk_plan.risk_fraction * 100:.1f}%)",
+                    f"Entry目安: {_format_number(risk_plan.entry_price)}",
+                    f"SL: {_format_number(risk_plan.stop_loss)}",
+                    f"TP: {_format_number(risk_plan.tp_target)}",
+                    f"RR: 1:{risk_plan.tp_r_multiple:.2f}",
+                    f"枚数: {_format_number(risk_plan.size)}",
+                    f"想定Notional: {_format_usd(risk_plan.notional)}",
+                    f"SL損失: -{_format_usd(risk_plan.max_loss)} ({risk_plan.actual_risk_fraction * 100:.2f}%)",
+                ]
+            )
+            if len(signal.split_targets) >= 2:
+                lines.extend(
+                    [
+                        "利確方式: 2分割（50% / 50%）",
+                        f"TP1 50%: {_format_number(signal.split_targets[0][1])} (2R)",
+                        f"TP2 50%: {_format_number(signal.split_targets[-1][1])} (4Hターゲット)",
+                    ]
+                )
+            else:
+                lines.append("利確方式: 分割なし（全量を4Hターゲットで利確）")
+            if risk_plan.margin_capped:
+                leverage_text = f"{risk_plan.leverage:g}x" if risk_plan.leverage is not None else "現在設定"
+                lines.append(f"証拠金上限で枚数縮小: {leverage_text}")
+            if risk_plan.size_capped:
+                lines.append("EdgeX最大注文枚数で枚数縮小")
+        elif risk_note:
+            lines.extend(["", f"📐 リスク計算: {risk_note}"])
+        lines.extend(["通知のみ（自動発注なし）", "https://pro.edgex.exchange/"])
+        return "\n".join(lines)
+
     direction_label = "上抜け" if signal.direction == "up" else "下抜け"
     sign = "+" if signal.breakout_pct >= 0 else ""
     lines = [
@@ -1063,22 +1230,9 @@ def format_signal(
                 f"{risk_plan.tp_r_multiple:g}R: {_format_number(risk_plan.tp_target)} / +{_format_usd(risk_plan.profit_target)}",
             ]
         )
-        if risk_plan.margin_capped:
-            leverage_text = (
-                f"{risk_plan.leverage:g}x" if risk_plan.leverage is not None else "現在設定"
-            )
-            lines.append(f"証拠金上限で縮小: {leverage_text}")
-        if risk_plan.size_capped:
-            lines.append("EdgeX最大注文枚数で縮小")
     elif risk_note:
         lines.extend(["", f"📐 5%リスク指示: {risk_note}"])
-
-    lines.extend(
-        [
-            "通知のみ（自動発注なし）",
-            "https://pro.edgex.exchange/",
-        ]
-    )
+    lines.extend(["通知のみ（自動発注なし）", "https://pro.edgex.exchange/"])
     return "\n".join(lines)
 
 
@@ -1160,6 +1314,157 @@ class BreakoutDetector:
         return None
 
 
+class RollReversalDetector:
+    """4H trend + role reversal, confirmed on the 15M entry candle."""
+
+    def __init__(self, settings: Settings) -> None:
+        self.settings = settings
+
+    def _recent_breakout(
+        self,
+        candles: list[Candle],
+        direction: str,
+    ) -> tuple[int, float] | None:
+        lookback = self.settings.roll_lookback
+        if len(candles) < lookback + 2:
+            return None
+        start = max(lookback, len(candles) - self.settings.roll_max_age)
+        for index in range(len(candles) - 1, start - 1, -1):
+            previous = candles[index - lookback : index]
+            if len(previous) < lookback:
+                continue
+            if direction == "up":
+                level = max(candle.high for candle in previous)
+                if candles[index].close > level:
+                    return index, level
+            else:
+                level = min(candle.low for candle in previous)
+                if candles[index].close < level:
+                    return index, level
+        return None
+
+    def detect(
+        self,
+        contract: Contract,
+        monitor_candles: Iterable[Candle],
+        entry_candles: Iterable[Candle],
+        candidate: Candle,
+    ) -> Signal | None:
+        monitor = sorted(monitor_candles, key=lambda item: item.time_ms)
+        entries = sorted((c for c in entry_candles if c.time_ms <= candidate.time_ms), key=lambda item: item.time_ms)
+        if not monitor or not entries or entries[-1].time_ms != candidate.time_ms:
+            return None
+        required_monitor = max(
+            self.settings.trend_slow_ema,
+            self.settings.roll_lookback + self.settings.roll_max_age,
+            self.settings.atr_period + 1,
+        )
+        required_entry = max(
+            self.settings.atr_period + 1,
+            self.settings.retest_lookback,
+            self.settings.pullback_swing_lookback,
+        )
+        if len(monitor) < required_monitor or len(entries) < required_entry:
+            return None
+
+        closes = [candle.close for candle in monitor]
+        ema_fast = _ema(closes, self.settings.trend_fast_ema)
+        ema_slow = _ema(closes, self.settings.trend_slow_ema)
+        atr_monitor = _atr(monitor, self.settings.atr_period)
+        atr_entry = _atr(entries, self.settings.atr_period)
+        if None in {ema_fast, ema_slow, atr_monitor, atr_entry}:
+            return None
+        assert ema_fast is not None and ema_slow is not None
+        assert atr_monitor is not None and atr_entry is not None
+        if atr_monitor <= 0 or atr_entry <= 0:
+            return None
+
+        latest_monitor = monitor[-1]
+        if ema_fast > ema_slow and latest_monitor.close > ema_fast:
+            direction = "up"
+        elif ema_fast < ema_slow and latest_monitor.close < ema_fast:
+            direction = "down"
+        else:
+            return None
+
+        breakout = self._recent_breakout(monitor, direction)
+        if breakout is None:
+            return None
+        breakout_index, roll_level = breakout
+        tolerance = max(atr_entry * self.settings.retest_atr_tolerance, roll_level * 0.001)
+        retest_window = entries[-self.settings.retest_lookback :]
+        if direction == "up":
+            touched = any(candle.low <= roll_level + tolerance for candle in retest_window)
+            confirmed = candidate.close > candidate.open and candidate.close > roll_level
+        else:
+            touched = any(candle.high >= roll_level - tolerance for candle in retest_window)
+            confirmed = candidate.close < candidate.open and candidate.close < roll_level
+        if not touched or not confirmed:
+            return None
+
+        swing_window = entries[-self.settings.pullback_swing_lookback :]
+        if direction == "up":
+            structural_stop = min(min(candle.low for candle in swing_window), roll_level)
+            stop_loss = structural_stop - atr_entry * self.settings.atr_stop_buffer
+            raw_target = max(candle.high for candle in monitor[breakout_index:])
+            take_profit = raw_target - atr_monitor * self.settings.atr_target_buffer
+            if stop_loss >= candidate.close or take_profit <= candidate.close:
+                return None
+            rr = (take_profit - candidate.close) / (candidate.close - stop_loss)
+        else:
+            structural_stop = max(max(candle.high for candle in swing_window), roll_level)
+            stop_loss = structural_stop + atr_entry * self.settings.atr_stop_buffer
+            raw_target = min(candle.low for candle in monitor[breakout_index:])
+            take_profit = raw_target + atr_monitor * self.settings.atr_target_buffer
+            if stop_loss <= candidate.close or take_profit >= candidate.close:
+                return None
+            rr = (candidate.close - take_profit) / (stop_loss - candidate.close)
+        if rr < self.settings.min_rr:
+            return None
+
+        stop_distance = abs(candidate.close - stop_loss)
+        if rr >= self.settings.split_rr:
+            direction_sign = 1.0 if direction == "up" else -1.0
+            split_targets = (
+                (0.5, candidate.close + direction_sign * stop_distance * 2.0),
+                (0.5, take_profit),
+            )
+        else:
+            split_targets = ((1.0, take_profit),)
+
+        volume_window = entries[-min(len(entries), self.settings.volume_lookback) :]
+        average_value = mean(candle.value for candle in volume_window) if volume_window else candidate.value
+        volume_ratio = candidate.value / average_value if average_value > 0 else 1.0
+        breakout_pct = (
+            (candidate.close / roll_level - 1.0) * 100.0
+            if direction == "up"
+            else -(1.0 - candidate.close / roll_level) * 100.0
+        )
+        return Signal(
+            contract=contract,
+            interval=self.settings.entry_interval,
+            direction=direction,
+            candle=candidate,
+            breakout_level=roll_level,
+            breakout_pct=breakout_pct,
+            volume_average=average_value,
+            volume_ratio=volume_ratio,
+            volume_lookback=len(volume_window),
+            strategy_name="4H trend + roll reversal",
+            monitor_interval=self.settings.monitor_interval,
+            ema_fast=ema_fast,
+            ema_slow=ema_slow,
+            atr_entry=atr_entry,
+            atr_monitor=atr_monitor,
+            raw_target=raw_target,
+            stop_loss_override=stop_loss,
+            take_profit_override=take_profit,
+            rr=rr,
+            breakout_time_ms=monitor[breakout_index].time_ms,
+            split_targets=split_targets,
+        )
+
+
 class BreakoutService:
     def __init__(
         self,
@@ -1176,7 +1481,7 @@ class BreakoutService:
             else StateStore(settings.database_path)
         )
         self.notifier = TelegramNotifier(settings)
-        self.detector = BreakoutDetector(settings)
+        self.detector = RollReversalDetector(settings)
         self.histories: dict[tuple[str, str], dict[int, Candle]] = {}
         self.initialized: set[tuple[str, str]] = set()
         self.contracts: dict[str, Contract] = {}
@@ -1229,6 +1534,19 @@ class BreakoutService:
             " (no initial alert)" if latest else "",
         )
 
+    def _detect_strategy(self, contract_id: str, candidate: Candle | None = None) -> Signal | None:
+        contract = self.contracts.get(contract_id)
+        if contract is None:
+            return None
+        monitor_key = (contract_id, self.settings.monitor_interval)
+        entry_key = (contract_id, self.settings.entry_interval)
+        monitor = self._closed_candles(monitor_key, self.settings.monitor_interval)
+        entries = self._closed_candles(entry_key, self.settings.entry_interval)
+        if not monitor or not entries:
+            return None
+        selected = candidate or entries[-1]
+        return self.detector.detect(contract, monitor, entries, selected)
+
     async def _process_updates(self, key: tuple[str, str], interval: str) -> None:
         if key not in self.initialized:
             await self._bootstrap(key, interval)
@@ -1245,32 +1563,19 @@ class BreakoutService:
         if not new_closed:
             return
 
-        contract = self.contracts.get(contract_id)
-        if contract is None:
-            return
-        # A reconnect can reveal many old candles at once. Evaluate only the
-        # latest newly closed candle to avoid a burst of stale alerts.
+        # Entry decisions are made only when a new 15-minute candle closes.
         candidate = new_closed[-1]
-        signal = self.detector.detect(contract, interval, self.histories[key].values(), candidate)
-        if signal is not None:
-            await self._send_signal(signal)
+        if interval == self.settings.entry_interval:
+            signal = self._detect_strategy(contract_id, candidate)
+            if signal is not None:
+                await self._send_signal(signal)
         self.store.mark_processed(contract_id, interval, candidate.time_ms)
 
     async def _process_snapshot_once(self, key: tuple[str, str], interval: str) -> None:
-        """Evaluate the latest closed candle from a scheduled snapshot.
-
-        Unlike the long-running mode, a scheduled run must evaluate the
-        latest already-closed candle immediately. Alert keys in the persistent
-        state store prevent the same candle from notifying on the next run.
-        """
-        closed = self._closed_candles(key, interval)
-        if not closed:
+        """Evaluate the latest 15M entry after both 4H and 15M snapshots exist."""
+        if interval not in {self.settings.monitor_interval, self.settings.entry_interval}:
             return
-        contract = self.contracts.get(key[0])
-        if contract is None:
-            return
-        candidate = closed[-1]
-        signal = self.detector.detect(contract, interval, self.histories[key].values(), candidate)
+        signal = self._detect_strategy(key[0])
         if signal is not None:
             await self._send_signal(signal)
 
@@ -1404,11 +1709,11 @@ class BreakoutService:
         await self.notifier.send(message)
         self.store.save_alert(signal, int(time.time() * 1000))
         LOGGER.info(
-            "Alert sent: %s %s %s volume_ratio=%.2f",
+            "Strategy alert sent: %s %s direction=%s rr=%s",
             signal.contract.contract_name,
             signal.interval,
             signal.direction,
-            signal.volume_ratio,
+            f"{signal.rr:.2f}" if signal.rr is not None else "-",
         )
 
     async def _handle_message(self, raw: str) -> None:
@@ -1617,12 +1922,15 @@ async def _async_main(args: argparse.Namespace) -> None:
         except (NotImplementedError, RuntimeError):
             pass
     LOGGER.info(
-        "Starting EdgeX breakout scanner: mode=%s intervals=%s lookback=%d volume_multiplier=%.2f min_breakout=%.2f%% risk=%.2f%% manual_risk=%s account_risk=%s dry_run=%s state=%s",
+        "Starting EdgeX roll-reversal scanner: mode=%s intervals=%s monitor=%s entry=%s EMA=%d/%d ATR=%d minRR=%.2f risk=%.2f%% manual_risk=%s account_risk=%s dry_run=%s state=%s",
         "scheduled-once" if args.once else "continuous",
         ",".join(settings.intervals),
-        settings.breakout_lookback,
-        settings.volume_multiplier,
-        settings.min_breakout_pct,
+        settings.monitor_interval,
+        settings.entry_interval,
+        settings.trend_fast_ema,
+        settings.trend_slow_ema,
+        settings.atr_period,
+        settings.min_rr,
         settings.risk_per_trade * 100,
         settings.manual_risk_enabled,
         settings.account_risk_enabled,
@@ -1633,7 +1941,7 @@ async def _async_main(args: argparse.Namespace) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="EdgeX volume-confirmed breakout Telegram notifier")
+    parser = argparse.ArgumentParser(description="EdgeX 4H trend / 15M roll-reversal Telegram notifier")
     parser.add_argument("--dry-run", action="store_true", help="log notifications without sending Telegram messages")
     parser.add_argument("--once", action="store_true", help="run one scheduled snapshot scan and exit")
     parser.add_argument(

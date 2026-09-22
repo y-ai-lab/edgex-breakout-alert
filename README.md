@@ -1,25 +1,35 @@
-# EdgeX 出来高ブレイクアウト通知システム
+# EdgeX 4Hトレンド / 15Mロールリバーサル通知システム
 
-EdgeXの公開WebSocketから、現在取引可能な全コントラクトを自動取得して監視します。指定した時間足の確定足が、直近レンジを終値で突破し、同時にEdgeX上のUSDC建て（将来変更された場合はメタデータ上の建値）出来高が平均を上回ったときだけTelegramへ通知します。
+EdgeXの公開WebSocketから現在取引可能な全コントラクトを取得し、4時間足でトレンドとロールリバーサル候補を監視、15分足で押し目買い・戻り売りのエントリー条件を判定します。条件が揃い、ATR調整後のリスクリワードが1:2以上の場合だけTelegramへ通知します。
 
 このプログラムは通知専用です。EdgeXへの注文・自動売買は行いません。
 
 ## 独立した定期実行方式
 
-このリポジトリの `.github/workflows/edgex-breakout-scan.yml` を有効にすると、Public GitHubの標準GitHub-hosted runnerが5分ごとに起動し、EdgeXの全取引可能コントラクトを確認して終了します。AI VALUE RADARやGPT、PCを起動したままにする必要はありません。
+有効な `.github/workflows/edgex-breakout-scan-v2.yml` は、Public GitHubの標準GitHub-hosted runnerで15分ごと（15分足確定後）に起動し、EdgeXの全取引可能コントラクトを確認して終了します。PCを起動したままにする必要はありません。
 
 これはWebSocketへ24時間接続し続ける方式ではなく、各回のスナップショットを確認する方式です。GitHub Actionsの起動遅延が発生する場合があるため、厳密なティック単位のリアルタイム監視ではありません。
 
-## 判定ルール（初期値）
+## 判定ルール
 
-- 対象銘柄：EdgeXメタデータの `enableTrade=true`。`EDGE_X_INCLUDE_HIDDEN=true` の場合は非表示設定の取引可能銘柄も含む
-- 時間足：5分足
-- ブレイク：確定足の終値が、直前20本の最高値を0.1%以上上回る（上抜け）、または最低値を0.1%以上下回る（下抜け）
-- 出来高確認：確定足の `value`（建値通貨建て売買代金）が、直前20本の平均の1.5倍以上
-- 初回起動時：過去のブレイクを遡って通知せず、最新の確定足を基準に待機
-- 重複防止：SQLiteへ処理済み足・通知済みシグナルを保存
+現在の機械判定は次の通りです。
 
-`value` を使う理由は、銘柄ごとにトークン数量の単位が違うためです。EdgeX内の取引活況を判定する目的では、数量 (`size`) より建値通貨建ての売買代金が比較しやすくなります。
+- 監視足：4時間足
+- エントリー足：15分足
+- トレンド：4HのEMA20 > EMA50かつ終値 > EMA20なら上昇、EMA20 < EMA50かつ終値 < EMA20なら下降
+- ロールリバーサル：4Hで直近20本高値/安値を終値で突破した水準を候補化。直近6本の4H足以内のブレイクのみ有効
+- 押し目/戻り：15Mの直近4本がロールリバーサル水準へATR許容幅内で再接触し、最新15M足がトレンド方向へ確定
+- ATR：ATR14を使用
+- 損切り：15M直近5本のスイングとロールリバーサル水準の外側へ、15M ATR × 0.5のバッファ
+- 利確：ブレイク後の4H直近高値（ショートは直近安値）を基準に、4H ATR × 0.25だけ内側へ調整
+- RR：ATR調整後で1:2未満は通知しない
+- RR 1:2以上〜1:3未満：分割利確なし。全量を4Hターゲットで利確
+- RR 1:3以上：2分割。50%を2R、残り50%を4Hターゲット
+- 1回の最大リスク：エントリー時点の総資産の5%
+- 枚数：`総資産 × 5% ÷ |Entry - SL|` を上限に、EdgeXの注文刻みへ切り下げる
+- 証拠金残高・レバレッジが設定されている場合は、証拠金上限でも枚数を縮小する
+
+ATRバッファやEMA期間などは環境変数で変更できます。現時点では上記を固定の検証ルールとして運用します。
 
 ## 起動方法
 
@@ -61,27 +71,17 @@ python app.py --dry-run --log-level DEBUG
 
 ## 5%リスクのエントリー指示
 
-EdgeXのPrivate REST APIを読み取り専用で使える場合、ブレイク通知へ口座資産ベースのエントリー指示を追加します。自動発注は行いません。
-
-計算は次の順です。
+Telegram通知時のEntryは条件成立した15分足の終値です。SLは上記のATR調整済みラインを使用し、次の式で枚数を計算します。
 
 ```text
-リスク予算 = EdgeX TotalEquity × 5%
-理論枚数 = リスク予算 ÷ |Entry - SL|
-最終枚数 = min(理論枚数, 利用可能証拠金×現在レバレッジ÷Entry, EdgeX最大注文枚数)
+リスク予算 = 現在のEdgeX Equity × 5%
+理論枚数 = リスク予算 ÷ |Entry - ATR調整済みSL|
+最終枚数 = min(理論枚数, 証拠金上限が分かる場合の上限, EdgeX最大注文枚数)
 ```
 
-初期設定では、Entryはシグナル確定足の終値、SLは上抜けならシグナル足の安値、下抜けならシグナル足の高値です。SL到達時の損失が口座Equityの5%以下になるよう枚数を算出し、1Rと2Rの価格・損益もTelegramへ表示します。証拠金や最大注文枚数で縮小された場合は、実際のリスク率も併記します。
+EdgeXの注文刻みへ切り下げるため、実際のSL損失は5%以下になります。手数料・スリッページ・資金調達料はこの5%計算には含まれません。
 
-APIキーがない場合は、EdgeX画面に表示される現在の口座資産をGitHub ActionsのRepository Secret `EDGEX_EQUITY_USDC` に入れます。これだけで「Equity × 5%」のSLリスク基準から枚数を計算できます。
-
-任意で `EDGEX_AVAILABLE_BALANCE_USDC` と `EDGEX_LEVERAGE` も設定すると、証拠金上限を考慮して枚数を縮小できます。未設定の場合は証拠金上限の自動判定はせず、5%リスク基準の理論枚数を通知します。
-
-Private REST APIの認証情報を持っている場合のみ、`EDGEX_ACCOUNT_ID` / `EDGEX_API_KEY` / `EDGEX_API_PASSPHRASE` / `EDGEX_API_SECRET` を使った自動取得も利用できます。手入力の `EDGEX_EQUITY_USDC` がある場合はそちらを優先します。
-
-いずれの方式でも自動発注は行いません。
-
-調整値は `.env.example` の `EDGE_X_RISK_PER_TRADE`、`EDGE_X_STOP_METHOD`、`EDGE_X_TP_R_MULTIPLE` で変更できます。
+APIキーがない場合はTelegramの `/equity` で現在資産を更新できます。API認証情報がある場合はPrivate REST APIの口座資産取得も利用できます。いずれの場合も自動発注は行いません。
 
 ## Telegramから口座資産を更新
 
@@ -101,7 +101,7 @@ Equity: $31.5000
 
 現在値だけ確認する場合は `/equity` を送ります。`/balance 31.50` または `残高 31.50` でも更新できます。
 
-更新値は `data/edgex_alert_state.json` に保存されるため、GitHub Actionsの実行環境が毎回作り直されても引き継がれます。コマンドは設定済みの `TELEGRAM_CHAT_ID` と一致するチャットからのみ受け付けます。反映は定期スキャン単位なので、通常は次の5分スキャン以降です。
+更新値は `data/edgex_alert_state.json` に保存されるため、GitHub Actionsの実行環境が毎回作り直されても引き継がれます。コマンドは設定済みの `TELEGRAM_CHAT_ID` と一致するチャットからのみ受け付けます。反映は定期スキャン単位なので、通常は次の15分スキャン以降です。
 
 ## Telegramの準備
 
@@ -124,7 +124,7 @@ TELEGRAM_CHAT_ID = 通知先のchat_id
 ```
 
 3. `Actions` タブで `EdgeX breakout scan` を選び、`Run workflow` で手動実行して確認する
-4. 問題がなければ、以後は5分ごとの自動実行に任せる
+4. 問題がなければ、以後は15分ごとの自動実行に任せる
 
 Telegram接続だけを確認したい場合は、手動実行フォームの `test_telegram` を `true` にします。この場合だけテスト通知を1通送信し、その後に通常のスキャンを実行します。
 
@@ -132,23 +132,22 @@ Telegram接続だけを確認したい場合は、手動実行フォームの `t
 
 Publicリポジトリの標準GitHub-hosted runnerだけを使うため、VPS・有料API・有料runnerは不要です。GitHub Actionsの実行時刻は混雑状況によって遅れることがあります。
 
-## 調整例
+## 主な調整値
 
 ```dotenv
-# 1分足に変更
-EDGE_X_INTERVALS=MINUTE_1
-
-# 5分足と1時間足を同時監視
-EDGE_X_INTERVALS=MINUTE_5,HOUR_1
-
-# 直近30本の高値・安値、出来高2倍、ブレイク幅0.2%
-EDGE_X_BREAKOUT_LOOKBACK=30
-EDGE_X_VOLUME_LOOKBACK=20
-EDGE_X_VOLUME_MULTIPLIER=2.0
-EDGE_X_MIN_BREAKOUT_PCT=0.2
+EDGE_X_MONITOR_INTERVAL=HOUR_4
+EDGE_X_ENTRY_INTERVAL=MINUTE_15
+EDGE_X_TREND_FAST_EMA=20
+EDGE_X_TREND_SLOW_EMA=50
+EDGE_X_ROLL_LOOKBACK=20
+EDGE_X_ROLL_MAX_AGE=6
+EDGE_X_ATR_PERIOD=14
+EDGE_X_ATR_STOP_BUFFER=0.5
+EDGE_X_ATR_TARGET_BUFFER=0.25
+EDGE_X_MIN_RR=2.0
+EDGE_X_SPLIT_RR=3.0
+EDGE_X_RISK_PER_TRADE=0.05
 ```
-
-銘柄数はEdgeXのメタデータから毎回取得し、接続更新時にも再読み込みします。新規銘柄や停止銘柄を固定リストへ手入力する必要はありません。
 
 ## Dockerで常駐させる場合
 
