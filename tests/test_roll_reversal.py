@@ -188,6 +188,10 @@ class RollReversalStrategyTests(unittest.TestCase):
         assert signal is not None
         legacy_signal = replace(
             signal,
+            candle=replace(
+                signal.candle,
+                time_ms=signal.breakout_time_ms + 15 * 60 * 1000,
+            ),
             strategy_name=None,
             breakout_time_ms=None,
         )
