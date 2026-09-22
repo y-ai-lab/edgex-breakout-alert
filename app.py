@@ -1180,7 +1180,7 @@ def format_signal(
                     f"SL損失: -{_format_usd(risk_plan.max_loss)} ({risk_plan.actual_risk_fraction * 100:.2f}%)",
                 ]
             )
-            if risk_plan.tp_r_multiple >= 3.0 and len(signal.split_targets) >= 2:
+            if len(signal.split_targets) >= 2:
                 lines.extend(
                     [
                         "利確方式: 2分割（50% / 50%）",
