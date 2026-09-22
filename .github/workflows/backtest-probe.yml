@@ -1,4 +1,4 @@
-name: Backtest API probe
+name: Backtest last 30 days
 
 on:
   push:
@@ -6,30 +6,61 @@ on:
       - backtest/last-month
     paths:
       - ".github/workflows/backtest-probe.yml"
+      - "backtest_last_30_days.py"
+      - "app.py"
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
-  probe:
+  backtest:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - name: Probe EdgeX kline API
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Run 30-day backtest
+        env:
+          DRY_RUN: "true"
+          EDGEX_EQUITY_USDC: "24"
+          EDGE_X_RISK_PER_TRADE: "0.05"
+          EDGE_X_MONITOR_INTERVAL: HOUR_4
+          EDGE_X_ENTRY_INTERVAL: MINUTE_15
+          EDGE_X_INTERVALS: HOUR_4,MINUTE_15
+          EDGE_X_TREND_FAST_EMA: "20"
+          EDGE_X_TREND_SLOW_EMA: "50"
+          EDGE_X_ROLL_LOOKBACK: "20"
+          EDGE_X_ROLL_MAX_AGE: "6"
+          EDGE_X_RETEST_LOOKBACK: "4"
+          EDGE_X_ATR_PERIOD: "14"
+          EDGE_X_ATR_STOP_BUFFER: "0.5"
+          EDGE_X_ATR_TARGET_BUFFER: "0.25"
+          EDGE_X_RETEST_ATR_TOLERANCE: "0.35"
+          EDGE_X_MIN_RR: "2.0"
+          EDGE_X_SPLIT_RR: "3.0"
+          EDGE_X_PULLBACK_SWING_LOOKBACK: "5"
+          EDGE_X_HISTORY_SIZE: "96"
+        run: python backtest_last_30_days.py
+
+      - name: Commit backtest report
         run: |
-          python - <<'PY'
-          import json, urllib.parse, urllib.request
-          base="https://edgex-prod-v2.edgex.exchange"
-          meta_url=base+"/api/v2/public/meta/getMetaData"
-          with urllib.request.urlopen(meta_url, timeout=30) as r:
-              meta=json.load(r)
-          contracts=(meta.get("data") or {}).get("contractList") or []
-          cid=str(next(x["contractId"] for x in contracts if x.get("enableTrade")))
-          params={
-              "contractId":cid,
-              "klineType":"MINUTE_15",
-              "priceType":"LAST_PRICE",
-              "size":"1000",
-          }
-          url=base+"/api/v2/public/quote/getKline?"+urllib.parse.urlencode(params)
-          with urllib.request.urlopen(url, timeout=30) as r:
-              payload=json.load(r)
-          print("CONTRACT", cid)
-          print("COUNT", len((payload.get("data") or {}).get("dataList") or [])); print("NEXT", bool((payload.get("data") or {}).get("nextPageOffsetData")))
-          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backtest_results/last_30_days.json backtest_results/last_30_days_trades.csv
+          if git diff --cached --quiet; then
+            echo "No report changes"
+            exit 0
+          fi
+          git commit -m "chore: save 30-day backtest results"
+          git pull --rebase origin backtest/last-month
+          git push origin HEAD:backtest/last-month
