@@ -32,6 +32,14 @@
       "interval": "MINUTE_15",
       "sent_at_ms": 1789923030721
     },
+    "30000003:MINUTE_15:1790038800000:down": {
+      "candle_time_ms": 1790038800000,
+      "contract_id": "30000003",
+      "contract_name": "SOLUSDC",
+      "direction": "down",
+      "interval": "MINUTE_15",
+      "sent_at_ms": 1790039709052
+    },
     "30000003:MINUTE_5:1789872900000:down": {
       "candle_time_ms": 1789872900000,
       "contract_id": "30000003",
@@ -71,6 +79,14 @@
       "direction": "up",
       "interval": "MINUTE_15",
       "sent_at_ms": 1789923031415
+    },
+    "30000014:MINUTE_15:1790038800000:down": {
+      "candle_time_ms": 1790038800000,
+      "contract_id": "30000014",
+      "contract_name": "MSTRUSDC",
+      "direction": "down",
+      "interval": "MINUTE_15",
+      "sent_at_ms": 1790039709658
     },
     "30000014:MINUTE_5:1789872900000:down": {
       "candle_time_ms": 1789872900000,
@@ -144,6 +160,14 @@
       "interval": "MINUTE_5",
       "sent_at_ms": 1789873242726
     },
+    "30000048:MINUTE_15:1790038800000:up": {
+      "candle_time_ms": 1790038800000,
+      "contract_id": "30000048",
+      "contract_name": "TRXUSDC",
+      "direction": "up",
+      "interval": "MINUTE_15",
+      "sent_at_ms": 1790039710308
+    },
     "30000048:MINUTE_5:1789872900000:down": {
       "candle_time_ms": 1789872900000,
       "contract_id": "30000048",
@@ -159,6 +183,14 @@
       "direction": "up",
       "interval": "MINUTE_15",
       "sent_at_ms": 1789923032834
+    },
+    "30000050:MINUTE_15:1790038800000:down": {
+      "candle_time_ms": 1790038800000,
+      "contract_id": "30000050",
+      "contract_name": "BNBUSDC",
+      "direction": "down",
+      "interval": "MINUTE_15",
+      "sent_at_ms": 1790039710869
     },
     "30000050:MINUTE_5:1789872900000:down": {
       "candle_time_ms": 1789872900000,
@@ -295,6 +327,14 @@
       "direction": "down",
       "interval": "MINUTE_15",
       "sent_at_ms": 1789894077154
+    },
+    "30000068:MINUTE_15:1790038800000:down": {
+      "candle_time_ms": 1790038800000,
+      "contract_id": "30000068",
+      "contract_name": "ASTERUSDC",
+      "direction": "down",
+      "interval": "MINUTE_15",
+      "sent_at_ms": 1790039711489
     },
     "30000068:MINUTE_5:1789872900000:down": {
       "candle_time_ms": 1789872900000,
