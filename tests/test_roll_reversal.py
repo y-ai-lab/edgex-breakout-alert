@@ -95,6 +95,31 @@ def long_entries(candidate_close=98.0):
     return rows
 
 
+def short_monitor():
+    rows = []
+    for i in range(55):
+        close = 120.0 - i * 0.3
+        rows.append(candle("HOUR_4", i, close + 0.1, close + 0.4, close - 0.4, close))
+    rows.append(candle("HOUR_4", 55, 104.0, 104.5, 98.0, 100.0))
+    rows.append(candle("HOUR_4", 56, 100.0, 101.0, 97.0, 99.0))
+    rows.append(candle("HOUR_4", 57, 99.0, 100.0, 96.0, 98.0))
+    rows.append(candle("HOUR_4", 58, 98.0, 99.0, 95.0, 97.0))
+    rows.append(candle("HOUR_4", 59, 97.0, 98.0, 94.0, 96.0))
+    return rows
+
+
+def short_entries():
+    rows = []
+    for i in range(15):
+        rows.append(candle("MINUTE_15", i, 100.0, 100.5, 99.5, 100.0))
+    rows.append(candle("MINUTE_15", 15, 100.0, 101.5, 99.8, 101.0))
+    rows.append(candle("MINUTE_15", 16, 101.0, 103.5, 100.8, 103.0))
+    rows.append(candle("MINUTE_15", 17, 103.0, 103.6, 102.2, 103.2))
+    rows.append(candle("MINUTE_15", 18, 103.2, 103.5, 102.4, 103.0))
+    rows.append(candle("MINUTE_15", 19, 103.0, 103.3, 101.5, 102.0))
+    return rows
+
+
 class RollReversalStrategyTests(unittest.TestCase):
     def setUp(self):
         self.settings = strategy_settings()
@@ -110,6 +135,16 @@ class RollReversalStrategyTests(unittest.TestCase):
         self.assertGreaterEqual(signal.rr, 2.0)
         self.assertLess(signal.stop_loss_override, signal.candle.close)
         self.assertGreater(signal.take_profit_override, signal.candle.close)
+
+    def test_short_roll_reversal_supports_rally_sell(self):
+        entries = short_entries()
+        signal = self.detector.detect(self.contract, short_monitor(), entries, entries[-1])
+        self.assertIsNotNone(signal)
+        assert signal is not None
+        self.assertEqual(signal.direction, "down")
+        self.assertGreaterEqual(signal.rr, 2.0)
+        self.assertGreater(signal.stop_loss_override, signal.candle.close)
+        self.assertLess(signal.take_profit_override, signal.candle.close)
 
     def test_rr_below_two_is_filtered_out(self):
         entries = long_entries(102.0)
