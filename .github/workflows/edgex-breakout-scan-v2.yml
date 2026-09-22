@@ -59,6 +59,9 @@ jobs:
       EDGE_X_PULLBACK_SWING_LOOKBACK: "5"
       EDGE_X_HISTORY_SIZE: "96"
       EDGE_X_ALERT_COOLDOWN_MINUTES: "0"
+      DRY_RUN: "false"
+      STATE_BACKEND: json
+      STATE_FILE: data/edgex_alert_state.json
       EDGE_X_INCLUDE_HIDDEN: "true"
       TIMEZONE: Asia/Tokyo
 
