@@ -25,11 +25,11 @@ jobs:
               "contractId":cid,
               "klineType":"MINUTE_15",
               "priceType":"LAST_PRICE",
-              "size":"5",
+              "size":"1000",
           }
           url=base+"/api/v2/public/quote/getKline?"+urllib.parse.urlencode(params)
           with urllib.request.urlopen(url, timeout=30) as r:
               payload=json.load(r)
           print("CONTRACT", cid)
-          print(json.dumps(payload, ensure_ascii=False)[:12000])
+          print("COUNT", len((payload.get("data") or {}).get("dataList") or [])); print("NEXT", bool((payload.get("data") or {}).get("nextPageOffsetData")))
           PY
