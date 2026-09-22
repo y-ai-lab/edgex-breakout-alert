@@ -368,6 +368,14 @@
       "interval": "MINUTE_15",
       "sent_at_ms": 1789923036875
     },
+    "30000081:MINUTE_15:1790115300000:up": {
+      "candle_time_ms": 1790115300000,
+      "contract_id": "30000081",
+      "contract_name": "LABUSDC",
+      "direction": "up",
+      "interval": "MINUTE_15",
+      "sent_at_ms": 1790116712253
+    },
     "30000100:MINUTE_15:1789921800000:up": {
       "candle_time_ms": 1789921800000,
       "contract_id": "30000100",
