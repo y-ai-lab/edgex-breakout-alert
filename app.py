@@ -528,6 +528,12 @@ class Signal:
 
     @property
     def key(self) -> str:
+        if self.strategy_name and self.breakout_time_ms is not None:
+            return (
+                f"{self.contract.contract_id}:roll:"
+                f"{self.monitor_interval or 'HOUR_4'}:"
+                f"{self.breakout_time_ms}:{self.direction}"
+            )
         return f"{self.contract.contract_id}:{self.interval}:{self.candle.time_ms}:{self.direction}"
 
 
@@ -889,6 +895,26 @@ class StateStore:
         ).fetchone()
         return row is not None
 
+    def setup_alert_exists(self, signal: Signal) -> bool:
+        if self.alert_exists(signal.key):
+            return True
+        if not signal.strategy_name or signal.breakout_time_ms is None:
+            return False
+        row = self.connection.execute(
+            """
+            SELECT 1 FROM alerts
+            WHERE contract_id=? AND interval=? AND direction=? AND candle_time_ms>=?
+            LIMIT 1
+            """,
+            (
+                signal.contract.contract_id,
+                signal.interval,
+                signal.direction,
+                signal.breakout_time_ms,
+            ),
+        ).fetchone()
+        return row is not None
+
     def latest_alert_time(self, contract_id: str, interval: str, direction: str) -> int | None:
         row = self.connection.execute(
             """
@@ -1018,6 +1044,28 @@ class JsonStateStore:
     def alert_exists(self, signal_key: str) -> bool:
         return signal_key in self.state["alerts"]
 
+    def setup_alert_exists(self, signal: Signal) -> bool:
+        if self.alert_exists(signal.key):
+            return True
+        if not signal.strategy_name or signal.breakout_time_ms is None:
+            return False
+        for record in self.state["alerts"].values():
+            if not isinstance(record, dict):
+                continue
+            if (
+                str(record.get("contract_id")) != signal.contract.contract_id
+                or str(record.get("interval")) != signal.interval
+                or str(record.get("direction")) != signal.direction
+            ):
+                continue
+            try:
+                candle_time_ms = int(record["candle_time_ms"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            if candle_time_ms >= signal.breakout_time_ms:
+                return True
+        return False
+
     def latest_alert_time(self, contract_id: str, interval: str, direction: str) -> int | None:
         latest: int | None = None
         for record in self.state["alerts"].values():
@@ -1045,6 +1093,9 @@ class JsonStateStore:
             "interval": signal.interval,
             "direction": signal.direction,
             "candle_time_ms": signal.candle.time_ms,
+            "breakout_time_ms": signal.breakout_time_ms,
+            "breakout_level": signal.breakout_level,
+            "strategy_name": signal.strategy_name,
             "sent_at_ms": int(sent_at_ms),
         }
         self._write()
@@ -1679,7 +1730,8 @@ class BreakoutService:
         return self._account_asset
 
     async def _send_signal(self, signal: Signal) -> None:
-        if self.store.alert_exists(signal.key):
+        if self.store.setup_alert_exists(signal):
+            LOGGER.info("Setup already alerted; skipped: %s", signal.key)
             return
         if self.settings.alert_cooldown_minutes:
             last_alert = self.store.latest_alert_time(
@@ -1709,11 +1761,12 @@ class BreakoutService:
         await self.notifier.send(message)
         self.store.save_alert(signal, int(time.time() * 1000))
         LOGGER.info(
-            "Strategy alert sent: %s %s direction=%s rr=%s",
+            "Strategy alert sent: %s %s direction=%s rr=%s setup_key=%s",
             signal.contract.contract_name,
             signal.interval,
             signal.direction,
             f"{signal.rr:.2f}" if signal.rr is not None else "-",
+            signal.key,
         )
 
     async def _handle_message(self, raw: str) -> None:
