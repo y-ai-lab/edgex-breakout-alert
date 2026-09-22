@@ -1160,7 +1160,7 @@ def format_signal(
             f"監視足: {_interval_label(signal.monitor_interval or 'HOUR_4')} / エントリー足: {_interval_label(signal.interval)}",
             f"確定時刻: {timestamp:%Y-%m-%d %H:%M:%S} {timezone_name}",
             f"4Hトレンド: {trend_label}",
-            f"EMA{self_period if False else ''}" if False else f"EMA: {_format_number(signal.ema_fast)} / {_format_number(signal.ema_slow)}",
+            f"EMA: {_format_number(signal.ema_fast)} / {_format_number(signal.ema_slow)}",
             f"ロールリバーサル水準: {_format_number(signal.breakout_level)}",
             f"15M ATR: {_format_number(signal.atr_entry)} / 4H ATR: {_format_number(signal.atr_monitor)}",
         ]
@@ -1579,7 +1579,6 @@ class BreakoutService:
         if signal is not None:
             await self._send_signal(signal)
 
-    def _current_equity(self) -> float | None:
     def _current_equity(self) -> float | None:
         runtime_equity = self.store.get_runtime_equity()
         if runtime_equity is not None and runtime_equity > 0:
