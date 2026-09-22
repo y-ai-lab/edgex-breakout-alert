@@ -27,7 +27,7 @@ def strategy_settings():
         "EDGE_X_ATR_PERIOD": "14",
         "EDGE_X_ATR_STOP_BUFFER": "0.5",
         "EDGE_X_ATR_TARGET_BUFFER": "0.25",
-        "EDGE_X_ATR_RETEST_TOLERANCE": "0.35",
+        "EDGE_X_RETEST_ATR_TOLERANCE": "0.35",
         "EDGE_X_MIN_RR": "2.0",
         "EDGE_X_SPLIT_RR": "3.0",
         "EDGE_X_PULLBACK_SWING_LOOKBACK": "5",
