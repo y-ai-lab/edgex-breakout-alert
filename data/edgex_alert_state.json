@@ -72,6 +72,14 @@
       "interval": "MINUTE_5",
       "sent_at_ms": 1789873241563
     },
+    "30000005:MINUTE_15:1790105400000:up": {
+      "candle_time_ms": 1790105400000,
+      "contract_id": "30000005",
+      "contract_name": "XAUUSDC",
+      "direction": "up",
+      "interval": "MINUTE_15",
+      "sent_at_ms": 1790106851607
+    },
     "30000014:MINUTE_15:1789921800000:up": {
       "candle_time_ms": 1789921800000,
       "contract_id": "30000014",
