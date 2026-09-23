@@ -2,9 +2,9 @@ name: EdgeX breakout scan v2
 
 on:
   schedule:
-    # Run a long-lived scanner every 3 hours. Each job scans every 5 minutes for ~2h50m.
-    # This reduces dependence on GitHub's sometimes-delayed high-frequency scheduler.
-    - cron: "7 */3 * * *"
+    # Long-lived runner: start every 6 hours and scan every 4 minutes for ~5h50m.
+    # This mirrors the previously stable standalone runner, now owned by EdgeX News itself.
+    - cron: "7 0,6,12,18 * * *"
   push:
     branches:
       - main
@@ -31,7 +31,7 @@ concurrency:
 jobs:
   scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 175
+    timeout-minutes: 350
     env:
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -117,23 +117,36 @@ jobs:
           PY
 
       - name: Scan all tradable EdgeX contracts continuously
+        shell: bash
         run: |
-          end=$(( $(date +%s) + 10200 ))
-          while [ "$(date +%s)" -lt "$end" ]; do
+          set -euo pipefail
+          end_epoch=$(( $(date +%s) + 21000 ))
+
+          while [ "$(date +%s)" -lt "$end_epoch" ]; do
+            echo "Starting EdgeX News scan at $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
             python app.py --once --once-timeout 90 --log-level INFO
-            sleep 300
+
+            if [ -n "$(git status --porcelain -- data/edgex_alert_state.json)" ]; then
+              git config user.name "github-actions[bot]"
+              git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+              git add data/edgex_alert_state.json
+              git commit -m "chore: update EdgeX alert state"
+              git pull --rebase origin main
+              git push
+            fi
+
+            remaining=$(( end_epoch - $(date +%s) ))
+            if [ "$remaining" -le 0 ]; then
+              break
+            fi
+            sleep_seconds=240
+            if [ "$remaining" -lt "$sleep_seconds" ]; then
+              sleep_seconds="$remaining"
+            fi
+            echo "Next EdgeX News scan in ${sleep_seconds}s"
+            sleep "$sleep_seconds"
           done
 
-      - name: Commit notification deduplication state
-        if: ${{ success() }}
-        run: |
-          if [ -z "$(git status --porcelain -- data/edgex_alert_state.json)" ]; then
-            echo "No state change"
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/edgex_alert_state.json
-          git commit -m "chore: update EdgeX alert state"
-          git pull --rebase origin main
-          git push
+      - name: Session summary
+        if: ${{ always() }}
+        run: echo "EdgeX News scanner session ended at $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
