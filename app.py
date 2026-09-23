@@ -1,10 +1,9 @@
 """EdgeX multi-timeframe roll-reversal alert service.
 
 The service monitors the 4-hour trend and recent role-reversal level, then
-uses 15-minute closed candles only for pullback / rally entry confirmation.
-Stop-loss and take-profit levels are derived from the 4-hour structure and
-4-hour ATR. It sizes positions so the stop-loss risk stays at or below the
-configured fraction of current equity and sends Telegram instructions only. It never
+uses 15-minute closed candles for pullback / rally entry confirmation. It
+sizes positions so the stop-loss risk stays at or below the configured
+fraction of current equity and sends Telegram instructions only. It never
 places orders.
 """
 
@@ -1215,7 +1214,6 @@ def format_signal(
             f"EMA: {_format_number(signal.ema_fast)} / {_format_number(signal.ema_slow)}",
             f"ロールリバーサル水準: {_format_number(signal.breakout_level)}",
             f"15M ATR: {_format_number(signal.atr_entry)} / 4H ATR: {_format_number(signal.atr_monitor)}",
-            "SL/TP基準: 4H構造 + 4H ATR",
         ]
         if risk_plan is not None:
             lines.extend(
@@ -1455,30 +1453,19 @@ class RollReversalDetector:
         if not touched or not confirmed:
             return None
 
-        # Entry timing is confirmed on 15M, but trade invalidation and targets
-        # are defined entirely from the 4H setup.  The structural stop uses the
-        # most adverse 4H extreme since the breakout (or the roll level itself)
-        # plus a 4H ATR buffer.  This keeps a valid 4H thesis from being stopped
-        # merely by ordinary 15M noise.
-        monitor_structure = monitor[breakout_index:]
+        # Entry timing is confirmed on 15M, but trade invalidation and target are
+        # anchored to the 4H setup. A long is invalidated below the broken 4H
+        # resistance (now support) by a 4H ATR buffer; a short is the inverse.
         if direction == "up":
-            structural_stop = min(
-                roll_level,
-                min(candle.low for candle in monitor_structure),
-            )
-            stop_loss = structural_stop - atr_monitor * self.settings.atr_stop_buffer
-            raw_target = max(candle.high for candle in monitor_structure)
+            stop_loss = roll_level - atr_monitor * self.settings.atr_stop_buffer
+            raw_target = max(candle.high for candle in monitor[breakout_index:])
             take_profit = raw_target - atr_monitor * self.settings.atr_target_buffer
             if stop_loss >= candidate.close or take_profit <= candidate.close:
                 return None
             rr = (take_profit - candidate.close) / (candidate.close - stop_loss)
         else:
-            structural_stop = max(
-                roll_level,
-                max(candle.high for candle in monitor_structure),
-            )
-            stop_loss = structural_stop + atr_monitor * self.settings.atr_stop_buffer
-            raw_target = min(candle.low for candle in monitor_structure)
+            stop_loss = roll_level + atr_monitor * self.settings.atr_stop_buffer
+            raw_target = min(candle.low for candle in monitor[breakout_index:])
             take_profit = raw_target + atr_monitor * self.settings.atr_target_buffer
             if stop_loss <= candidate.close or take_profit >= candidate.close:
                 return None
