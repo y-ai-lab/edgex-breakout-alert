@@ -11,6 +11,7 @@ from app import (
     JsonStateStore,
     RollReversalDetector,
     Settings,
+    _atr,
     _manual_account_asset,
     build_risk_plan,
     format_signal,
@@ -139,6 +140,19 @@ class RollReversalStrategyTests(unittest.TestCase):
         self.assertGreaterEqual(signal.rr, 2.0)
         self.assertLess(signal.stop_loss_override, signal.candle.close)
         self.assertGreater(signal.take_profit_override, signal.candle.close)
+        monitor = long_monitor()
+        breakout_index = next(
+            index for index, item in enumerate(monitor)
+            if item.time_ms == signal.breakout_time_ms
+        )
+        expected_structural_stop = min(
+            signal.breakout_level,
+            min(item.low for item in monitor[breakout_index:]),
+        )
+        self.assertAlmostEqual(
+            signal.stop_loss_override,
+            expected_structural_stop - signal.atr_monitor * self.settings.atr_stop_buffer,
+        )
 
     def test_short_roll_reversal_supports_rally_sell(self):
         entries = short_entries()
@@ -149,6 +163,35 @@ class RollReversalStrategyTests(unittest.TestCase):
         self.assertGreaterEqual(signal.rr, 2.0)
         self.assertGreater(signal.stop_loss_override, signal.candle.close)
         self.assertLess(signal.take_profit_override, signal.candle.close)
+        monitor = short_monitor()
+        breakout_index = next(
+            index for index, item in enumerate(monitor)
+            if item.time_ms == signal.breakout_time_ms
+        )
+        expected_structural_stop = max(
+            signal.breakout_level,
+            max(item.high for item in monitor[breakout_index:]),
+        )
+        self.assertAlmostEqual(
+            signal.stop_loss_override,
+            expected_structural_stop + signal.atr_monitor * self.settings.atr_stop_buffer,
+        )
+
+    def test_15m_noise_does_not_move_4h_stop(self):
+        entries = long_entries(98.0)
+        first = self.detector.detect(self.contract, long_monitor(), entries, entries[-1])
+        self.assertIsNotNone(first)
+        assert first is not None
+
+        noisier_entries = list(entries)
+        noisier_entries[-2] = replace(noisier_entries[-2], low=90.0)
+        second = self.detector.detect(
+            self.contract, long_monitor(), noisier_entries, noisier_entries[-1]
+        )
+        self.assertIsNotNone(second)
+        assert second is not None
+        self.assertNotAlmostEqual(first.atr_entry, second.atr_entry)
+        self.assertAlmostEqual(first.stop_loss_override, second.stop_loss_override)
 
     def test_same_roll_reversal_uses_same_persistent_alert_key(self):
         entries = long_entries(98.0)
@@ -220,7 +263,7 @@ class RollReversalStrategyTests(unittest.TestCase):
         signal = self.detector.detect(self.contract, long_monitor(), entries, entries[-1])
         self.assertIsNone(signal)
 
-    def test_five_percent_position_size_uses_atr_stop(self):
+    def test_five_percent_position_size_uses_4h_structure_stop(self):
         entries = long_entries(98.0)
         signal = self.detector.detect(self.contract, long_monitor(), entries, entries[-1])
         self.assertIsNotNone(signal)
@@ -233,7 +276,7 @@ class RollReversalStrategyTests(unittest.TestCase):
         self.assertGreaterEqual(plan.tp_r_multiple, 2.0)
 
     def test_rr_three_or_more_is_equal_two_way_take_profit(self):
-        entries = long_entries(98.0)
+        entries = long_entries(97.0)
         signal = self.detector.detect(self.contract, long_monitor(), entries, entries[-1])
         self.assertIsNotNone(signal)
         assert signal is not None
