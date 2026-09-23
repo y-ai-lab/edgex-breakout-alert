@@ -1215,6 +1215,7 @@ def format_signal(
             f"EMA: {_format_number(signal.ema_fast)} / {_format_number(signal.ema_slow)}",
             f"ロールリバーサル水準: {_format_number(signal.breakout_level)}",
             f"15M ATR: {_format_number(signal.atr_entry)} / 4H ATR: {_format_number(signal.atr_monitor)}",
+            "SL/TP基準: 4H構造 + 4H ATR",
         ]
         if risk_plan is not None:
             lines.extend(
