@@ -2,8 +2,9 @@ name: EdgeX breakout scan v2
 
 on:
   schedule:
-    # GitHub Actions uses UTC. Run every 15 minutes shortly after each candle close. Updated 2026-09-23 to re-arm the scheduler.
-    - cron: "3-59/15 * * * *"
+    # Run a long-lived scanner every 3 hours. Each job scans every 5 minutes for ~2h50m.
+    # This reduces dependence on GitHub's sometimes-delayed high-frequency scheduler.
+    - cron: "7 */3 * * *"
   push:
     branches:
       - main
@@ -30,7 +31,7 @@ concurrency:
 jobs:
   scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 175
     env:
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -115,8 +116,13 @@ jobs:
           print("Telegram test message sent")
           PY
 
-      - name: Scan all tradable EdgeX contracts
-        run: python app.py --once --once-timeout 90 --log-level INFO
+      - name: Scan all tradable EdgeX contracts continuously
+        run: |
+          end=$(( $(date +%s) + 10200 ))
+          while [ "$(date +%s)" -lt "$end" ]; do
+            python app.py --once --once-timeout 90 --log-level INFO
+            sleep 300
+          done
 
       - name: Commit notification deduplication state
         if: ${{ success() }}
