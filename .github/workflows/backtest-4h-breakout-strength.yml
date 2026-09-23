@@ -1,4 +1,5 @@
 name: Backtest 4H breakout strength
+# aligned with feature/4h-exit-structure baseline
 
 on:
   push:
