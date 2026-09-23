@@ -2,7 +2,7 @@ name: EdgeX breakout scan v2
 
 on:
   schedule:
-    # GitHub Actions uses UTC. This runs every fifteen minutes, shortly after each 15-minute candle closes.
+    # GitHub Actions uses UTC. Run every 15 minutes shortly after each candle close. Updated 2026-09-23 to re-arm the scheduler.
     - cron: "3-59/15 * * * *"
   push:
     branches:
