@@ -231,7 +231,7 @@ def variant_accepts(variant: str, signal: Any, entry_history: list[Candle]) -> b
 
     level = float(signal.breakout_level)
     candidate = signal.candle
-    previous = entry_history[-max(2, signal.contract is not None and 4 or 4):-1]
+    previous = entry_history[-4:-1]
 
     if signal.direction == "up":
         wrong_side_close = any(c.close <= level for c in previous)
