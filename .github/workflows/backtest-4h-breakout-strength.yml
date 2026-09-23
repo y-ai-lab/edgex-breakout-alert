@@ -13,6 +13,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: backtest-4h-breakout-strength
+  cancel-in-progress: true
+
 jobs:
   backtest:
     runs-on: ubuntu-latest
@@ -46,7 +50,10 @@ jobs:
           EDGE_X_MIN_RR: "2.0"
           EDGE_X_SPLIT_RR: "3.0"
           EDGE_X_HISTORY_SIZE: "96"
-        run: python backtest_4h_breakout_strength.py
+        run: |
+          # Reduce concurrent EdgeX history requests to avoid API stalls/rate-limit hangs.
+          sed -i 's/max_workers=6/max_workers=3/' backtest_4h_breakout_strength.py
+          python backtest_4h_breakout_strength.py
       - name: Analyze costs and portfolio risk
         run: python analyze_4h_breakout_strength_costs.py
       - name: Commit results
