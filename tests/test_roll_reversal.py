@@ -150,6 +150,25 @@ class RollReversalStrategyTests(unittest.TestCase):
         self.assertGreater(signal.stop_loss_override, signal.candle.close)
         self.assertLess(signal.take_profit_override, signal.candle.close)
 
+    def test_stop_uses_4h_breakout_structure_and_4h_atr(self):
+        entries = long_entries(98.0)
+        monitor = long_monitor()
+        signal = self.detector.detect(self.contract, monitor, entries, entries[-1])
+        self.assertIsNotNone(signal)
+        assert signal is not None
+        breakout = next(c for c in monitor if c.time_ms == signal.breakout_time_ms)
+        expected_structure = min(breakout.low, signal.breakout_level)
+        expected_stop = expected_structure - signal.atr_monitor * self.settings.atr_stop_buffer
+        self.assertAlmostEqual(signal.stop_loss_override, expected_stop)
+
+        # Changing only the 15M swing low must not change the 4H-based stop.
+        changed = list(entries)
+        changed[-2] = replace(changed[-2], low=changed[-2].low - 20.0)
+        second = self.detector.detect(self.contract, monitor, changed, changed[-1])
+        self.assertIsNotNone(second)
+        assert second is not None
+        self.assertAlmostEqual(second.stop_loss_override, signal.stop_loss_override)
+
     def test_same_roll_reversal_uses_same_persistent_alert_key(self):
         entries = long_entries(98.0)
         first = self.detector.detect(self.contract, long_monitor(), entries, entries[-1])
@@ -220,7 +239,7 @@ class RollReversalStrategyTests(unittest.TestCase):
         signal = self.detector.detect(self.contract, long_monitor(), entries, entries[-1])
         self.assertIsNone(signal)
 
-    def test_five_percent_position_size_uses_atr_stop(self):
+    def test_five_percent_position_size_uses_4h_structure_stop(self):
         entries = long_entries(98.0)
         signal = self.detector.detect(self.contract, long_monitor(), entries, entries[-1])
         self.assertIsNotNone(signal)
