@@ -1,0 +1,40 @@
+name: Probe funding and metadata
+
+on:
+  push:
+    branches:
+      - backtest/180d-deduped
+    paths:
+      - ".github/workflows/funding-meta-probe.yml"
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe EdgeX funding history and metadata
+        run: |
+          python - <<'PY'
+          import json, urllib.parse, urllib.request
+          base="https://edgex-prod-v2.edgex.exchange"
+
+          def get(path, params=None):
+              url=base+path
+              if params:
+                  url += "?" + urllib.parse.urlencode(params)
+              req=urllib.request.Request(url, headers={"Accept":"application/json","User-Agent":"edgex-backtest-probe/1.0"})
+              with urllib.request.urlopen(req, timeout=30) as r:
+                  return json.load(r)
+
+          funding=get("/api/v2/public/funding/getFundingRatePage",{
+              "size":"5",
+              "contractId":"30000001",
+              "filterSettlementFundingRate":"true",
+          })
+          print("FUNDING", json.dumps(funding, ensure_ascii=False)[:12000])
+
+          meta=get("/api/v2/public/meta/getMetaData")
+          contracts=(meta.get("data") or {}).get("contractList") or []
+          for symbol in ("BTCUSDC","AAPLUSDC","TSLAUSDC","XAUUSDC"):
+              row=next((x for x in contracts if x.get("contractName")==symbol), None)
+              print("META", symbol, json.dumps(row, ensure_ascii=False)[:8000])
+          PY
