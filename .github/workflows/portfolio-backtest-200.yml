@@ -1,0 +1,46 @@
+name: Portfolio backtest 200
+
+on:
+  push:
+    branches:
+      - backtest/180d-deduped
+    paths:
+      - ".github/workflows/portfolio-backtest-200.yml"
+      - "portfolio_backtest_200.py"
+      - "backtest_results/deduped_180d_trades.csv"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile
+        run: python -m py_compile portfolio_backtest_200.py
+
+      - name: Run realistic portfolio backtest
+        run: python portfolio_backtest_200.py
+
+      - name: Commit result
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backtest_results/portfolio_realistic_200.json
+          if git diff --cached --quiet; then
+            echo "No result changes"
+            exit 0
+          fi
+          git commit -m "chore: save realistic $200 portfolio backtest"
+          git pull --rebase origin backtest/180d-deduped
+          git push origin HEAD:backtest/180d-deduped
