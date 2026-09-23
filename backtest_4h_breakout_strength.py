@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
-from app import Candle, Contract, EdgeXClient, INTERVAL_MS, RollReversalDetector, Settings
+from app import Candle, Contract, EdgeXClient, INTERVAL_MS, RollReversalDetector, Settings, _atr
 
 DAY_MS = 24 * 60 * 60 * 1000
 ENTRY_INTERVAL = "MINUTE_15"
@@ -263,13 +263,17 @@ def backtest_contract(
         if signal is None:
             continue
 
-        breakout_candle = next(
-            (x for x in monitor_history if x.time_ms == signal.breakout_time_ms),
+        breakout_index = next(
+            (j for j, x in enumerate(monitor_history) if x.time_ms == signal.breakout_time_ms),
             None,
         )
-        if breakout_candle is None or not signal.atr_monitor:
+        if breakout_index is None:
             continue
-        breakout_body_atr = abs(breakout_candle.close - breakout_candle.open) / float(signal.atr_monitor)
+        breakout_candle = monitor_history[breakout_index]
+        breakout_atr = _atr(monitor_history[: breakout_index + 1], settings.atr_period)
+        if breakout_atr is None or breakout_atr <= 0:
+            continue
+        breakout_body_atr = abs(breakout_candle.close - breakout_candle.open) / float(breakout_atr)
 
         for variant, threshold in VARIANTS.items():
             if threshold is not None and breakout_body_atr < threshold:
