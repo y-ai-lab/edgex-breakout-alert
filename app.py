@@ -1453,18 +1453,18 @@ class RollReversalDetector:
         if not touched or not confirmed:
             return None
 
-        swing_window = entries[-self.settings.pullback_swing_lookback :]
+        # Entry timing is confirmed on 15M, but trade invalidation and target are
+        # anchored to the 4H setup. A long is invalidated below the broken 4H
+        # resistance (now support) by a 4H ATR buffer; a short is the inverse.
         if direction == "up":
-            structural_stop = min(min(candle.low for candle in swing_window), roll_level)
-            stop_loss = structural_stop - atr_entry * self.settings.atr_stop_buffer
+            stop_loss = roll_level - atr_monitor * self.settings.atr_stop_buffer
             raw_target = max(candle.high for candle in monitor[breakout_index:])
             take_profit = raw_target - atr_monitor * self.settings.atr_target_buffer
             if stop_loss >= candidate.close or take_profit <= candidate.close:
                 return None
             rr = (take_profit - candidate.close) / (candidate.close - stop_loss)
         else:
-            structural_stop = max(max(candle.high for candle in swing_window), roll_level)
-            stop_loss = structural_stop + atr_entry * self.settings.atr_stop_buffer
+            stop_loss = roll_level + atr_monitor * self.settings.atr_stop_buffer
             raw_target = min(candle.low for candle in monitor[breakout_index:])
             take_profit = raw_target + atr_monitor * self.settings.atr_target_buffer
             if stop_loss <= candidate.close or take_profit >= candidate.close:
