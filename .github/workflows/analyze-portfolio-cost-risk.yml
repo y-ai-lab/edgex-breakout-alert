@@ -1,0 +1,32 @@
+name: Analyze portfolio cost risk
+
+on:
+  push:
+    branches: [backtest/portfolio-cost-risk]
+    paths:
+      - ".github/workflows/analyze-portfolio-cost-risk.yml"
+      - "analyze_portfolio_costs.py"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run portfolio/cost analysis
+        run: python analyze_portfolio_costs.py
+      - name: Commit results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backtest_results/portfolio_cost_risk_analysis.json
+          git diff --cached --quiet && exit 0
+          git commit -m "chore: save portfolio cost risk analysis"
+          git pull --rebase origin backtest/portfolio-cost-risk
+          git push origin HEAD:backtest/portfolio-cost-risk
