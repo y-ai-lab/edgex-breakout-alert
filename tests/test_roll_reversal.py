@@ -139,6 +139,10 @@ class RollReversalStrategyTests(unittest.TestCase):
         self.assertGreaterEqual(signal.rr, 2.0)
         self.assertLess(signal.stop_loss_override, signal.candle.close)
         self.assertGreater(signal.take_profit_override, signal.candle.close)
+        self.assertAlmostEqual(
+            signal.stop_loss_override,
+            signal.breakout_level - signal.atr_monitor * self.settings.atr_stop_buffer,
+        )
 
     def test_short_roll_reversal_supports_rally_sell(self):
         entries = short_entries()
@@ -149,6 +153,10 @@ class RollReversalStrategyTests(unittest.TestCase):
         self.assertGreaterEqual(signal.rr, 2.0)
         self.assertGreater(signal.stop_loss_override, signal.candle.close)
         self.assertLess(signal.take_profit_override, signal.candle.close)
+        self.assertAlmostEqual(
+            signal.stop_loss_override,
+            signal.breakout_level + signal.atr_monitor * self.settings.atr_stop_buffer,
+        )
 
     def test_same_roll_reversal_uses_same_persistent_alert_key(self):
         entries = long_entries(98.0)
@@ -220,7 +228,7 @@ class RollReversalStrategyTests(unittest.TestCase):
         signal = self.detector.detect(self.contract, long_monitor(), entries, entries[-1])
         self.assertIsNone(signal)
 
-    def test_five_percent_position_size_uses_atr_stop(self):
+    def test_five_percent_position_size_uses_4h_atr_stop(self):
         entries = long_entries(98.0)
         signal = self.detector.detect(self.contract, long_monitor(), entries, entries[-1])
         self.assertIsNotNone(signal)
