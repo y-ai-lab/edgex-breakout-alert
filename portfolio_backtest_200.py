@@ -508,6 +508,31 @@ def main() -> None:
             ),
         })
 
+    # Post-hoc robustness check only: RR>=4 was discovered after looking at the sample,
+    # so these scenarios must not be treated as validated production rules.
+    rr4_trades = [trade for trade in trades if float(trade["rr_planned"]) >= 4.0]
+    rr4_diagnostics = []
+    for risk in (0.01, 0.02, 0.03, 0.05):
+        for cap in (0.10, 0.15, 0.20):
+            for slip in (0.0002, 0.0005):
+                rr4_diagnostics.append({
+                    "name": f"rr4_risk{risk:.2%}_cap{cap:.0%}_slip{slip:.2%}",
+                    "risk_per_trade": risk,
+                    "portfolio_risk_cap": cap,
+                    "slippage_each_fill": slip,
+                    **simulate(
+                        rr4_trades,
+                        metadata,
+                        funding,
+                        risk_per_trade=risk,
+                        portfolio_risk_cap=cap,
+                        slippage=slip,
+                        fee_mode="live_metadata",
+                        funding_mode="signed",
+                        stock_mode="all",
+                    ),
+                })
+
     live_taker_rates = sorted({
         round(float(meta.get("defaultTakerFeeRate") or LIVE_DEFAULT_TAKER_FALLBACK), 8)
         for meta in metadata.values()
@@ -544,6 +569,7 @@ def main() -> None:
             "funding_errors": funding_errors,
         },
         "diagnostics": diagnostics,
+        "rr4_posthoc_diagnostics": rr4_diagnostics,
         "grid": scenarios,
     }
 
@@ -559,6 +585,8 @@ def main() -> None:
     }))
     for row in diagnostics:
         print("DIAG", json.dumps(row, ensure_ascii=False))
+    for row in rr4_diagnostics:
+        print("RR4", json.dumps(row, ensure_ascii=False))
     print("GRID_COUNT", len(scenarios))
 
 
