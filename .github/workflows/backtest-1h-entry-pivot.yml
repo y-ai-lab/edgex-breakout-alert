@@ -1,0 +1,38 @@
+name: Backtest 1H entry pivot
+on:
+  push:
+    branches: [backtest/1h-entry-pivot]
+    paths:
+      - "backtest_1h_entry.py"
+      - ".github/workflows/backtest-1h-entry-pivot.yml"
+  workflow_dispatch:
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      EDGEX_EQUITY_USDC: "24"
+      EDGE_X_RISK_PER_TRADE: "0.05"
+      EDGE_X_MONITOR_INTERVAL: "HOUR_4"
+      EDGE_X_ENTRY_INTERVAL: "HOUR_1"
+      EDGE_X_TREND_FAST_EMA: "20"
+      EDGE_X_TREND_SLOW_EMA: "50"
+      EDGE_X_ROLL_LOOKBACK: "20"
+      EDGE_X_ROLL_MAX_AGE: "6"
+      EDGE_X_RETEST_LOOKBACK: "4"
+      EDGE_X_ATR_PERIOD: "14"
+      EDGE_X_ATR_STOP_BUFFER: "0.5"
+      EDGE_X_ATR_TARGET_BUFFER: "0.25"
+      EDGE_X_RETEST_ATR_TOLERANCE: "0.35"
+      EDGE_X_MIN_RR: "2"
+      EDGE_X_SPLIT_RR: "3"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Unit tests
+        run: python -m unittest discover -s tests -v
+      - name: Run 1H entry pivot backtest
+        run: python backtest_1h_entry.py
