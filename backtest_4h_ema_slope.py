@@ -4,6 +4,7 @@ from __future__ import annotations
 import backtest_4h_exit as bt
 
 SLOPE_LAG_BARS = 3  # 12 hours on the 4H monitor timeframe
+FILTER_NAME = "ema20_slope_3x4h"
 
 
 class EmaSlopeFilteredDetector(bt.RollReversalDetector):
