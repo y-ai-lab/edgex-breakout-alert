@@ -7,6 +7,17 @@ SLOPE_LAG_BARS = 3  # 12 hours on the 4H monitor timeframe
 FILTER_NAME = "ema20_slope_3x4h"
 
 
+def ema(values: list[float], period: int) -> float | None:
+    if period <= 0 or len(values) < period:
+        return None
+    seed = sum(values[:period]) / period
+    multiplier = 2.0 / (period + 1.0)
+    current = seed
+    for value in values[period:]:
+        current = (value - current) * multiplier + current
+    return current
+
+
 class EmaSlopeFilteredDetector(bt.RollReversalDetector):
     """Existing 4H roll-reversal rules + a fixed 3-bar EMA20 slope filter."""
 
@@ -21,8 +32,8 @@ class EmaSlopeFilteredDetector(bt.RollReversalDetector):
 
         closes_now = [c.close for c in monitor]
         closes_then = closes_now[:-SLOPE_LAG_BARS]
-        ema_now = bt._ema(closes_now, self.settings.trend_fast_ema)
-        ema_then = bt._ema(closes_then, self.settings.trend_fast_ema)
+        ema_now = ema(closes_now, self.settings.trend_fast_ema)
+        ema_then = ema(closes_then, self.settings.trend_fast_ema)
         if ema_now is None or ema_then is None:
             return None
 
