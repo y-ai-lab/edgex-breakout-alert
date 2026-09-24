@@ -1,0 +1,22 @@
+name: Backtest cross-sectional momentum pivot
+on:
+  push:
+    branches: [backtest/cross-sectional-momentum]
+    paths:
+      - 'backtest_cross_sectional_momentum.py'
+      - '.github/workflows/backtest-cross-sectional-momentum.yml'
+  workflow_dispatch:
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - name: Unit tests
+        run: python -m unittest discover -s tests -v
+      - name: Run cross-sectional momentum pivot
+        run: python backtest_cross_sectional_momentum.py
