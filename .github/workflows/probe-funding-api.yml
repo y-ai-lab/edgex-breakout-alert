@@ -1,0 +1,19 @@
+name: Probe EdgeX funding API
+on:
+  push:
+    branches: [research/funding-carry-breakeven]
+    paths:
+      - 'probe_funding_api.py'
+      - '.github/workflows/probe-funding-api.yml'
+  workflow_dispatch:
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Probe public funding endpoints
+        run: python probe_funding_api.py
