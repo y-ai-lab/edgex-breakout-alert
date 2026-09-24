@@ -1,0 +1,74 @@
+name: Backtest 4H EMA slope filter
+
+on:
+  push:
+    branches:
+      - backtest/4h-ema-slope
+    paths:
+      - ".github/workflows/backtest-4h-ema-slope.yml"
+      - "app.py"
+      - "backtest_4h_exit.py"
+      - "backtest_4h_ema_slope.py"
+      - "analyze_4h_exit_costs.py"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: backtest-4h-ema-slope
+  cancel-in-progress: true
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Unit tests
+        run: python -m unittest discover -s tests -v
+      - name: Run 4H EMA slope filter backtest
+        env:
+          DRY_RUN: "true"
+          EDGEX_EQUITY_USDC: "200"
+          EDGE_X_RISK_PER_TRADE: "0.05"
+          EDGE_X_MONITOR_INTERVAL: HOUR_4
+          EDGE_X_ENTRY_INTERVAL: MINUTE_15
+          EDGE_X_INTERVALS: HOUR_4,MINUTE_15
+          EDGE_X_TREND_FAST_EMA: "20"
+          EDGE_X_TREND_SLOW_EMA: "50"
+          EDGE_X_ROLL_LOOKBACK: "20"
+          EDGE_X_ROLL_MAX_AGE: "6"
+          EDGE_X_RETEST_LOOKBACK: "4"
+          EDGE_X_ATR_PERIOD: "14"
+          EDGE_X_ATR_STOP_BUFFER: "0.5"
+          EDGE_X_ATR_TARGET_BUFFER: "0.25"
+          EDGE_X_RETEST_ATR_TOLERANCE: "0.35"
+          EDGE_X_MIN_RR: "2.0"
+          EDGE_X_SPLIT_RR: "3.0"
+          EDGE_X_PULLBACK_SWING_LOOKBACK: "5"
+          EDGE_X_HISTORY_SIZE: "96"
+        run: |
+          sed -i 's/max_workers=6/max_workers=3/' backtest_4h_exit.py
+          python backtest_4h_ema_slope.py
+      - name: Analyze costs and portfolio risk
+        run: python analyze_4h_exit_costs.py
+      - name: Commit results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backtest_results/4h_exit_180d_summary.json backtest_results/4h_exit_180d_trades.csv backtest_results/4h_exit_portfolio_cost_risk.json
+          if git diff --cached --quiet; then
+            echo "No result changes"
+            exit 0
+          fi
+          git commit -m "chore: save 4H EMA slope backtest results"
+          git pull --rebase origin backtest/4h-ema-slope
+          git push origin HEAD:backtest/4h-ema-slope
