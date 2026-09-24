@@ -395,6 +395,17 @@
       "interval": "MINUTE_15",
       "sent_at_ms": 1789923037635
     },
+    "30000133:roll:HOUR_4:1790236800000:up": {
+      "breakout_level": 0.182,
+      "breakout_time_ms": 1790236800000,
+      "candle_time_ms": 1790257500000,
+      "contract_id": "30000133",
+      "contract_name": "CYSUSDC",
+      "direction": "up",
+      "interval": "MINUTE_15",
+      "sent_at_ms": 1790258599658,
+      "strategy_name": "4H trend + roll reversal"
+    },
     "30000136:MINUTE_15:1789953300000:down": {
       "candle_time_ms": 1789953300000,
       "contract_id": "30000136",
