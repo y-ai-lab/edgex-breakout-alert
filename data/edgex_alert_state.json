@@ -360,6 +360,17 @@
       "interval": "MINUTE_5",
       "sent_at_ms": 1789873247774
     },
+    "30000068:roll:HOUR_4:1790164800000:down": {
+      "breakout_level": 0.7106,
+      "breakout_time_ms": 1790164800000,
+      "candle_time_ms": 1790235000000,
+      "contract_id": "30000068",
+      "contract_name": "ASTERUSDC",
+      "direction": "down",
+      "interval": "MINUTE_15",
+      "sent_at_ms": 1790236117493,
+      "strategy_name": "4H trend + roll reversal"
+    },
     "30000070:MINUTE_15:1789921800000:up": {
       "candle_time_ms": 1789921800000,
       "contract_id": "30000070",
