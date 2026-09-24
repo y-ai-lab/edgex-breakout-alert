@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import json, math, time, urllib.parse, urllib.request
-from collections import defaultdict
+import asyncio, json, math, time, urllib.parse, urllib.request
 from datetime import datetime, timezone
 from typing import Any
 
-from app import Candle, Contract, EdgeXClient
+from app import Candle, Contract, EdgeXClient, Settings
 
 BASE_URL='https://edgex-prod-v2.edgex.exchange'
 DAY=86400000
@@ -64,7 +63,10 @@ def max_dd(curve:list[float])->float:
 
 def main():
     now=int(datetime.now(timezone.utc).timestamp()*1000); end=(now//BAR)*BAR; begin=end-PERIOD_DAYS*DAY; warm=begin-(LOOKBACK+SKIP+5)*BAR
-    client=EdgeXClient(); contracts=client.fetch_contracts(); print('contracts',len(contracts),flush=True)
+    settings=Settings.from_env(dry_run_override=True)
+    client=EdgeXClient(settings)
+    contracts=list(asyncio.run(client.get_contracts()).values())
+    print('contracts',len(contracts),flush=True)
     data={}; failed=[]
     for n,c in enumerate(contracts,1):
         try:
