@@ -27,10 +27,16 @@ class EmaSlopeFilteredDetector(bt.RollReversalDetector):
         if signal is None:
             return None
 
-        if len(monitor) <= SLOPE_LAG_BARS:
+        # Use only 4H candles that were fully closed by the 15M candidate time.
+        # Using the full monitor history here would leak future EMA information.
+        monitor_closed = [
+            c for c in monitor
+            if c.time_ms + bt.interval_ms(self.settings.monitor_interval) <= candidate.time_ms
+        ]
+        if len(monitor_closed) <= SLOPE_LAG_BARS:
             return None
 
-        closes_now = [c.close for c in monitor]
+        closes_now = [c.close for c in monitor_closed]
         closes_then = closes_now[:-SLOPE_LAG_BARS]
         ema_now = ema(closes_now, self.settings.trend_fast_ema)
         ema_then = ema(closes_then, self.settings.trend_fast_ema)
