@@ -1,4 +1,5 @@
 name: Backtest 4H EMA slope filter
+# rerun after lookahead fix a904dba
 
 on:
   push:
