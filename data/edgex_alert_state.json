@@ -429,6 +429,17 @@
       "direction": "down",
       "interval": "MINUTE_15",
       "sent_at_ms": 1789955020550
+    },
+    "30000159:roll:HOUR_4:1790294400000:up": {
+      "breakout_level": 195.67,
+      "breakout_time_ms": 1790294400000,
+      "candle_time_ms": 1790325900000,
+      "contract_id": "30000159",
+      "contract_name": "MRNAUSDC",
+      "direction": "up",
+      "interval": "MINUTE_15",
+      "sent_at_ms": 1790327019681,
+      "strategy_name": "4H trend + roll reversal"
     }
   },
   "processed_candles": {},
