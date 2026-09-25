@@ -12,10 +12,6 @@ FUNDING_FORWARD_MS = 2 * bt.DAY_MS
 _funding_cache: dict[str, list[tuple[int, float]]] = {}
 _base_compact = bt.compact_summary
 
-# Cost assumptions are expressed as round-trip notional cost.
-# Non-VIP taker fee: 0.038% per side => 0.076% round trip.
-# Base slippage stress: 0.010% per side => +0.020% round trip.
-# We also report fee-only, conservative, and stress scenarios without optimizing thresholds.
 COST_SCENARIOS = {
     'fee_only_0.076pct': 0.00076,
     'base_0.096pct': 0.00096,
@@ -23,6 +19,11 @@ COST_SCENARIOS = {
     'stress_0.300pct': 0.00300,
 }
 BASE_ROUNDTRIP_COST = COST_SCENARIOS['base_0.096pct']
+
+# Pre-trade cost/R gate. A 0.20R cap means the assumed base round-trip
+# execution cost may consume at most 20% of the initial 1R price risk.
+# This is deliberately simple and known before entry; no outcome data is used.
+MAX_BASE_COST_R = 0.20
 
 
 def fetch_funding_history(contract_id: str, anchor_ms: int) -> list[tuple[int, float]]:
@@ -89,12 +90,21 @@ def simulate_trade(signal, entries, entry_index, end_ms):
     history = fetch_funding_history(str(result['contract_id']), entry_ms)
     rate = previous_funding(history, entry_ms)
     direction = str(result['direction'])
-    eligible = rate is not None and ((direction == 'LONG' and rate <= 0.0) or (direction == 'SHORT' and rate >= 0.0))
+    funding_aligned = rate is not None and ((direction == 'LONG' and rate <= 0.0) or (direction == 'SHORT' and rate >= 0.0))
+
+    base_cost_r = cost_r_for_roundtrip(result, BASE_ROUNDTRIP_COST)
+    cost_efficient = base_cost_r <= MAX_BASE_COST_R
+    eligible = funding_aligned and cost_efficient
+
     result['funding_entry_rate'] = rate
-    result['funding_aligned'] = eligible
+    result['funding_aligned'] = funding_aligned
+    result['base_cost_r_pretrade'] = base_cost_r
+    result['cost_efficient'] = cost_efficient
+    result['strategy_eligible'] = eligible
     result['price_r_result'] = result.get('r_result')
     result['funding_r'] = 0.0
-    result['cost_r_base'] = 0.0
+    result['cost_r_base'] = base_cost_r if eligible else 0.0
+
     if eligible and result.get('r_result') is not None and result.get('exit_time_ms') is not None:
         entry = float(result['entry']); stop = float(result['stop'])
         risk_pct = abs(entry - stop) / entry if entry > 0 else 0.0
@@ -102,10 +112,8 @@ def simulate_trade(signal, entries, entry_index, end_ms):
             total_rate = funding_sum(history, entry_ms, int(result['exit_time_ms']))
             signed_return = (-total_rate) if direction == 'LONG' else total_rate
             funding_r = signed_return / risk_pct
-            cost_r = cost_r_for_roundtrip(result, BASE_ROUNDTRIP_COST)
             result['funding_r'] = funding_r
-            result['cost_r_base'] = cost_r
-            result['r_result'] = float(result['r_result']) + funding_r - cost_r
+            result['r_result'] = float(result['r_result']) + funding_r - base_cost_r
     return result
 
 
@@ -113,27 +121,32 @@ def summary_for_cost(rows: list[dict[str, Any]], starting_equity: float, risk_fr
     adjusted = []
     for x in rows:
         y = dict(x)
-        if y.get('funding_aligned') is True and y.get('price_r_result') is not None:
+        if y.get('strategy_eligible') is True and y.get('price_r_result') is not None:
             y['r_result'] = float(y['price_r_result']) + float(y.get('funding_r') or 0.0) - cost_r_for_roundtrip(y, roundtrip_cost)
         adjusted.append(y)
-    return _base_compact([x for x in adjusted if x.get('funding_aligned') is True], starting_equity, risk_fraction)
+    return _base_compact([x for x in adjusted if x.get('strategy_eligible') is True], starting_equity, risk_fraction)
 
 
 def compact_funding_aligned(trades, starting_equity, risk_fraction):
     rows = list(trades)
-    eligible = [x for x in rows if x.get('funding_aligned') is True]
+    funding_ok = [x for x in rows if x.get('funding_aligned') is True]
+    eligible = [x for x in rows if x.get('strategy_eligible') is True]
     out = _base_compact(eligible, starting_equity, risk_fraction)
     out['signals_before_funding_filter'] = len(rows)
-    out['signals_filtered_out'] = len(rows) - len(eligible)
+    out['signals_filtered_by_funding'] = len(rows) - len(funding_ok)
+    out['signals_after_funding_filter'] = len(funding_ok)
+    out['signals_filtered_by_cost_r'] = len(funding_ok) - len(eligible)
+    out['signals_after_cost_r_filter'] = len(eligible)
     out['funding_data_missing'] = sum(1 for x in rows if x.get('funding_entry_rate') is None)
     out['funding_r_total'] = sum(float(x.get('funding_r') or 0.0) for x in eligible)
     out['cost_r_total_base'] = sum(float(x.get('cost_r_base') or 0.0) for x in eligible)
     out['roundtrip_cost_base_pct'] = BASE_ROUNDTRIP_COST * 100.0
+    out['max_base_cost_r'] = MAX_BASE_COST_R
     out['cost_sensitivity'] = {
         name: summary_for_cost(rows, starting_equity, risk_fraction, cost)
         for name, cost in COST_SCENARIOS.items()
     }
-    out['filter_rule'] = 'LONG only when prior settled funding <= 0; SHORT only when prior settled funding >= 0'
+    out['filter_rule'] = 'Funding aligned, then require base execution cost <= 0.20R before entry.'
     out['cost_model'] = 'Non-VIP taker 0.038% each side plus base slippage 0.010% each side; sensitivity includes fee-only, conservative, and stress round-trip costs.'
     return out
 
