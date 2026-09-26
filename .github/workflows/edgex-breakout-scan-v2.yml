@@ -24,9 +24,12 @@ on:
 permissions:
   contents: write
 
+# A code/config update must replace the old long-lived scanner instead of
+# waiting up to ~6 hours for it to finish. Scheduled overlaps are also safely
+# collapsed to the newest run.
 concurrency:
   group: edgex-breakout-scan-v2
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   scan:
