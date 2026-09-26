@@ -3,7 +3,6 @@ name: EdgeX breakout scan v2
 on:
   schedule:
     # Long-lived runner: start every 6 hours and scan every 4 minutes for ~5h50m.
-    # This mirrors the previously stable standalone runner, now owned by EdgeX News itself.
     - cron: "7 0,6,12,18 * * *"
   push:
     branches:
@@ -11,6 +10,7 @@ on:
     paths:
       - ".github/workflows/edgex-breakout-scan-v2.yml"
       - "app.py"
+      - "production_app.py"
       - "requirements.txt"
       - "tests/**"
   workflow_dispatch:
@@ -48,6 +48,7 @@ jobs:
       EDGE_X_INTERVALS: HOUR_4,MINUTE_15
       EDGE_X_TREND_FAST_EMA: "20"
       EDGE_X_TREND_SLOW_EMA: "50"
+      EDGE_X_MIN_TREND_GAP_ATR: "0.35"
       EDGE_X_ROLL_LOOKBACK: "20"
       EDGE_X_ROLL_MAX_AGE: "6"
       EDGE_X_RETEST_LOOKBACK: "4"
@@ -124,7 +125,7 @@ jobs:
 
           while [ "$(date +%s)" -lt "$end_epoch" ]; do
             echo "Starting EdgeX News scan at $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
-            python app.py --once --once-timeout 90 --log-level INFO
+            python production_app.py --once --once-timeout 90 --log-level INFO
 
             if [ -n "$(git status --porcelain -- data/edgex_alert_state.json)" ]; then
               git config user.name "github-actions[bot]"
