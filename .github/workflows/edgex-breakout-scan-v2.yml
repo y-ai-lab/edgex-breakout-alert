@@ -2,7 +2,6 @@ name: EdgeX breakout scan v2
 
 on:
   schedule:
-    # Long-lived runner: start every 6 hours and scan every 4 minutes for ~5h50m.
     - cron: "7 0,6,12,18 * * *"
   push:
     branches:
@@ -24,9 +23,6 @@ on:
 permissions:
   contents: write
 
-# A code/config update must replace the old long-lived scanner instead of
-# waiting up to ~6 hours for it to finish. Scheduled overlaps are also safely
-# collapsed to the newest run.
 concurrency:
   group: edgex-breakout-scan-v2
   cancel-in-progress: true
@@ -67,6 +63,7 @@ jobs:
       DRY_RUN: "false"
       STATE_BACKEND: json
       STATE_FILE: data/edgex_alert_state.json
+      EDGE_X_FUNNEL_FILE: data/alert_funnel_latest.json
       EDGE_X_INCLUDE_HIDDEN: "true"
       TIMEZONE: Asia/Tokyo
 
@@ -95,21 +92,10 @@ jobs:
           import os
           import urllib.parse
           import urllib.request
-
           token = os.environ["TELEGRAM_BOT_TOKEN"]
           chat_id = os.environ["TELEGRAM_CHAT_ID"]
-          body = urllib.parse.urlencode(
-              {
-                  "chat_id": chat_id,
-                  "text": "✅ EdgeX監視のテスト通知です。Telegram送信は正常です。",
-              }
-          ).encode("utf-8")
-          request = urllib.request.Request(
-              f"https://api.telegram.org/bot{token}/sendMessage",
-              data=body,
-              headers={"Content-Type": "application/x-www-form-urlencoded"},
-              method="POST",
-          )
+          body = urllib.parse.urlencode({"chat_id": chat_id, "text": "✅ EdgeX監視のテスト通知です。Telegram送信は正常です。"}).encode("utf-8")
+          request = urllib.request.Request(f"https://api.telegram.org/bot{token}/sendMessage", data=body, headers={"Content-Type": "application/x-www-form-urlencoded"}, method="POST")
           try:
               with urllib.request.urlopen(request, timeout=20) as response:
                   payload = json.loads(response.read().decode("utf-8"))
@@ -130,11 +116,11 @@ jobs:
             echo "Starting EdgeX News scan at $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
             python production_app.py --once --once-timeout 90 --log-level INFO
 
-            if [ -n "$(git status --porcelain -- data/edgex_alert_state.json)" ]; then
+            if [ -n "$(git status --porcelain -- data/edgex_alert_state.json data/alert_funnel_latest.json)" ]; then
               git config user.name "github-actions[bot]"
               git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-              git add data/edgex_alert_state.json
-              git commit -m "chore: update EdgeX alert state"
+              git add data/edgex_alert_state.json data/alert_funnel_latest.json
+              git commit -m "chore: update EdgeX scanner state and funnel"
               git pull --rebase origin main
               git push
             fi
