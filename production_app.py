@@ -2,18 +2,24 @@
 
 Keeps the core strategy implementation in app.py unchanged while applying the
 current production notification rule: abs(EMA20-EMA50) >= 0.35 * 4H ATR.
-Also emits filter-funnel diagnostics so quiet periods are observable in Actions.
+Also persists filter-funnel diagnostics so quiet periods remain observable even
+when live Actions logs are unavailable.
 """
 
 from __future__ import annotations
 
+import atexit
+import json
 import logging
 import os
+from datetime import datetime, timezone
+from pathlib import Path
 
 import app
 
 
 MIN_TREND_GAP_ATR = float(os.getenv("EDGE_X_MIN_TREND_GAP_ATR", "0.35"))
+FUNNEL_FILE = Path(os.getenv("EDGE_X_FUNNEL_FILE", "data/alert_funnel_latest.json"))
 _original_detect = app.RollReversalDetector.detect
 _original_format_signal = app.format_signal
 
@@ -24,6 +30,24 @@ _stats = {
     "trend_rejected": 0,
     "final_signals": 0,
 }
+
+
+def _persist_funnel() -> None:
+    try:
+        FUNNEL_FILE.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "updated_at_utc": datetime.now(timezone.utc).isoformat(),
+            "min_trend_gap_atr": MIN_TREND_GAP_ATR,
+            **_stats,
+        }
+        temp = FUNNEL_FILE.with_suffix(FUNNEL_FILE.suffix + ".tmp")
+        temp.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        temp.replace(FUNNEL_FILE)
+    except Exception:
+        logging.getLogger(__name__).exception("Failed to persist alert funnel diagnostics")
+
+
+atexit.register(_persist_funnel)
 
 
 def _log_funnel(contract_symbol: str, outcome: str, trend_gap_atr: float | None = None) -> None:
@@ -41,6 +65,7 @@ def _log_funnel(contract_symbol: str, outcome: str, trend_gap_atr: float | None 
         _stats["trend_rejected"],
         _stats["final_signals"],
     )
+    _persist_funnel()
 
 
 def _filtered_detect(self, contract, monitor_candles, entry_candles, candidate):
@@ -48,8 +73,6 @@ def _filtered_detect(self, contract, monitor_candles, entry_candles, candidate):
     signal = _original_detect(self, contract, monitor_candles, entry_candles, candidate)
     symbol = str(getattr(contract, "symbol", None) or getattr(contract, "contract_name", None) or getattr(contract, "contract_id", "unknown"))
     if signal is None:
-        # Core detector rejected the candidate. Avoid one log line per rejection;
-        # accepted/rejected filter events below are enough to diagnose quiet periods.
         return None
 
     _stats["core_signals"] += 1
@@ -88,5 +111,6 @@ app.format_signal = _format_signal_with_filter
 
 
 if __name__ == "__main__":
-    logging.getLogger(__name__).info("ALERT_FUNNEL enabled threshold=%.2f", MIN_TREND_GAP_ATR)
+    logging.getLogger(__name__).info("ALERT_FUNNEL enabled threshold=%.2f file=%s", MIN_TREND_GAP_ATR, FUNNEL_FILE)
+    _persist_funnel()
     app.main()
