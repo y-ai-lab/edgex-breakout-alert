@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import bisect
+import os
 from typing import Any
 
 import backtest_4h_exit as bt
@@ -21,10 +22,9 @@ COST_SCENARIOS = {
 BASE_ROUNDTRIP_COST = COST_SCENARIOS['base_0.096pct']
 MAX_BASE_COST_R = 0.20
 
-# 4H trend-strength gate: normalize the existing EMA20/EMA50 separation by
-# 4H ATR so it is comparable across BTC, alts, equities and commodities.
-# 0.25 means the fast/slow EMA gap must be at least one quarter of a 4H ATR.
-MIN_TREND_GAP_ATR = 0.25
+# 4H trend-strength gate: normalize EMA20/EMA50 separation by 4H ATR.
+# Parameterized for a small robustness sweep; production candidate remains unset.
+MIN_TREND_GAP_ATR = float(os.getenv('EDGE_X_MIN_TREND_GAP_ATR', '0.25'))
 
 
 def fetch_funding_history(contract_id: str, anchor_ms: int) -> list[tuple[int, float]]:
@@ -160,7 +160,7 @@ def compact_funding_aligned(trades, starting_equity, risk_fraction):
         name: summary_for_cost(rows, starting_equity, risk_fraction, cost)
         for name, cost in COST_SCENARIOS.items()
     }
-    out['filter_rule'] = 'Funding aligned, base execution cost <= 0.20R, then abs(EMA20-EMA50) >= 0.25 x 4H ATR.'
+    out['filter_rule'] = f'Funding aligned, base execution cost <= 0.20R, then abs(EMA20-EMA50) >= {MIN_TREND_GAP_ATR:.2f} x 4H ATR.'
     out['cost_model'] = 'Non-VIP taker 0.038% each side plus base slippage 0.010% each side; sensitivity includes fee-only, conservative, and stress round-trip costs.'
     return out
 
