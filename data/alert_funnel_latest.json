@@ -1,5 +1,5 @@
 {
-  "updated_at_utc": "2026-09-27T00:55:54.785125+00:00",
+  "updated_at_utc": "2026-09-27T01:00:10.668708+00:00",
   "min_trend_gap_atr": 0.35,
   "detect_calls": 179,
   "core_signals": 0,
@@ -7,9 +7,9 @@
   "reject_indicator": 2,
   "reject_trend_direction": 41,
   "reject_recent_breakout": 110,
-  "reject_retest_or_confirmation": 19,
+  "reject_retest_or_confirmation": 20,
   "reject_structure_target": 0,
-  "reject_min_rr": 2,
+  "reject_min_rr": 1,
   "reject_unclassified": 0,
   "trend_missing": 0,
   "trend_rejected": 0,
