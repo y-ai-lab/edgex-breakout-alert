@@ -1581,6 +1581,7 @@ class BreakoutService:
         self._account_asset_loaded = False
         self._account_asset: dict[str, Any] | None = None
         self._account_asset_error: str | None = None
+        self._started_at_ms = int(time.time() * 1000)
         self._entry_eval_count = 0
         self._entry_signal_count = 0
         self._entry_duplicate_signal_count = 0
@@ -1662,7 +1663,23 @@ class BreakoutService:
             self._entry_eval_count += 1
             signal = self._detect_strategy(contract_id, candidate)
             if signal is not None:
-                if self.store.setup_alert_exists(signal):
+                breakout_closed_at_ms = (
+                    signal.breakout_time_ms + INTERVAL_MS.get(signal.monitor_interval or self.settings.monitor_interval, 0)
+                    if signal.breakout_time_ms is not None
+                    else None
+                )
+                if (
+                    breakout_closed_at_ms is not None
+                    and breakout_closed_at_ms <= self._started_at_ms
+                ):
+                    self._entry_suppressed_signal_count += 1
+                    LOGGER.info(
+                        "Preexisting setup after restart; suppressed: %s breakout_closed_at_ms=%d started_at_ms=%d",
+                        signal.key,
+                        breakout_closed_at_ms,
+                        self._started_at_ms,
+                    )
+                elif self.store.setup_alert_exists(signal):
                     self._entry_duplicate_signal_count += 1
                     LOGGER.info("Setup already alerted; skipped: %s", signal.key)
                 else:
