@@ -1719,6 +1719,15 @@ class BreakoutService:
         if next_offset is not None:
             self.store.set_telegram_update_offset(next_offset)
 
+    async def _telegram_command_loop(self) -> None:
+        """Continuously poll Telegram commands while the scanner is running."""
+        while not self.stop_event.is_set():
+            await self._sync_telegram_equity_commands()
+            try:
+                await asyncio.wait_for(self.stop_event.wait(), timeout=10)
+            except asyncio.TimeoutError:
+                pass
+
     async def _get_account_asset_for_risk(self) -> dict[str, Any] | None:
         if self._account_asset_loaded:
             return self._account_asset
@@ -1927,8 +1936,11 @@ class BreakoutService:
                         raise exception
 
     async def run(self) -> None:
+        telegram_task: asyncio.Task[Any] | None = None
         try:
             await self._sync_telegram_equity_commands()
+            if not self.run_once:
+                telegram_task = asyncio.create_task(self._telegram_command_loop())
             if self.run_once:
                 self.contracts = await self.client.get_contracts()
                 LOGGER.info(
@@ -1964,6 +1976,9 @@ class BreakoutService:
                         pass
                     backoff = min(backoff * 2, self.settings.reconnect_max_seconds)
         finally:
+            if telegram_task is not None:
+                telegram_task.cancel()
+                await asyncio.gather(telegram_task, return_exceptions=True)
             await self.close()
 
 
