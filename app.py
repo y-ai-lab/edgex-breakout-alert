@@ -1583,6 +1583,8 @@ class BreakoutService:
         self._account_asset_error: str | None = None
         self._entry_eval_count = 0
         self._entry_signal_count = 0
+        self._entry_duplicate_signal_count = 0
+        self._entry_suppressed_signal_count = 0
         self._entry_reject_counts: dict[str, int] = {}
 
     async def close(self) -> None:
@@ -1660,8 +1662,15 @@ class BreakoutService:
             self._entry_eval_count += 1
             signal = self._detect_strategy(contract_id, candidate)
             if signal is not None:
-                self._entry_signal_count += 1
-                await self._send_signal(signal)
+                if self.store.setup_alert_exists(signal):
+                    self._entry_duplicate_signal_count += 1
+                    LOGGER.info("Setup already alerted; skipped: %s", signal.key)
+                else:
+                    sent = await self._send_signal(signal)
+                    if sent:
+                        self._entry_signal_count += 1
+                    else:
+                        self._entry_suppressed_signal_count += 1
             else:
                 reason = self.detector.last_reject_reason or "unclassified"
                 self._entry_reject_counts[reason] = self._entry_reject_counts.get(reason, 0) + 1
@@ -1670,9 +1679,11 @@ class BreakoutService:
                     f"{key}={value}" for key, value in sorted(self._entry_reject_counts.items())
                 ) or "none"
                 LOGGER.info(
-                    "15M evaluation funnel: evaluated=%d signals=%d rejects=%s last_candidate_ms=%d",
+                    "15M evaluation funnel: evaluated=%d signals=%d duplicates=%d suppressed=%d rejects=%s last_candidate_ms=%d",
                     self._entry_eval_count,
                     self._entry_signal_count,
+                    self._entry_duplicate_signal_count,
+                    self._entry_suppressed_signal_count,
                     reject_summary,
                     candidate.time_ms,
                 )
@@ -1794,10 +1805,10 @@ class BreakoutService:
             LOGGER.warning("EdgeX account asset lookup failed: %s", exc)
         return self._account_asset
 
-    async def _send_signal(self, signal: Signal) -> None:
+    async def _send_signal(self, signal: Signal) -> bool:
         if self.store.setup_alert_exists(signal):
             LOGGER.info("Setup already alerted; skipped: %s", signal.key)
-            return
+            return False
         if self.settings.alert_cooldown_minutes:
             last_alert = self.store.latest_alert_time(
                 signal.contract.contract_id, signal.interval, signal.direction
@@ -1806,7 +1817,7 @@ class BreakoutService:
                 cooldown_ms = self.settings.alert_cooldown_minutes * 60_000
                 if signal.candle.time_ms - last_alert < cooldown_ms:
                     LOGGER.info("Cooldown skipped: %s", signal.key)
-                    return
+                    return False
         account_asset = await self._get_account_asset_for_risk()
         risk_plan: RiskPlan | None = None
         risk_note = self._account_asset_error
@@ -1833,6 +1844,7 @@ class BreakoutService:
             f"{signal.rr:.2f}" if signal.rr is not None else "-",
             signal.key,
         )
+        return True
 
     async def _handle_message(self, raw: str) -> None:
         try:
