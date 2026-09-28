@@ -1200,57 +1200,69 @@ def format_signal(
         tz = ZoneInfo(timezone_name)
     except Exception:
         tz = timezone.utc
-    timestamp = datetime.fromtimestamp(signal.candle.time_ms / 1000, tz=timezone.utc).astimezone(tz)
+    interval_ms = INTERVAL_MS.get(signal.interval, 0)
+    close_time_ms = signal.candle.time_ms + interval_ms
+    timestamp = datetime.fromtimestamp(close_time_ms / 1000, tz=timezone.utc).astimezone(tz)
 
     if signal.strategy_name:
         long_side = signal.direction == "up"
         setup_label = "押し目買い / LONG" if long_side else "戻り売り / SHORT"
         trend_label = "上昇トレンド" if long_side else "下降トレンド"
+        entry_price = signal.candle.close
+        stop_loss = signal.stop_loss_override
+        take_profit = signal.take_profit_override
+        rr_text = f"1:{signal.rr:.2f}" if signal.rr is not None else "-"
         lines = [
             "🎯 EdgeX 4H→15M ロールリバーサル条件成立",
             f"銘柄: {signal.contract.contract_name}",
             f"方向: {setup_label}",
             f"監視足: {_interval_label(signal.monitor_interval or 'HOUR_4')} / エントリー足: {_interval_label(signal.interval)}",
-            f"確定時刻: {timestamp:%Y-%m-%d %H:%M:%S} {timezone_name}",
+            f"15M確定時刻: {timestamp:%Y-%m-%d %H:%M:%S} {timezone_name}",
+            "",
+            "⏱ エントリー",
+            "タイミング: 15M確定直後（この通知後）",
+            f"Entry目安: {_format_number(entry_price)} {signal.contract.quote_coin}",
+            f"SL: {_format_number(stop_loss)}",
+            f"TP: {_format_number(take_profit)}",
+            f"RR: {rr_text}",
+            "※ Entry目安から価格が動いた後は、このRRをそのまま使わず再計算",
+            "",
             f"4Hトレンド: {trend_label}",
             f"EMA: {_format_number(signal.ema_fast)} / {_format_number(signal.ema_slow)}",
             f"ロールリバーサル水準: {_format_number(signal.breakout_level)}",
             f"15M ATR: {_format_number(signal.atr_entry)} / 4H ATR: {_format_number(signal.atr_monitor)}",
             "SL/TP基準: 4H構造 + 4H ATR",
         ]
+        if len(signal.split_targets) >= 2:
+            lines.extend(
+                [
+                    "利確方式: 2分割（50% / 50%）",
+                    f"TP1 50%: {_format_number(signal.split_targets[0][1])} (2R)",
+                    f"TP2 50%: {_format_number(signal.split_targets[-1][1])} (4Hターゲット)",
+                ]
+            )
+        else:
+            lines.append("利確方式: 分割なし（全量を4Hターゲットで利確）")
+
         if risk_plan is not None:
             lines.extend(
                 [
                     "",
-                    "📐 エントリー計画",
+                    "📐 5%リスク枚数",
                     f"EdgeX Equity: {_format_usd(risk_plan.equity)}",
                     f"最大リスク: {_format_usd(risk_plan.risk_budget)} ({risk_plan.risk_fraction * 100:.1f}%)",
-                    f"Entry目安: {_format_number(risk_plan.entry_price)}",
-                    f"SL: {_format_number(risk_plan.stop_loss)}",
-                    f"TP: {_format_number(risk_plan.tp_target)}",
-                    f"RR: 1:{risk_plan.tp_r_multiple:.2f}",
                     f"枚数: {_format_number(risk_plan.size)}",
                     f"想定Notional: {_format_usd(risk_plan.notional)}",
                     f"SL損失: -{_format_usd(risk_plan.max_loss)} ({risk_plan.actual_risk_fraction * 100:.2f}%)",
                 ]
             )
-            if len(signal.split_targets) >= 2:
-                lines.extend(
-                    [
-                        "利確方式: 2分割（50% / 50%）",
-                        f"TP1 50%: {_format_number(signal.split_targets[0][1])} (2R)",
-                        f"TP2 50%: {_format_number(signal.split_targets[-1][1])} (4Hターゲット)",
-                    ]
-                )
-            else:
-                lines.append("利確方式: 分割なし（全量を4Hターゲットで利確）")
             if risk_plan.margin_capped:
                 leverage_text = f"{risk_plan.leverage:g}x" if risk_plan.leverage is not None else "現在設定"
                 lines.append(f"証拠金上限で枚数縮小: {leverage_text}")
             if risk_plan.size_capped:
                 lines.append("EdgeX最大注文枚数で枚数縮小")
         elif risk_note:
-            lines.extend(["", f"📐 リスク計算: {risk_note}"])
+            lines.extend(["", f"📐 枚数計算: {risk_note}"])
         lines.extend(["通知のみ（自動発注なし）", "https://pro.edgex.exchange/"])
         return "\n".join(lines)
 
