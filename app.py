@@ -1557,6 +1557,8 @@ class BreakoutService:
         self._account_asset_loaded = False
         self._account_asset: dict[str, Any] | None = None
         self._account_asset_error: str | None = None
+        self._entry_eval_count = 0
+        self._entry_signal_count = 0
 
     async def close(self) -> None:
         self.store.close()
@@ -1630,9 +1632,18 @@ class BreakoutService:
         # Entry decisions are made only when a new 15-minute candle closes.
         candidate = new_closed[-1]
         if interval == self.settings.entry_interval:
+            self._entry_eval_count += 1
             signal = self._detect_strategy(contract_id, candidate)
             if signal is not None:
+                self._entry_signal_count += 1
                 await self._send_signal(signal)
+            if self._entry_eval_count % 60 == 0:
+                LOGGER.info(
+                    "15M evaluation heartbeat: evaluated=%d signals=%d last_candidate_ms=%d",
+                    self._entry_eval_count,
+                    self._entry_signal_count,
+                    candidate.time_ms,
+                )
         self.store.mark_processed(contract_id, interval, candidate.time_ms)
 
     async def _process_snapshot_once(self, key: tuple[str, str], interval: str) -> None:
