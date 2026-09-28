@@ -541,6 +541,7 @@ class Signal:
 class EdgeXClient:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
+        self.last_reject_reason: str | None = None
 
     def _get_json_sync(self, path: str, params: dict[str, str] | None = None) -> dict[str, Any]:
         url = f"{self.settings.api_base_url}{path}"
@@ -1403,9 +1404,11 @@ class RollReversalDetector:
         entry_candles: Iterable[Candle],
         candidate: Candle,
     ) -> Signal | None:
+        self.last_reject_reason = None
         monitor = sorted(monitor_candles, key=lambda item: item.time_ms)
         entries = sorted((c for c in entry_candles if c.time_ms <= candidate.time_ms), key=lambda item: item.time_ms)
         if not monitor or not entries or entries[-1].time_ms != candidate.time_ms:
+            self.last_reject_reason = "input_or_history"
             return None
         required_monitor = max(
             self.settings.trend_slow_ema,
@@ -1418,6 +1421,7 @@ class RollReversalDetector:
             self.settings.pullback_swing_lookback,
         )
         if len(monitor) < required_monitor or len(entries) < required_entry:
+            self.last_reject_reason = "input_or_history"
             return None
 
         closes = [candle.close for candle in monitor]
@@ -1426,10 +1430,12 @@ class RollReversalDetector:
         atr_monitor = _atr(monitor, self.settings.atr_period)
         atr_entry = _atr(entries, self.settings.atr_period)
         if None in {ema_fast, ema_slow, atr_monitor, atr_entry}:
+            self.last_reject_reason = "indicator"
             return None
         assert ema_fast is not None and ema_slow is not None
         assert atr_monitor is not None and atr_entry is not None
         if atr_monitor <= 0 or atr_entry <= 0:
+            self.last_reject_reason = "indicator"
             return None
 
         latest_monitor = monitor[-1]
@@ -1438,10 +1444,12 @@ class RollReversalDetector:
         elif ema_fast < ema_slow and latest_monitor.close < ema_fast:
             direction = "down"
         else:
+            self.last_reject_reason = "trend_direction"
             return None
 
         breakout = self._recent_breakout(monitor, direction)
         if breakout is None:
+            self.last_reject_reason = "recent_breakout"
             return None
         breakout_index, roll_level = breakout
         tolerance = max(atr_entry * self.settings.retest_atr_tolerance, roll_level * 0.001)
@@ -1453,6 +1461,7 @@ class RollReversalDetector:
             touched = any(candle.high >= roll_level - tolerance for candle in retest_window)
             confirmed = candidate.close < candidate.open and candidate.close < roll_level
         if not touched or not confirmed:
+            self.last_reject_reason = "retest_or_confirmation"
             return None
 
         # Entry timing is confirmed on 15M, but trade invalidation and targets
@@ -1470,6 +1479,7 @@ class RollReversalDetector:
             raw_target = max(candle.high for candle in monitor_structure)
             take_profit = raw_target - atr_monitor * self.settings.atr_target_buffer
             if stop_loss >= candidate.close or take_profit <= candidate.close:
+                self.last_reject_reason = "structure_target"
                 return None
             rr = (take_profit - candidate.close) / (candidate.close - stop_loss)
         else:
@@ -1481,9 +1491,11 @@ class RollReversalDetector:
             raw_target = min(candle.low for candle in monitor_structure)
             take_profit = raw_target + atr_monitor * self.settings.atr_target_buffer
             if stop_loss <= candidate.close or take_profit >= candidate.close:
+                self.last_reject_reason = "structure_target"
                 return None
             rr = (candidate.close - take_profit) / (stop_loss - candidate.close)
         if rr < self.settings.min_rr:
+            self.last_reject_reason = "min_rr"
             return None
 
         stop_distance = abs(candidate.close - stop_loss)
@@ -1559,6 +1571,7 @@ class BreakoutService:
         self._account_asset_error: str | None = None
         self._entry_eval_count = 0
         self._entry_signal_count = 0
+        self._entry_reject_counts: dict[str, int] = {}
 
     async def close(self) -> None:
         self.store.close()
@@ -1637,11 +1650,18 @@ class BreakoutService:
             if signal is not None:
                 self._entry_signal_count += 1
                 await self._send_signal(signal)
-            if self._entry_eval_count % 60 == 0:
+            else:
+                reason = self.detector.last_reject_reason or "unclassified"
+                self._entry_reject_counts[reason] = self._entry_reject_counts.get(reason, 0) + 1
+            if self._entry_eval_count % 180 == 0:
+                reject_summary = ",".join(
+                    f"{key}={value}" for key, value in sorted(self._entry_reject_counts.items())
+                ) or "none"
                 LOGGER.info(
-                    "15M evaluation heartbeat: evaluated=%d signals=%d last_candidate_ms=%d",
+                    "15M evaluation funnel: evaluated=%d signals=%d rejects=%s last_candidate_ms=%d",
                     self._entry_eval_count,
                     self._entry_signal_count,
+                    reject_summary,
                     candidate.time_ms,
                 )
         self.store.mark_processed(contract_id, interval, candidate.time_ms)
