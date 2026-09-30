@@ -497,11 +497,18 @@ def _market_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
         for row in rows
         if row.get("stage") in {"CONFIRMATION_WAIT", "RETEST_WAIT"}
     ]
+    qualified_near = [
+        row
+        for row in near
+        if row.get("rr") is not None
+        and float(row["rr"]) >= SETTINGS.min_rr
+    ]
     return {
         "stage_counts": dict(stages),
         "direction_counts": dict(directions),
         "ready_count": len(ready),
         "near_signal_count": len(near),
+        "qualified_near_count": len(qualified_near),
         "average_score": (
             round(mean(float(row.get("score") or 0) for row in rows), 1)
             if rows
@@ -509,6 +516,9 @@ def _market_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
         ),
         "top_ready": [row["ticker"] for row in _sort_rows(ready)[:5]],
         "top_near": [row["ticker"] for row in _sort_rows(near)[:5]],
+        "top_qualified_near": [
+            row["ticker"] for row in _sort_rows(qualified_near)[:5]
+        ],
     }
 
 
@@ -787,7 +797,17 @@ async def screener_api(
 
     rows = all_rows
     if stage and stage.upper() != "ALL":
-        rows = [row for row in rows if row.get("stage") == stage.upper()]
+        requested_stage = stage.upper()
+        if requested_stage == "NEAR":
+            rows = [
+                row
+                for row in rows
+                if row.get("stage") in {"CONFIRMATION_WAIT", "RETEST_WAIT"}
+                and row.get("rr") is not None
+                and float(row["rr"]) >= SETTINGS.min_rr
+            ]
+        else:
+            rows = [row for row in rows if row.get("stage") == requested_stage]
     if direction and direction.upper() != "ALL":
         target = direction.upper()
         rows = [
