@@ -512,7 +512,7 @@ def _market_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-app = FastAPI(title="EdgeX Analysis Terminal", version="5.0.0")
+app = FastAPI(title="EdgeX Analysis Terminal", version="6.0.0")
 
 
 @app.get("/health")
@@ -520,7 +520,7 @@ async def health():
     return {
         "ok": True,
         "service": "edgex-analysis-terminal",
-        "version": "5.0.0",
+        "version": "6.0.0",
         "time_ms": int(time.time() * 1000),
     }
 
