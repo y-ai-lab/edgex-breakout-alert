@@ -512,7 +512,7 @@ def _market_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-app = FastAPI(title="EdgeX Analysis Terminal", version="2.0.0")
+app = FastAPI(title="EdgeX Analysis Terminal", version="3.0.0")
 
 
 @app.get("/health")
@@ -520,7 +520,7 @@ async def health():
     return {
         "ok": True,
         "service": "edgex-analysis-terminal",
-        "version": "2.0.0",
+        "version": "3.0.0",
         "time_ms": int(time.time() * 1000),
     }
 
@@ -572,6 +572,130 @@ async def analyze_api(ticker: str = Query(min_length=2, max_length=64)):
         data.get((contract.contract_id, SETTINGS.monitor_interval), []),
         data.get((contract.contract_id, SETTINGS.entry_interval), []),
     )
+
+
+def _resolve_contract(
+    contracts: dict[str, scanner.Contract],
+    ticker: str,
+) -> scanner.Contract | None:
+    ticker = ticker.strip().upper()
+    bare = ticker.removesuffix("USDC")
+    return next(
+        (
+            contract
+            for contract in contracts.values()
+            if contract.contract_name.upper() == ticker
+            or contract.contract_name.upper().removesuffix("USDC") == bare
+        ),
+        None,
+    )
+
+
+def _ema_series(values: list[float], period: int) -> list[float | None]:
+    if period <= 0:
+        return [None for _ in values]
+    alpha = 2.0 / (period + 1.0)
+    result: list[float | None] = []
+    ema: float | None = None
+    for index, value in enumerate(values):
+        if index + 1 < period:
+            result.append(None)
+            continue
+        if ema is None:
+            ema = mean(values[index + 1 - period : index + 1])
+        else:
+            ema = value * alpha + ema * (1.0 - alpha)
+        result.append(ema)
+    return result
+
+
+def _chart_candles(
+    candles: list[scanner.Candle],
+    interval: str,
+    limit: int,
+) -> list[dict[str, Any]]:
+    items = closed(candles, interval)[-limit:]
+    closes = [candle.close for candle in items]
+    ema20 = _ema_series(closes, SETTINGS.trend_fast_ema)
+    ema50 = _ema_series(closes, SETTINGS.trend_slow_ema)
+    return [
+        {
+            "time_ms": candle.time_ms,
+            "open": candle.open,
+            "high": candle.high,
+            "low": candle.low,
+            "close": candle.close,
+            "volume": candle.value,
+            "ema20": ema20[index],
+            "ema50": ema50[index],
+        }
+        for index, candle in enumerate(items)
+    ]
+
+
+def _action_for_stage(stage: str) -> str:
+    return {
+        "READY": "ENTER",
+        "CONFIRMATION_WAIT": "WAIT FOR 15M CLOSE",
+        "RETEST_WAIT": "WAIT FOR RETEST",
+        "BREAKOUT_WAIT": "WAIT FOR BREAKOUT",
+        "RR_WAIT": "SKIP",
+        "STRUCTURE_WAIT": "SKIP",
+        "TREND_WAIT": "SKIP",
+        "DATA_WAIT": "SKIP",
+    }.get(stage, "SKIP")
+
+
+@app.get("/api/chart")
+async def chart_api(
+    ticker: str = Query(min_length=2, max_length=64),
+    limit_4h: int = Query(default=80, ge=30, le=160),
+    limit_15m: int = Query(default=120, ge=40, le=240),
+):
+    try:
+        contracts = await CLIENT.get_contracts()
+    except Exception as exc:
+        raise HTTPException(502, str(exc)) from exc
+
+    contract = _resolve_contract(contracts, ticker)
+    if contract is None:
+        raise HTTPException(404, f"Ticker not found on EdgeX: {ticker.strip().upper()}")
+
+    try:
+        data = await fetch_snapshots([contract.contract_id], timeout=22.0)
+    except Exception as exc:
+        raise HTTPException(502, f"EdgeX WebSocket failed: {exc}") from exc
+
+    monitor_raw = data.get((contract.contract_id, SETTINGS.monitor_interval), [])
+    entry_raw = data.get((contract.contract_id, SETTINGS.entry_interval), [])
+    analysis = analyze_contract(contract, monitor_raw, entry_raw)
+    analysis["action"] = _action_for_stage(str(analysis.get("stage") or ""))
+
+    return {
+        "ticker": contract.contract_name,
+        "analysis": analysis,
+        "series": {
+            "HOUR_4": _chart_candles(
+                monitor_raw,
+                SETTINGS.monitor_interval,
+                limit_4h,
+            ),
+            "MINUTE_15": _chart_candles(
+                entry_raw,
+                SETTINGS.entry_interval,
+                limit_15m,
+            ),
+        },
+        "levels": {
+            "breakout": analysis.get("breakout_level"),
+            "entry": analysis.get("entry_reference"),
+            "stop": analysis.get("stop_loss"),
+            "tp1": analysis.get("tp1_2r"),
+            "target": analysis.get("take_profit"),
+            "support": analysis.get("support_4h"),
+            "resistance": analysis.get("resistance_4h"),
+        },
+    }
 
 
 @app.get("/api/compare")
