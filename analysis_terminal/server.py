@@ -837,6 +837,11 @@ async def screener_api(
         ]
 
     rows = _sort_rows(rows)
+    ready_candidates = [
+        row for row in _sort_rows(all_rows)
+        if row.get("stage") == "READY"
+    ][:20]
+
     return {
         "universe": len(contracts),
         "scanned": len(all_rows),
@@ -848,6 +853,7 @@ async def screener_api(
             else None
         ),
         "summary": _market_summary(all_rows),
+        "ready_candidates": ready_candidates,
         "results": rows[:limit],
     }
 
