@@ -839,7 +839,13 @@ async def risk_api(req: RiskRequest):
 
 @app.get("/", response_class=HTMLResponse)
 async def index():
-    return Path(__file__).with_name("index.html").read_text(encoding="utf-8")
+    return HTMLResponse(
+        Path(__file__).with_name("index.html").read_text(encoding="utf-8"),
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+        },
+    )
 
 
 if __name__ == "__main__":
