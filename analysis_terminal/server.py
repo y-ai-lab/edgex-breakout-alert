@@ -357,8 +357,40 @@ async def market_snapshots(force: bool = False):
     async with _cache_lock:
         if not force and _snapshot_cache and time.time() - _snapshot_cache[0] < 240:
             return _snapshot_cache[1]
+
         contracts = await CLIENT.get_contracts()
-        data = await fetch_snapshots(list(contracts), timeout=40.0)
+        contract_ids = list(contracts)
+        chunks = [
+            contract_ids[index : index + 50]
+            for index in range(0, len(contract_ids), 50)
+        ]
+        parts = await asyncio.gather(
+            *(fetch_snapshots(chunk, timeout=25.0) for chunk in chunks),
+            return_exceptions=True,
+        )
+
+        data: dict[tuple[str, str], list[scanner.Candle]] = {}
+        for part in parts:
+            if isinstance(part, Exception):
+                continue
+            data.update(part)
+
+        received_contracts = {contract_id for contract_id, _interval in data}
+        missing = [
+            contract_id
+            for contract_id in contract_ids
+            if contract_id not in received_contracts
+        ]
+        if missing:
+            try:
+                retry = await fetch_snapshots(missing, timeout=20.0)
+                data.update(retry)
+            except Exception:
+                pass
+
+        if not data:
+            raise RuntimeError("EdgeX returned no market snapshots")
+
         _snapshot_cache = (time.time(), data)
         return data
 
@@ -662,7 +694,9 @@ async def screener_api(
 
     rows = _sort_rows(rows)
     return {
+        "universe": len(contracts),
         "scanned": len(all_rows),
+        "coverage_pct": round(len(all_rows) / len(contracts) * 100.0, 1) if contracts else 0.0,
         "matched": len(rows),
         "snapshot_age_seconds": (
             int(time.time() - _snapshot_cache[0])
