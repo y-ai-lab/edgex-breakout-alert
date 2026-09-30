@@ -1,132 +1,87 @@
 <!doctype html>
 <html lang="ja">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>EdgeX Analysis Terminal</title>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>EdgeX Analysis Terminal v2</title>
 <style>
 :root{color-scheme:dark;--bg:#0b0d12;--panel:#131720;--muted:#8d96a8;--line:#252c38;--text:#f3f5f8;--good:#4ade80;--warn:#facc15;--bad:#fb7185;--accent:#7dd3fc}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif}
-main{max-width:1180px;margin:auto;padding:28px 18px 60px}h1{margin:0 0 6px;font-size:28px}h2{font-size:20px}.sub,.status,label{color:var(--muted)}
-.tabs,.row{display:flex;gap:9px;flex-wrap:wrap}.tabs{margin:22px 0}.tab,.primary{border-radius:9px;padding:10px 14px;cursor:pointer;font:inherit}
-.tab{border:1px solid var(--line);background:#0f131b;color:var(--text)}.tab.active{border-color:var(--accent);color:var(--accent)}
-.primary{border:0;background:#e6f6ff;color:#071018;font-weight:700}.panel{display:none;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px}
-.panel.active{display:block}.field{display:flex;flex-direction:column;gap:5px;min-width:150px;flex:1}input{background:#0c1017;color:var(--text);border:1px solid var(--line);border-radius:9px;padding:10px}
-.status{margin:14px 0}.scroll{overflow:auto}table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:10px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
-th{color:var(--muted)}.badge{padding:3px 7px;border:1px solid var(--line);border-radius:999px;font-size:11px}.READY{color:var(--good)}.CONFIRMATION_WAIT,.RETEST_WAIT{color:var(--warn)}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-top:14px}.card{background:#0e1219;border:1px solid var(--line);border-radius:10px;padding:12px}
-.k{font-size:11px;color:var(--muted)}.v{font-size:17px;margin-top:4px}.error{color:var(--bad)}.section{border-top:1px solid var(--line);margin-top:18px;padding-top:12px}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif}main{max-width:1260px;margin:auto;padding:26px 16px 60px}h1{margin:0 0 5px;font-size:28px}h2{font-size:20px}.sub,.status,label,.k{color:var(--muted)}.tabs,.row,.filters{display:flex;gap:9px;flex-wrap:wrap}.tabs{margin:20px 0}.tab,.primary,.ghost{border-radius:9px;padding:10px 13px;cursor:pointer;font:inherit}.tab,.ghost{border:1px solid var(--line);background:#0f131b;color:var(--text)}.tab.active{border-color:var(--accent);color:var(--accent)}.primary{border:0;background:#e6f6ff;color:#071018;font-weight:700}.panel{display:none;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:17px}.panel.active{display:block}.field{display:flex;flex-direction:column;gap:5px;min-width:130px;flex:1}.field.small{max-width:170px}input,select{background:#0c1017;color:var(--text);border:1px solid var(--line);border-radius:9px;padding:10px}.status{margin:13px 0}.scroll{overflow:auto}table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}th{color:var(--muted)}.badge{padding:3px 7px;border:1px solid var(--line);border-radius:999px;font-size:11px}.READY{color:var(--good)}.CONFIRMATION_WAIT,.RETEST_WAIT{color:var(--warn)}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:10px;margin-top:12px}.card{background:#0e1219;border:1px solid var(--line);border-radius:10px;padding:12px}.v{font-size:17px;margin-top:4px}.error{color:var(--bad)}.section{border-top:1px solid var(--line);margin-top:17px;padding-top:12px}.star{font-size:18px;cursor:pointer}.muted{color:var(--muted)}.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:9px;margin:12px 0}.check{transform:scale(1.15)}.pill{padding:6px 9px;border:1px solid var(--line);border-radius:999px}.right{margin-left:auto}.good{color:var(--good)}.warn{color:var(--warn)}.bad{color:var(--bad)}
 </style>
 </head>
-<body>
-<main>
-<h1>EdgeX Analysis Terminal</h1>
-<div class="sub">通知Botとは別サービス。公開EdgeXデータだけで分析します。</div>
-
+<body><main>
+<h1>EdgeX Analysis Terminal <span class="muted">v2</span></h1>
+<div class="sub">通知Botとは別サービス。公開EdgeXデータのみ使用。</div>
 <div class="tabs">
 <button class="tab active" data-tab="screen">Market Screener</button>
 <button class="tab" data-tab="analysis">Ticker Analysis</button>
+<button class="tab" data-tab="compare">Compare</button>
 <button class="tab" data-tab="risk">Risk Calculator</button>
 </div>
 
 <section id="screen" class="panel active">
 <h2>Market Screener</h2>
-<div class="row"><button class="primary" id="scan">スキャン</button><button class="tab" id="force">強制更新</button></div>
+<div class="filters">
+<div class="field small"><label>Search</label><input id="q" placeholder="BTC / HYPE"></div>
+<div class="field small"><label>Stage</label><select id="stage"><option>ALL</option><option>READY</option><option>CONFIRMATION_WAIT</option><option>RETEST_WAIT</option><option>RR_WAIT</option><option>BREAKOUT_WAIT</option><option>TREND_WAIT</option></select></div>
+<div class="field small"><label>Direction</label><select id="direction"><option>ALL</option><option>LONG</option><option>SHORT</option><option>NEUTRAL</option></select></div>
+<div class="field small"><label>Min Score</label><input id="minScore" type="number" min="0" max="100" value="0"></div>
+<div class="field small"><label>Min RR</label><input id="minRR" type="number" min="0" step="0.1" placeholder="any"></div>
+</div>
+<div class="row" style="margin-top:10px"><button class="primary" id="scan">スキャン</button><button class="ghost" id="force">強制更新</button><button class="ghost" id="watchOnly">★のみ</button><button class="ghost" id="compareSelected">比較</button><button class="ghost" id="csv">CSV</button></div>
+<div id="summary" class="summary"></div>
 <div id="screenStatus" class="status">4H→15Mで全取引可能銘柄を確認します。</div>
-<div class="scroll"><table>
-<thead><tr><th>Ticker</th><th>Stage</th><th>方向</th><th>Score</th><th>Price</th><th>24h</th><th>Vol</th><th>RR</th><th>状態</th></tr></thead>
-<tbody id="screenBody"></tbody>
-</table></div>
+<div class="scroll"><table><thead><tr><th>★</th><th>選択</th><th>Ticker</th><th>Stage</th><th>方向</th><th>Score</th><th>Price</th><th>24h</th><th>Vol</th><th>RR</th><th>Data age</th><th>状態</th></tr></thead><tbody id="screenBody"></tbody></table></div>
 </section>
 
 <section id="analysis" class="panel">
 <h2>Ticker Analysis</h2>
-<div class="row">
-<div class="field"><label>Ticker</label><input id="ticker" value="BTCUSDC"></div>
-<button class="primary" id="analyze">分析</button>
-</div>
-<div id="analysisStatus" class="status">BTC のような短縮入力でも検索します。</div>
-<div id="analysisOut"></div>
+<div class="row"><div class="field"><label>Ticker</label><input id="ticker" value="BTCUSDC"></div><button class="primary" id="analyze">分析</button></div>
+<div id="analysisStatus" class="status">BTC のような短縮入力でも検索します。</div><div id="analysisOut"></div>
+</section>
+
+<section id="compare" class="panel">
+<h2>Compare</h2><div class="sub">Screenerで2〜6銘柄を選択して比較します。</div><div id="compareOut" class="scroll" style="margin-top:14px"></div>
 </section>
 
 <section id="risk" class="panel">
 <h2>Risk Calculator</h2>
 <div class="row">
-<div class="field"><label>Equity USDC</label><input id="equity" type="number" value="1000"></div>
-<div class="field"><label>Risk %</label><input id="riskPct" type="number" value="5"></div>
-<div class="field"><label>Entry</label><input id="entry" type="number" step="any"></div>
-<div class="field"><label>Stop</label><input id="stop" type="number" step="any"></div>
-<div class="field"><label>Target</label><input id="target" type="number" step="any"></div>
-<div class="field"><label>Step Size</label><input id="step" type="number" step="any"></div>
-<div class="field"><label>Leverage</label><input id="lev" type="number" step="any"></div>
-<button class="primary" id="calc">計算</button>
+<div class="field"><label>Equity USDC</label><input id="equity" type="number" value="1000"></div><div class="field"><label>Risk %</label><input id="riskPct" type="number" value="5"></div>
+<div class="field"><label>Entry</label><input id="entry" type="number" step="any"></div><div class="field"><label>Stop</label><input id="stop" type="number" step="any"></div>
+<div class="field"><label>Target</label><input id="target" type="number" step="any"></div><div class="field"><label>Step Size</label><input id="step" type="number" step="any"></div>
+<div class="field"><label>Min Order</label><input id="minOrder" type="number" step="any"></div><div class="field"><label>Max Order</label><input id="maxOrder" type="number" step="any"></div>
+<div class="field"><label>Leverage</label><input id="lev" type="number" step="any"></div><button class="primary" id="calc">計算</button>
 </div>
-<div id="riskStatus" class="status">SL到達時の最大損失から枚数を逆算します。</div>
-<div id="riskOut" class="grid"></div>
+<div id="riskStatus" class="status">SL到達時の最大損失から枚数を逆算します。</div><div id="riskOut" class="grid"></div>
 </section>
 </main>
-
 <script>
+var rows=[], watch=new Set(JSON.parse(localStorage.getItem("edgexWatch")||"[]")), showWatch=false;
 function fmt(x,d){return x==null?"—":Number(x).toLocaleString("ja-JP",{maximumFractionDigits:d==null?4:d})}
 function pct(x){return x==null?"—":(x>=0?"+":"")+Number(x).toFixed(2)+"%"}
 function card(k,v){return '<div class="card"><div class="k">'+k+'</div><div class="v">'+v+'</div></div>'}
-async function jf(url,opt){var r=await fetch(url,opt);var j={};try{j=await r.json()}catch(e){}if(!r.ok)throw new Error(j.detail||("HTTP "+r.status));return j}
+async function jf(url,opt){var r=await fetch(url,opt),j={};try{j=await r.json()}catch(e){}if(!r.ok)throw new Error(j.detail||("HTTP "+r.status));return j}
+function saveWatch(){localStorage.setItem("edgexWatch",JSON.stringify(Array.from(watch)))}
+function tab(name){document.querySelector('[data-tab="'+name+'"]').click()}
+document.querySelectorAll("[data-tab]").forEach(function(b){b.onclick=function(){document.querySelectorAll("[data-tab]").forEach(x=>x.classList.remove("active"));document.querySelectorAll(".panel").forEach(x=>x.classList.remove("active"));b.classList.add("active");document.getElementById(b.dataset.tab).classList.add("active")}});
 
-document.querySelectorAll("[data-tab]").forEach(function(b){b.onclick=function(){
- document.querySelectorAll("[data-tab]").forEach(function(x){x.classList.remove("active")});
- document.querySelectorAll(".panel").forEach(function(x){x.classList.remove("active")});
- b.classList.add("active");document.getElementById(b.dataset.tab).classList.add("active");
-}});
+function summaryView(s){var el=document.getElementById("summary");if(!s){el.innerHTML="";return}el.innerHTML=card("READY",s.ready_count)+card("Near Signal",s.near_signal_count)+card("LONG",s.direction_counts.LONG||0)+card("SHORT",s.direction_counts.SHORT||0)+card("Avg Score",fmt(s.average_score,1))+card("Top Near",(s.top_near||[]).join(", ")||"—")}
+function renderRows(){var body=document.getElementById("screenBody");body.innerHTML="";var filtered=showWatch?rows.filter(r=>watch.has(r.ticker)):rows;filtered.forEach(function(r){var tr=document.createElement("tr");tr.innerHTML='<td class="star">'+(watch.has(r.ticker)?"★":"☆")+'</td><td><input class="check" type="checkbox" data-ticker="'+r.ticker+'"></td><td><b>'+r.ticker+'</b></td><td><span class="badge '+r.stage+'">'+r.stage+'</span></td><td>'+(r.direction||"—")+'</td><td>'+fmt(r.score,1)+'</td><td>'+fmt(r.current_price,8)+'</td><td>'+pct(r.change_24h_pct)+'</td><td>'+fmt(r.volume_ratio,2)+'x</td><td>'+fmt(r.rr,2)+'</td><td>'+fmt(r.data_age_seconds,0)+'s</td><td>'+(r.reason||"")+'</td>';
+ var tds=tr.children;tds[0].onclick=function(e){e.stopPropagation();watch.has(r.ticker)?watch.delete(r.ticker):watch.add(r.ticker);saveWatch();renderRows()};tds[2].onclick=function(){document.getElementById("ticker").value=r.ticker;tab("analysis");analyze()};body.appendChild(tr)})}
+async function scan(force){var s=document.getElementById("screenStatus");s.textContent="EdgeX全銘柄を取得中…";try{var u="/api/screener?limit=200&force="+force+"&stage="+encodeURIComponent(document.getElementById("stage").value)+"&direction="+encodeURIComponent(document.getElementById("direction").value)+"&min_score="+(+document.getElementById("minScore").value||0);var rr=document.getElementById("minRR").value,q=document.getElementById("q").value.trim();if(rr)u+="&min_rr="+encodeURIComponent(rr);if(q)u+="&q="+encodeURIComponent(q);var j=await jf(u);rows=j.results;summaryView(j.summary);s.textContent=j.matched+"件表示 / "+j.scanned+"銘柄評価 / cache "+(j.snapshot_age_seconds||0)+"s";renderRows()}catch(e){s.innerHTML='<span class="error">'+e.message+'</span>'}}
+document.getElementById("scan").onclick=()=>scan(false);document.getElementById("force").onclick=()=>scan(true);document.getElementById("watchOnly").onclick=function(){showWatch=!showWatch;this.textContent=showWatch?"全件表示":"★のみ";renderRows()};
 
-async function scan(force){
- var s=document.getElementById("screenStatus"), body=document.getElementById("screenBody");
- s.textContent="EdgeX全銘柄を取得中…";body.innerHTML="";
- try{
-  var j=await jf("/api/screener?limit=20&force="+force);
-  s.textContent=j.scanned+"銘柄評価 / cache "+(j.snapshot_age_seconds||0)+"s";
-  j.results.forEach(function(r){
-   var tr=document.createElement("tr");
-   tr.innerHTML="<td><b>"+r.ticker+"</b></td><td><span class='badge "+r.stage+"'>"+r.stage+"</span></td><td>"+(r.direction||"—")+"</td><td>"+fmt(r.score,1)+"</td><td>"+fmt(r.current_price,8)+"</td><td>"+pct(r.change_24h_pct)+"</td><td>"+fmt(r.volume_ratio,2)+"x</td><td>"+fmt(r.rr,2)+"</td><td>"+(r.reason||"")+"</td>";
-   tr.style.cursor="pointer";
-   tr.onclick=function(){document.getElementById("ticker").value=r.ticker;document.querySelector('[data-tab="analysis"]').click();analyze()};
-   body.appendChild(tr);
-  });
- }catch(e){s.innerHTML="<span class='error'>"+e.message+"</span>"}
-}
-document.getElementById("scan").onclick=function(){scan(false)};
-document.getElementById("force").onclick=function(){scan(true)};
+function selected(){return Array.from(document.querySelectorAll(".check:checked")).map(x=>x.dataset.ticker)}
+async function compareTickers(tickers){var out=document.getElementById("compareOut");if(tickers.length<2){out.innerHTML='<span class="error">2銘柄以上選択してください</span>';tab("compare");return}tab("compare");out.textContent="比較中…";try{var j=await jf("/api/compare?tickers="+encodeURIComponent(tickers.join(",")));var h='<table><thead><tr><th>Ticker</th><th>Stage</th><th>方向</th><th>Score</th><th>Price</th><th>24h</th><th>Vol</th><th>RR</th><th>Entry</th><th>SL</th><th>TP</th></tr></thead><tbody>';j.results.forEach(r=>h+='<tr><td><b>'+r.ticker+'</b></td><td>'+r.stage+'</td><td>'+(r.direction||"—")+'</td><td>'+fmt(r.score,1)+'</td><td>'+fmt(r.current_price,8)+'</td><td>'+pct(r.change_24h_pct)+'</td><td>'+fmt(r.volume_ratio,2)+'x</td><td>'+fmt(r.rr,2)+'</td><td>'+fmt(r.entry_reference,8)+'</td><td>'+fmt(r.stop_loss,8)+'</td><td>'+fmt(r.take_profit,8)+'</td></tr>');out.innerHTML=h+'</tbody></table>'}catch(e){out.innerHTML='<span class="error">'+e.message+'</span>'}}
+document.getElementById("compareSelected").onclick=()=>compareTickers(selected());
 
-async function analyze(){
- var t=document.getElementById("ticker").value.trim();
- var s=document.getElementById("analysisStatus"),o=document.getElementById("analysisOut");
- s.textContent="分析中…";o.innerHTML="";
- try{
-  var r=await jf("/api/analyze?ticker="+encodeURIComponent(t));
-  s.innerHTML="<span class='badge "+r.stage+"'>"+r.stage+"</span> "+(r.direction||"")+" — "+(r.reason||"");
-  o.innerHTML='<div class="grid">'+
-   card("Current",fmt(r.current_price,8))+card("24h",pct(r.change_24h_pct))+card("4H Trend",r.trend||"—")+
-   card("EMA20 / EMA50",fmt(r.ema20_4h,8)+" / "+fmt(r.ema50_4h,8))+card("ATR 4H / 15M",fmt(r.atr_4h,8)+" / "+fmt(r.atr_15m,8))+
-   card("Volume Ratio",fmt(r.volume_ratio,2)+"x")+card("Score",fmt(r.score,1))+'</div>'+
-   '<div class="section"><h2>Trade Scenario</h2><div class="grid">'+card("Breakout",fmt(r.breakout_level,8))+card("Entry",fmt(r.entry_reference,8))+
-   card("SL",fmt(r.stop_loss,8))+card("TP1 (2R)",fmt(r.tp1_2r,8))+card("4H Target",fmt(r.take_profit,8))+card("RR",fmt(r.rr,2))+'</div></div>'+
-   '<div class="section"><h2>EdgeX Rules</h2><div class="grid">'+card("Step Size",fmt(r.step_size,8))+card("Min Order",fmt(r.min_order_size,8))+
-   card("Max Long Lev",fmt(r.max_long_leverage,2))+card("Max Short Lev",fmt(r.max_short_leverage,2))+'</div></div>';
-  if(r.entry_reference&&r.stop_loss){document.getElementById("entry").value=r.entry_reference;document.getElementById("stop").value=r.stop_loss;document.getElementById("target").value=r.take_profit||"";document.getElementById("step").value=r.step_size||""}
- }catch(e){s.innerHTML="<span class='error'>"+e.message+"</span>"}
-}
+document.getElementById("csv").onclick=function(){if(!rows.length)return;var cols=["ticker","stage","direction","score","current_price","change_24h_pct","volume_ratio","rr","entry_reference","stop_loss","take_profit","reason"];var csv=[cols.join(",")].concat(rows.map(r=>cols.map(c=>'"'+String(r[c]??"").replaceAll('"','""')+'"').join(","))).join("
+");var a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));a.download="edgex-screener.csv";a.click();URL.revokeObjectURL(a.href)};
+
+async function analyze(){var t=document.getElementById("ticker").value.trim(),s=document.getElementById("analysisStatus"),o=document.getElementById("analysisOut");s.textContent="分析中…";o.innerHTML="";try{var r=await jf("/api/analyze?ticker="+encodeURIComponent(t));var b=r.score_breakdown||{};s.innerHTML='<span class="badge '+r.stage+'">'+r.stage+'</span> '+(r.direction||"")+" — "+(r.reason||"");o.innerHTML='<div class="grid">'+card("Current",fmt(r.current_price,8))+card("24h",pct(r.change_24h_pct))+card("4H Trend",r.trend||"—")+card("Data age",fmt(r.data_age_seconds,0)+"s")+card("EMA20 / EMA50",fmt(r.ema20_4h,8)+" / "+fmt(r.ema50_4h,8))+card("ATR 4H / 15M",fmt(r.atr_4h,8)+" / "+fmt(r.atr_15m,8))+card("Volume Ratio",fmt(r.volume_ratio,2)+"x")+card("Score",fmt(r.score,1))+'</div><div class="section"><h2>Score Breakdown</h2><div class="grid">'+card("Volume",fmt(b.volume,1)+" /10")+card("Trend",fmt(b.trend,1)+" /20")+card("Breakout",fmt(b.breakout,1)+" /25")+card("Retest",fmt(b.retest,1)+" /20")+card("Confirmation",fmt(b.confirmation,1)+" /15")+card("RR",fmt(b.rr,1)+" /20")+'</div></div><div class="section"><h2>Trade Scenario</h2><div class="grid">'+card("Breakout",fmt(r.breakout_level,8))+card("Entry",fmt(r.entry_reference,8))+card("SL",fmt(r.stop_loss,8))+card("TP1 (2R)",fmt(r.tp1_2r,8))+card("4H Target",fmt(r.take_profit,8))+card("RR",fmt(r.rr,2))+card("Support 4H",fmt(r.support_4h,8))+card("Resistance 4H",fmt(r.resistance_4h,8))+'</div></div><div class="section"><h2>EdgeX Rules</h2><div class="grid">'+card("Step Size",fmt(r.step_size,8))+card("Min Order",fmt(r.min_order_size,8))+card("Max Order",fmt(r.max_order_size,8))+card("Max Long Lev",fmt(r.max_long_leverage,2))+card("Max Short Lev",fmt(r.max_short_leverage,2))+'</div></div>';
+ if(r.entry_reference&&r.stop_loss){document.getElementById("entry").value=r.entry_reference;document.getElementById("stop").value=r.stop_loss;document.getElementById("target").value=r.take_profit||"";document.getElementById("step").value=r.step_size||"";document.getElementById("minOrder").value=r.min_order_size||"";document.getElementById("maxOrder").value=r.max_order_size||"";var lev=r.direction==="LONG"?r.max_long_leverage:r.max_short_leverage;if(lev)document.getElementById("lev").value=lev}}
+ catch(e){s.innerHTML='<span class="error">'+e.message+'</span>'}}
 document.getElementById("analyze").onclick=analyze;
 
-document.getElementById("calc").onclick=async function(){
- function v(id){return document.getElementById(id).value}
- var p={equity:+v("equity"),risk_pct:+v("riskPct"),entry:+v("entry"),stop:+v("stop")};
- if(v("target"))p.target=+v("target");if(v("step"))p.step_size=+v("step");if(v("lev"))p.leverage=+v("lev");
- var s=document.getElementById("riskStatus"),o=document.getElementById("riskOut");
- try{
-  var r=await jf("/api/risk",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(p)});
-  s.textContent="計算完了";
-  o.innerHTML=card("Risk budget",fmt(r.risk_budget,4)+" USDC")+card("Size",fmt(r.size,8))+card("Notional",fmt(r.notional,2)+" USDC")+
-   card("Max loss",fmt(r.max_loss,4)+" USDC")+card("Actual risk",pct(r.actual_risk_pct))+card("RR",fmt(r.rr,2))+card("Target profit",r.target_profit==null?"—":fmt(r.target_profit,4)+" USDC");
- }catch(e){s.innerHTML="<span class='error'>"+e.message+"</span>"}
-};
-</script>
-</body></html>
+document.getElementById("calc").onclick=async function(){function v(id){return document.getElementById(id).value}var p={equity:+v("equity"),risk_pct:+v("riskPct"),entry:+v("entry"),stop:+v("stop")};if(v("target"))p.target=+v("target");if(v("step"))p.step_size=+v("step");if(v("minOrder"))p.min_order_size=+v("minOrder");if(v("maxOrder"))p.max_order_size=+v("maxOrder");if(v("lev"))p.leverage=+v("lev");var s=document.getElementById("riskStatus"),o=document.getElementById("riskOut");try{var r=await jf("/api/risk",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(p)});s.innerHTML="計算完了 — <b>"+r.side+"</b>"+(r.below_min_order?' <span class="bad">Min Order未満</span>':'')+(r.margin_capped?' <span class="warn">証拠金上限</span>':'')+(r.max_order_capped?' <span class="warn">Max Order上限</span>':'');o.innerHTML=card("Risk budget",fmt(r.risk_budget,4)+" USDC")+card("Size",fmt(r.size,8))+card("Notional",fmt(r.notional,2)+" USDC")+card("Max loss",fmt(r.max_loss,4)+" USDC")+card("Actual risk",pct(r.actual_risk_pct))+card("RR",fmt(r.rr,2))+card("Target profit",r.target_profit==null?"—":fmt(r.target_profit,4)+" USDC")}catch(e){s.innerHTML='<span class="error">'+e.message+'</span>'}};
+</script></body></html>
