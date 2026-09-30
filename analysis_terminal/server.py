@@ -6,6 +6,7 @@ import math
 import os
 import sys
 import time
+from collections import Counter
 from pathlib import Path
 from statistics import mean
 from typing import Any
@@ -56,8 +57,7 @@ async def fetch_snapshots(
         while time.monotonic() < deadline and set(found) != expected:
             try:
                 raw = await asyncio.wait_for(
-                    ws.recv(),
-                    timeout=max(0.2, deadline - time.monotonic()),
+                    ws.recv(), timeout=max(0.2, deadline - time.monotonic())
                 )
             except asyncio.TimeoutError:
                 break
@@ -82,7 +82,7 @@ async def fetch_snapshots(
                 continue
 
             items = content.get("data") or []
-            parsed = []
+            parsed: list[scanner.Candle] = []
             if isinstance(items, list):
                 for item in items:
                     if isinstance(item, dict):
@@ -107,9 +107,29 @@ def closed(candles: list[scanner.Candle], interval: str) -> list[scanner.Candle]
     cutoff = int(time.time() * 1000)
     interval_ms = scanner.INTERVAL_MS[interval]
     return [
-        candle for candle in sorted(candles, key=lambda item: item.time_ms)
+        candle
+        for candle in sorted(candles, key=lambda item: item.time_ms)
         if candle.time_ms + interval_ms <= cutoff
     ]
+
+
+def _score_breakdown(
+    *,
+    volume_ratio: float,
+    trend: bool,
+    breakout: bool,
+    retest: bool,
+    confirmed: bool,
+    rr: float | None,
+) -> dict[str, float]:
+    return {
+        "volume": round(min(10.0, max(0.0, volume_ratio * 4.0)), 1),
+        "trend": 20.0 if trend else 0.0,
+        "breakout": 25.0 if breakout else 0.0,
+        "retest": 20.0 if retest else 0.0,
+        "confirmation": 15.0 if confirmed else 0.0,
+        "rr": round(min(20.0, rr / SETTINGS.min_rr * 20.0), 1) if rr is not None else 0.0,
+    }
 
 
 def analyze_contract(
@@ -129,6 +149,14 @@ def analyze_contract(
         "max_short_leverage": contract.max_short_leverage,
         "stage": "DATA_WAIT",
         "score": 0.0,
+        "score_breakdown": _score_breakdown(
+            volume_ratio=0,
+            trend=False,
+            breakout=False,
+            retest=False,
+            confirmed=False,
+            rr=None,
+        ),
     }
 
     required_monitor = max(
@@ -143,6 +171,22 @@ def analyze_contract(
 
     latest4 = monitor[-1]
     latest15 = entries[-1]
+    now_ms = int(time.time() * 1000)
+    base.update({
+        "latest_4h_time_ms": latest4.time_ms,
+        "latest_15m_time_ms": latest15.time_ms,
+        "data_age_seconds": max(
+            0,
+            int(
+                (
+                    now_ms
+                    - (latest15.time_ms + scanner.INTERVAL_MS[SETTINGS.entry_interval])
+                )
+                / 1000
+            ),
+        ),
+    })
+
     ema_fast = scanner._ema([c.close for c in monitor], SETTINGS.trend_fast_ema)
     ema_slow = scanner._ema([c.close for c in monitor], SETTINGS.trend_slow_ema)
     atr4 = scanner._atr(monitor, SETTINGS.atr_period)
@@ -186,69 +230,112 @@ def analyze_contract(
         "resistance_4h": max(c.high for c in monitor[-20:]),
     })
 
-    score = min(10.0, max(0.0, volume_ratio * 4.0))
+    breakdown = _score_breakdown(
+        volume_ratio=volume_ratio,
+        trend=direction is not None,
+        breakout=False,
+        retest=False,
+        confirmed=False,
+        rr=None,
+    )
     if direction is None:
-        base.update(stage="TREND_WAIT", score=round(score, 1), reason="4H trend not aligned")
+        base.update(
+            stage="TREND_WAIT",
+            score=round(sum(breakdown.values()), 1),
+            score_breakdown=breakdown,
+            reason="4H trend not aligned",
+        )
         return base
 
-    score += 20.0
     raw_direction = "up" if direction == "LONG" else "down"
     breakout = DETECTOR._recent_breakout(monitor, raw_direction)
     if breakout is None:
-        base.update(stage="BREAKOUT_WAIT", score=round(score, 1), reason="waiting for recent 4H breakout")
+        base.update(
+            stage="BREAKOUT_WAIT",
+            score=round(sum(breakdown.values()), 1),
+            score_breakdown=breakdown,
+            reason="waiting for recent 4H breakout",
+        )
         return base
 
     breakout_index, roll_level = breakout
-    score += 25.0
     tolerance = max(atr15 * SETTINGS.retest_atr_tolerance, roll_level * 0.001)
     retest_window = entries[-SETTINGS.retest_lookback:]
 
     if direction == "LONG":
         touched = any(c.low <= roll_level + tolerance for c in retest_window)
         confirmed = latest15.close > latest15.open and latest15.close > roll_level
-        structural_stop = min(roll_level, min(c.low for c in monitor[breakout_index:]))
+        structural_stop = min(
+            roll_level,
+            min(c.low for c in monitor[breakout_index:]),
+        )
         stop = structural_stop - atr4 * SETTINGS.atr_stop_buffer
         raw_target = max(c.high for c in monitor[breakout_index:])
         target = raw_target - atr4 * SETTINGS.atr_target_buffer
         structure_ok = stop < latest15.close < target
-        rr = (target - latest15.close) / (latest15.close - stop) if structure_ok else None
+        rr = (
+            (target - latest15.close) / (latest15.close - stop)
+            if structure_ok
+            else None
+        )
     else:
         touched = any(c.high >= roll_level - tolerance for c in retest_window)
         confirmed = latest15.close < latest15.open and latest15.close < roll_level
-        structural_stop = max(roll_level, max(c.high for c in monitor[breakout_index:]))
+        structural_stop = max(
+            roll_level,
+            max(c.high for c in monitor[breakout_index:]),
+        )
         stop = structural_stop + atr4 * SETTINGS.atr_stop_buffer
         raw_target = min(c.low for c in monitor[breakout_index:])
         target = raw_target + atr4 * SETTINGS.atr_target_buffer
         structure_ok = target < latest15.close < stop
-        rr = (latest15.close - target) / (stop - latest15.close) if structure_ok else None
+        rr = (
+            (latest15.close - target) / (stop - latest15.close)
+            if structure_ok
+            else None
+        )
 
-    if touched:
-        score += 20.0
-    if confirmed:
-        score += 15.0
-    if rr is not None:
-        score += min(20.0, rr / SETTINGS.min_rr * 20.0)
+    breakdown = _score_breakdown(
+        volume_ratio=volume_ratio,
+        trend=True,
+        breakout=True,
+        retest=touched,
+        confirmed=confirmed,
+        rr=rr,
+    )
 
     if not touched:
         stage, reason = "RETEST_WAIT", "4H setup exists; waiting for 15M retest"
     elif not confirmed:
         stage, reason = "CONFIRMATION_WAIT", "retest seen; waiting for 15M confirmation"
     elif rr is None:
-        stage, reason = "STRUCTURE_WAIT", "4H structural target/stop is not valid at current price"
+        stage, reason = (
+            "STRUCTURE_WAIT",
+            "4H structural target/stop is not valid at current price",
+        )
     elif rr < SETTINGS.min_rr:
-        stage, reason = "RR_WAIT", f"structural RR {rr:.2f} is below {SETTINGS.min_rr:.2f}"
+        stage, reason = (
+            "RR_WAIT",
+            f"structural RR {rr:.2f} is below {SETTINGS.min_rr:.2f}",
+        )
     else:
-        stage, reason = "READY", "trend + breakout + retest + confirmation + RR >= 2"
+        stage, reason = (
+            "READY",
+            "trend + breakout + retest + confirmation + RR >= 2",
+        )
 
     stop_distance = abs(latest15.close - stop) if structure_ok else None
     tp1 = None
     if stop_distance is not None:
-        tp1 = latest15.close + (2.0 * stop_distance if direction == "LONG" else -2.0 * stop_distance)
+        tp1 = latest15.close + (
+            2.0 * stop_distance if direction == "LONG" else -2.0 * stop_distance
+        )
 
     base.update({
         "stage": stage,
         "reason": reason,
-        "score": round(min(100.0, score), 1),
+        "score": round(min(100.0, sum(breakdown.values())), 1),
+        "score_breakdown": breakdown,
         "breakout_level": roll_level,
         "breakout_time_ms": monitor[breakout_index].time_ms,
         "retest_touched": touched,
@@ -283,6 +370,7 @@ class RiskRequest(BaseModel):
     stop: float = Field(gt=0)
     target: float | None = Field(default=None, gt=0)
     step_size: float | None = Field(default=None, gt=0)
+    min_order_size: float | None = Field(default=None, gt=0)
     max_order_size: float | None = Field(default=None, gt=0)
     leverage: float | None = Field(default=None, gt=0)
 
@@ -297,6 +385,13 @@ def risk_plan(req: RiskRequest) -> dict[str, Any]:
     distance = abs(req.entry - req.stop)
     if distance <= 0:
         raise HTTPException(400, "Entry and stop must differ")
+
+    side = "LONG" if req.stop < req.entry else "SHORT"
+    if req.target is not None:
+        if side == "LONG" and req.target <= req.entry:
+            raise HTTPException(400, "LONG target must be above Entry")
+        if side == "SHORT" and req.target >= req.entry:
+            raise HTTPException(400, "SHORT target must be below Entry")
 
     budget = req.equity * req.risk_pct / 100.0
     theoretical = budget / distance
@@ -314,6 +409,7 @@ def risk_plan(req: RiskRequest) -> dict[str, Any]:
             size = floor_step(max_by_margin, req.step_size)
             margin_capped = True
 
+    below_min_order = bool(req.min_order_size and size < req.min_order_size)
     max_loss = size * distance
     rr = None
     target_profit = None
@@ -323,6 +419,7 @@ def risk_plan(req: RiskRequest) -> dict[str, Any]:
         target_profit = size * reward
 
     return {
+        "side": side,
         "risk_budget": budget,
         "theoretical_size": theoretical,
         "size": size,
@@ -333,15 +430,67 @@ def risk_plan(req: RiskRequest) -> dict[str, Any]:
         "target_profit": target_profit,
         "max_order_capped": max_order_capped,
         "margin_capped": margin_capped,
+        "below_min_order": below_min_order,
+        "min_order_size": req.min_order_size,
     }
 
 
-app = FastAPI(title="EdgeX Analysis Terminal", version="1.0.0")
+def _sort_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    priority = {
+        "READY": 0,
+        "CONFIRMATION_WAIT": 1,
+        "RETEST_WAIT": 2,
+        "RR_WAIT": 3,
+        "BREAKOUT_WAIT": 4,
+        "TREND_WAIT": 5,
+        "STRUCTURE_WAIT": 6,
+        "DATA_WAIT": 7,
+    }
+    return sorted(
+        rows,
+        key=lambda row: (
+            priority.get(row.get("stage"), 99),
+            -float(row.get("score") or 0),
+            -float(row.get("volume_24h_value") or 0),
+        ),
+    )
+
+
+def _market_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    stages = Counter(str(row.get("stage") or "UNKNOWN") for row in rows)
+    directions = Counter(str(row.get("direction") or "NEUTRAL") for row in rows)
+    ready = [row for row in rows if row.get("stage") == "READY"]
+    near = [
+        row
+        for row in rows
+        if row.get("stage") in {"CONFIRMATION_WAIT", "RETEST_WAIT"}
+    ]
+    return {
+        "stage_counts": dict(stages),
+        "direction_counts": dict(directions),
+        "ready_count": len(ready),
+        "near_signal_count": len(near),
+        "average_score": (
+            round(mean(float(row.get("score") or 0) for row in rows), 1)
+            if rows
+            else 0.0
+        ),
+        "top_ready": [row["ticker"] for row in _sort_rows(ready)[:5]],
+        "top_near": [row["ticker"] for row in _sort_rows(near)[:5]],
+    }
+
+
+app = FastAPI(title="EdgeX Analysis Terminal", version="2.0.0")
 
 
 @app.get("/health")
 async def health():
-    return {"ok": True, "service": "edgex-analysis-terminal", "time_ms": int(time.time() * 1000)}
+    return {
+        "ok": True,
+        "service": "edgex-analysis-terminal",
+        "version": "2.0.0",
+        "time_ms": int(time.time() * 1000),
+    }
 
 
 @app.get("/api/contracts")
@@ -350,7 +499,10 @@ async def contracts_api():
         contracts = await CLIENT.get_contracts()
     except Exception as exc:
         raise HTTPException(502, str(exc)) from exc
-    return {"count": len(contracts), "contracts": [contract.__dict__ for contract in contracts.values()]}
+    return {
+        "count": len(contracts),
+        "contracts": [contract.__dict__ for contract in contracts.values()],
+    }
 
 
 @app.get("/api/analyze")
@@ -361,11 +513,18 @@ async def analyze_api(ticker: str = Query(min_length=2, max_length=64)):
     except Exception as exc:
         raise HTTPException(502, str(exc)) from exc
 
-    contract = next((c for c in contracts.values() if c.contract_name.upper() == ticker), None)
+    contract = next(
+        (c for c in contracts.values() if c.contract_name.upper() == ticker),
+        None,
+    )
     if contract is None:
         bare = ticker.removesuffix("USDC")
         contract = next(
-            (c for c in contracts.values() if c.contract_name.upper().removesuffix("USDC") == bare),
+            (
+                c
+                for c in contracts.values()
+                if c.contract_name.upper().removesuffix("USDC") == bare
+            ),
             None,
         )
     if contract is None:
@@ -383,18 +542,84 @@ async def analyze_api(ticker: str = Query(min_length=2, max_length=64)):
     )
 
 
+@app.get("/api/compare")
+async def compare_api(tickers: str = Query(min_length=2, max_length=400)):
+    requested = [
+        item.strip().upper()
+        for item in tickers.split(",")
+        if item.strip()
+    ]
+    requested = list(dict.fromkeys(requested))[:6]
+    if len(requested) < 2:
+        raise HTTPException(400, "Select at least two tickers")
+
+    try:
+        contracts = await CLIENT.get_contracts()
+    except Exception as exc:
+        raise HTTPException(502, str(exc)) from exc
+
+    resolved: list[scanner.Contract] = []
+    missing: list[str] = []
+    for ticker in requested:
+        bare = ticker.removesuffix("USDC")
+        contract = next(
+            (
+                c
+                for c in contracts.values()
+                if c.contract_name.upper() == ticker
+                or c.contract_name.upper().removesuffix("USDC") == bare
+            ),
+            None,
+        )
+        if contract is None:
+            missing.append(ticker)
+        else:
+            resolved.append(contract)
+    if missing:
+        raise HTTPException(
+            404,
+            f"Ticker not found on EdgeX: {', '.join(missing)}",
+        )
+
+    try:
+        data = await fetch_snapshots(
+            [c.contract_id for c in resolved],
+            timeout=25.0,
+        )
+    except Exception as exc:
+        raise HTTPException(502, f"EdgeX WebSocket failed: {exc}") from exc
+
+    rows = [
+        analyze_contract(
+            contract,
+            data.get((contract.contract_id, SETTINGS.monitor_interval), []),
+            data.get((contract.contract_id, SETTINGS.entry_interval), []),
+        )
+        for contract in resolved
+    ]
+    return {"results": _sort_rows(rows)}
+
+
 @app.get("/api/screener")
 async def screener_api(
-    limit: int = Query(default=20, ge=1, le=50),
+    limit: int = Query(default=100, ge=1, le=200),
     force: bool = False,
+    stage: str | None = None,
+    direction: str | None = None,
+    min_score: float = Query(default=0.0, ge=0, le=100),
+    min_rr: float | None = Query(default=None, ge=0),
+    q: str | None = Query(default=None, max_length=64),
 ):
     try:
         contracts = await CLIENT.get_contracts()
         data = await market_snapshots(force=force)
     except Exception as exc:
-        raise HTTPException(502, f"EdgeX market scan failed: {exc}") from exc
+        raise HTTPException(
+            502,
+            f"EdgeX market scan failed: {exc}",
+        ) from exc
 
-    rows = []
+    all_rows = []
     for cid, contract in contracts.items():
         row = analyze_contract(
             contract,
@@ -402,27 +627,49 @@ async def screener_api(
             data.get((cid, SETTINGS.entry_interval), []),
         )
         if row.get("current_price") is not None:
-            rows.append(row)
+            all_rows.append(row)
 
-    priority = {
-        "READY": 0,
-        "CONFIRMATION_WAIT": 1,
-        "RETEST_WAIT": 2,
-        "RR_WAIT": 3,
-        "BREAKOUT_WAIT": 4,
-        "TREND_WAIT": 5,
-        "STRUCTURE_WAIT": 6,
-        "DATA_WAIT": 7,
-    }
-    rows.sort(key=lambda row: (
-        priority.get(row.get("stage"), 99),
-        -float(row.get("score") or 0),
-        -float(row.get("volume_24h_value") or 0),
-    ))
+    rows = all_rows
+    if stage and stage.upper() != "ALL":
+        rows = [row for row in rows if row.get("stage") == stage.upper()]
+    if direction and direction.upper() != "ALL":
+        target = direction.upper()
+        rows = [
+            row
+            for row in rows
+            if (row.get("direction") or "NEUTRAL") == target
+        ]
+    if min_score > 0:
+        rows = [
+            row
+            for row in rows
+            if float(row.get("score") or 0) >= min_score
+        ]
+    if min_rr is not None:
+        rows = [
+            row
+            for row in rows
+            if row.get("rr") is not None
+            and float(row["rr"]) >= min_rr
+        ]
+    if q:
+        needle = q.strip().upper()
+        rows = [
+            row
+            for row in rows
+            if needle in str(row.get("ticker", "")).upper()
+        ]
 
+    rows = _sort_rows(rows)
     return {
-        "scanned": len(rows),
-        "snapshot_age_seconds": int(time.time() - _snapshot_cache[0]) if _snapshot_cache else None,
+        "scanned": len(all_rows),
+        "matched": len(rows),
+        "snapshot_age_seconds": (
+            int(time.time() - _snapshot_cache[0])
+            if _snapshot_cache
+            else None
+        ),
+        "summary": _market_summary(all_rows),
         "results": rows[:limit],
     }
 
