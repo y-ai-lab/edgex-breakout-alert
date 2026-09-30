@@ -2,19 +2,20 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>EdgeX Analysis Terminal v3</title>
+<title>EdgeX Analysis Terminal v4</title>
 <style>
 :root{color-scheme:dark;--bg:#0b0d12;--panel:#131720;--muted:#8d96a8;--line:#252c38;--text:#f3f5f8;--good:#4ade80;--warn:#facc15;--bad:#fb7185;--accent:#7dd3fc}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif}main{max-width:1260px;margin:auto;padding:26px 16px 60px}h1{margin:0 0 5px;font-size:28px}h2{font-size:20px}.sub,.status,label,.k{color:var(--muted)}.tabs,.row,.filters{display:flex;gap:9px;flex-wrap:wrap}.tabs{margin:20px 0}.tab,.primary,.ghost{border-radius:9px;padding:10px 13px;cursor:pointer;font:inherit}.tab,.ghost{border:1px solid var(--line);background:#0f131b;color:var(--text)}.tab.active{border-color:var(--accent);color:var(--accent)}.primary{border:0;background:#e6f6ff;color:#071018;font-weight:700}.panel{display:none;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:17px}.panel.active{display:block}.field{display:flex;flex-direction:column;gap:5px;min-width:130px;flex:1}.field.small{max-width:170px}input,select{background:#0c1017;color:var(--text);border:1px solid var(--line);border-radius:9px;padding:10px}.status{margin:13px 0}.scroll{overflow:auto}table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}th{color:var(--muted)}.badge{padding:3px 7px;border:1px solid var(--line);border-radius:999px;font-size:11px}.READY{color:var(--good)}.CONFIRMATION_WAIT,.RETEST_WAIT{color:var(--warn)}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:10px;margin-top:12px}.card{background:#0e1219;border:1px solid var(--line);border-radius:10px;padding:12px}.v{font-size:17px;margin-top:4px}.error{color:var(--bad)}.section{border-top:1px solid var(--line);margin-top:17px;padding-top:12px}.star{font-size:18px;cursor:pointer}.muted{color:var(--muted)}.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:9px;margin:12px 0}.check{transform:scale(1.15)}.pill{padding:6px 9px;border:1px solid var(--line);border-radius:999px}.right{margin-left:auto}.good{color:var(--good)}.warn{color:var(--warn)}.bad{color:var(--bad)}.chartWrap{margin-top:12px;background:#0e1219;border:1px solid var(--line);border-radius:12px;padding:10px}.chartTitle{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}.chart{width:100%;height:310px;display:block}.actionBox{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:12px 0;padding:12px;border:1px solid var(--line);border-radius:10px;background:#0e1219}.actionMain{font-size:18px;font-weight:700}.legend{display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--muted)}.legend span:before{content:"";display:inline-block;width:10px;height:3px;margin-right:5px;vertical-align:middle;background:currentColor}.chartGrid{display:grid;grid-template-columns:1fr;gap:12px}@media(min-width:980px){.chartGrid{grid-template-columns:1fr 1fr}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif}main{max-width:1260px;margin:auto;padding:26px 16px 60px}h1{margin:0 0 5px;font-size:28px}h2{font-size:20px}.sub,.status,label,.k{color:var(--muted)}.tabs,.row,.filters{display:flex;gap:9px;flex-wrap:wrap}.tabs{margin:20px 0}.tab,.primary,.ghost{border-radius:9px;padding:10px 13px;cursor:pointer;font:inherit}.tab,.ghost{border:1px solid var(--line);background:#0f131b;color:var(--text)}.tab.active{border-color:var(--accent);color:var(--accent)}.primary{border:0;background:#e6f6ff;color:#071018;font-weight:700}.panel{display:none;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:17px}.panel.active{display:block}.field{display:flex;flex-direction:column;gap:5px;min-width:130px;flex:1}.field.small{max-width:170px}input,select{background:#0c1017;color:var(--text);border:1px solid var(--line);border-radius:9px;padding:10px}.status{margin:13px 0}.scroll{overflow:auto}table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}th{color:var(--muted)}.badge{padding:3px 7px;border:1px solid var(--line);border-radius:999px;font-size:11px}.READY{color:var(--good)}.CONFIRMATION_WAIT,.RETEST_WAIT{color:var(--warn)}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:10px;margin-top:12px}.card{background:#0e1219;border:1px solid var(--line);border-radius:10px;padding:12px}.v{font-size:17px;margin-top:4px}.error{color:var(--bad)}.section{border-top:1px solid var(--line);margin-top:17px;padding-top:12px}.star{font-size:18px;cursor:pointer}.muted{color:var(--muted)}.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:9px;margin:12px 0}.check{transform:scale(1.15)}.pill{padding:6px 9px;border:1px solid var(--line);border-radius:999px}.right{margin-left:auto}.good{color:var(--good)}.warn{color:var(--warn)}.bad{color:var(--bad)}.resultTP{color:var(--good);font-weight:700}.resultSL{color:var(--bad);font-weight:700}.resultTP1{color:var(--warn);font-weight:700}.resultAMBIGUOUS{color:#f0abfc;font-weight:700}.chartWrap{margin-top:12px;background:#0e1219;border:1px solid var(--line);border-radius:12px;padding:10px}.chartTitle{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}.chart{width:100%;height:310px;display:block}.actionBox{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:12px 0;padding:12px;border:1px solid var(--line);border-radius:10px;background:#0e1219}.actionMain{font-size:18px;font-weight:700}.legend{display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--muted)}.legend span:before{content:"";display:inline-block;width:10px;height:3px;margin-right:5px;vertical-align:middle;background:currentColor}.chartGrid{display:grid;grid-template-columns:1fr;gap:12px}@media(min-width:980px){.chartGrid{grid-template-columns:1fr 1fr}}
 </style>
 </head>
 <body><main>
-<h1>EdgeX Analysis Terminal <span class="muted">v3</span></h1>
+<h1>EdgeX Analysis Terminal <span class="muted">v4</span></h1>
 <div class="sub">通知Botとは別サービス。公開EdgeXデータのみ使用。</div>
 <div class="tabs">
 <button class="tab active" data-tab="screen">Market Screener</button>
 <button class="tab" data-tab="analysis">Ticker Analysis</button>
 <button class="tab" data-tab="compare">Compare</button>
+<button class="tab" data-tab="journal">Journal</button>
 <button class="tab" data-tab="risk">Risk Calculator</button>
 </div>
 
@@ -35,7 +36,7 @@
 
 <section id="analysis" class="panel">
 <h2>Ticker Analysis</h2>
-<div class="row"><div class="field"><label>Ticker</label><input id="ticker" value="BTCUSDC"></div><button class="primary" id="analyze">分析</button><button class="ghost" id="toRisk">Riskへ</button><button class="ghost" id="copyPlan">プランをコピー</button></div>
+<div class="row"><div class="field"><label>Ticker</label><input id="ticker" value="BTCUSDC"></div><button class="primary" id="analyze">分析</button><button class="ghost" id="savePlan">Journal保存</button><button class="ghost" id="toRisk">Riskへ</button><button class="ghost" id="copyPlan">プランをコピー</button></div>
 <div id="analysisStatus" class="status">BTC のような短縮入力でも検索します。</div>
 <div id="actionOut"></div>
 <div id="analysisOut"></div>
@@ -44,6 +45,15 @@
 
 <section id="compare" class="panel">
 <h2>Compare</h2><div class="sub">Screenerで2〜6銘柄を選択して比較します。</div><div id="compareOut" class="scroll" style="margin-top:14px"></div>
+</section>
+
+<section id="journal" class="panel">
+<h2>Trade Journal</h2>
+<div class="sub">分析シナリオをこのブラウザに保存します。Railway再デプロイでは消えません。</div>
+<div class="row" style="margin-top:10px"><button class="primary" id="refreshJournal">結果を更新</button><button class="ghost" id="exportJournal">JSONバックアップ</button><label class="ghost" style="cursor:pointer">JSON読込<input id="importJournal" type="file" accept="application/json" style="display:none"></label></div>
+<div id="journalSummary" class="summary"></div>
+<div id="journalStatus" class="status">保存したシナリオはまだありません。</div>
+<div class="scroll"><table><thead><tr><th>日時</th><th>Ticker</th><th>Side</th><th>Action</th><th>Entry</th><th>SL</th><th>TP</th><th>RR</th><th>Score</th><th>Result</th><th>MFE</th><th>MAE</th><th>R</th><th>履歴</th><th>操作</th></tr></thead><tbody id="journalBody"></tbody></table></div>
 </section>
 
 <section id="risk" class="panel">
@@ -59,7 +69,7 @@
 </section>
 </main>
 <script>
-var rows=[], watch=new Set(JSON.parse(localStorage.getItem("edgexWatch")||"[]")), showWatch=false, lastAnalysis=null;
+var rows=[], watch=new Set(JSON.parse(localStorage.getItem("edgexWatch")||"[]")), showWatch=false, lastAnalysis=null, journal=JSON.parse(localStorage.getItem("edgexJournal")||"[]");
 function fmt(x,d){return x==null?"—":Number(x).toLocaleString("ja-JP",{maximumFractionDigits:d==null?4:d})}
 function pct(x){return x==null?"—":(x>=0?"+":"")+Number(x).toFixed(2)+"%"}
 function card(k,v){return '<div class="card"><div class="k">'+k+'</div><div class="v">'+v+'</div></div>'}
@@ -113,6 +123,61 @@ async function analyze(){
  }catch(e){s.innerHTML='<span class="error">'+e.message+'</span>'}
 }
 document.getElementById("analyze").onclick=analyze;document.getElementById("ticker").addEventListener("keydown",function(e){if(e.key==="Enter")analyze()});document.getElementById("toRisk").onclick=function(){if(!lastAnalysis||!lastAnalysis.entry_reference||!lastAnalysis.stop_loss)return;tab("risk")};document.getElementById("copyPlan").onclick=async function(){if(!lastAnalysis)return;var r=lastAnalysis;var txt=[r.ticker+" — "+r.action,"Direction: "+(r.direction||"NEUTRAL"),"Stage: "+r.stage,"Entry: "+fmt(r.entry_reference,8),"SL: "+fmt(r.stop_loss,8),"TP1: "+fmt(r.tp1_2r,8),"TP: "+fmt(r.take_profit,8),"RR: "+fmt(r.rr,2),"Reason: "+(r.reason||"")].join("\n");try{await navigator.clipboard.writeText(txt);this.textContent="コピー済み";var b=this;setTimeout(()=>b.textContent="プランをコピー",1200)}catch(e){alert(txt)}};
+
+
+function saveJournalStore(){localStorage.setItem("edgexJournal",JSON.stringify(journal))}
+function journalResultClass(s){return s==="TP"?"resultTP":s==="SL"?"resultSL":s==="TP1"?"resultTP1":s==="AMBIGUOUS"?"resultAMBIGUOUS":"muted"}
+function journalStats(){
+ var resolved=journal.filter(x=>x.result&&(x.result.status==="TP"||x.result.status==="SL"));
+ var wins=resolved.filter(x=>x.result.status==="TP").length;
+ var totalR=resolved.reduce((a,x)=>a+(Number(x.result.final_r)||0),0);
+ return {total:journal.length,resolved:resolved.length,wins:wins,losses:resolved.length-wins,winRate:resolved.length?wins/resolved.length*100:null,totalR:totalR,avgR:resolved.length?totalR/resolved.length:null,open:journal.filter(x=>!x.result||x.result.status==="OPEN"||x.result.status==="TP1").length};
+}
+function renderJournal(){
+ var body=document.getElementById("journalBody"),sum=document.getElementById("journalSummary"),status=document.getElementById("journalStatus");
+ if(!body)return;body.innerHTML="";var st=journalStats();
+ sum.innerHTML=card("Saved",st.total)+card("Resolved",st.resolved)+card("Win rate",st.winRate==null?"—":fmt(st.winRate,1)+"%")+card("Total R",fmt(st.totalR,2))+card("Avg R",st.avgR==null?"—":fmt(st.avgR,2))+card("Open/TP1",st.open);
+ status.textContent=journal.length?journal.length+"件保存。結果更新はEdgeXの15M履歴で再判定します。":"保存したシナリオはまだありません。";
+ journal.slice().reverse().forEach(function(p,revIndex){var idx=journal.length-1-revIndex,r=p.result||{},tr=document.createElement("tr"),hist=r.coverage_complete===false?"PARTIAL":"OK";tr.innerHTML="<td>"+new Date(p.created_ms).toLocaleString("ja-JP")+"</td><td><b>"+p.ticker+"</b></td><td>"+p.side+"</td><td>"+p.action+"</td><td>"+fmt(p.entry,8)+"</td><td>"+fmt(p.stop,8)+"</td><td>"+fmt(p.target,8)+"</td><td>"+fmt(p.rr,2)+"</td><td>"+fmt(p.score,1)+"</td><td class='"+journalResultClass(r.status)+"'>"+(r.status||"未更新")+"</td><td>"+(r.mfe_r==null?"—":fmt(r.mfe_r,2)+"R")+"</td><td>"+(r.mae_r==null?"—":fmt(r.mae_r,2)+"R")+"</td><td>"+(r.final_r==null?"—":fmt(r.final_r,2)+"R")+"</td><td>"+hist+"</td><td><button class='ghost jAnalyze'>分析</button> <button class='ghost jDelete'>削除</button></td>";
+ tr.querySelector(".jAnalyze").onclick=function(){document.getElementById("ticker").value=p.ticker;tab("analysis");analyze()};
+ tr.querySelector(".jDelete").onclick=function(){journal.splice(idx,1);saveJournalStore();renderJournal()};
+ body.appendChild(tr)});
+}
+function evaluateCandles(p,series){
+ var interval=15*60*1000,relevant=(series||[]).filter(c=>c.time_ms+interval>=p.created_ms);
+ if(!relevant.length&&series&&series.length)relevant=[series[series.length-1]];
+ if(!relevant.length)return {status:"NO_DATA",coverage_complete:false};
+ var risk=Math.abs(p.entry-p.stop),maxHigh=Math.max.apply(null,relevant.map(c=>c.high)),minLow=Math.min.apply(null,relevant.map(c=>c.low));
+ var mfe=p.side==="LONG"?Math.max(0,(maxHigh-p.entry)/risk):Math.max(0,(p.entry-minLow)/risk);
+ var mae=p.side==="LONG"?Math.max(0,(p.entry-minLow)/risk):Math.max(0,(maxHigh-p.entry)/risk);
+ var status="OPEN",finalR=null,tp1Time=null,outcomeTime=null,ambiguous=null;
+ for(var i=0;i<relevant.length;i++){var c=relevant[i],stopHit=p.side==="LONG"?c.low<=p.stop:c.high>=p.stop,targetHit=p.side==="LONG"?c.high>=p.target:c.low<=p.target,tp1Hit=p.tp1!=null&&(p.side==="LONG"?c.high>=p.tp1:c.low<=p.tp1);
+  if(tp1Hit&&tp1Time==null)tp1Time=c.time_ms;
+  if(stopHit&&targetHit){status="AMBIGUOUS";outcomeTime=c.time_ms;ambiguous="SLと最終TPが同じ15M足で到達";break}
+  if(stopHit){if(tp1Hit&&tp1Time===c.time_ms){status="AMBIGUOUS";outcomeTime=c.time_ms;ambiguous="SLとTP1が同じ15M足で到達";break}status="SL";outcomeTime=c.time_ms;finalR=-1;break}
+  if(targetHit){status="TP";outcomeTime=c.time_ms;finalR=Math.abs(p.target-p.entry)/risk;break}
+ }
+ if(status==="OPEN"&&tp1Time!=null)status="TP1";
+ return {status:status,final_r:finalR,mfe_r:mfe,mae_r:mae,tp1_time_ms:tp1Time,outcome_time_ms:outcomeTime,ambiguous_reason:ambiguous,last_price:relevant[relevant.length-1].close,coverage_complete:series&&series.length?series[0].time_ms<=p.created_ms:false,history_start_ms:series&&series.length?series[0].time_ms:null,history_end_ms:relevant[relevant.length-1].time_ms};
+}
+async function updateJournalOne(index){
+ var p=journal[index],pack=await jf("/api/chart?ticker="+encodeURIComponent(p.ticker)+"&limit_4h=30&limit_15m=240");p.result=evaluateCandles(p,pack.series.MINUTE_15);p.updated_ms=Date.now();journal[index]=p;saveJournalStore();
+}
+async function refreshJournal(){
+ var s=document.getElementById("journalStatus");if(!journal.length){renderJournal();return}s.textContent="結果を更新中…";
+ for(var i=0;i<journal.length;i++){try{await updateJournalOne(i)}catch(e){journal[i].result={status:"ERROR",error:e.message};saveJournalStore()}}
+ renderJournal();s.textContent="更新完了。";
+}
+document.getElementById("savePlan").onclick=function(){
+ var s=document.getElementById("analysisStatus");if(!lastAnalysis||!lastAnalysis.direction||!lastAnalysis.entry_reference||!lastAnalysis.stop_loss||!lastAnalysis.take_profit){s.innerHTML='<span class="error">保存できるEntry/SL/TPシナリオがありません。</span>';return}
+ var key=lastAnalysis.ticker+"|"+String(lastAnalysis.latest_15m_time_ms||"")+"|"+lastAnalysis.direction;if(journal.some(x=>x.key===key)){s.innerHTML='<span class="warn">同じ15Mシナリオは保存済みです。</span>';return}
+ journal.push({key:key,ticker:lastAnalysis.ticker,side:lastAnalysis.direction,action:lastAnalysis.action||lastAnalysis.stage,stage:lastAnalysis.stage,entry:lastAnalysis.entry_reference,stop:lastAnalysis.stop_loss,tp1:lastAnalysis.tp1_2r,target:lastAnalysis.take_profit,rr:lastAnalysis.rr,score:lastAnalysis.score,source_candle_ms:lastAnalysis.latest_15m_time_ms,created_ms:Date.now(),eligible:lastAnalysis.action==="ENTER"});
+ saveJournalStore();renderJournal();s.innerHTML='<span class="good">Journalに保存しました。</span>';
+};
+document.getElementById("refreshJournal").onclick=refreshJournal;
+document.getElementById("exportJournal").onclick=function(){var a=document.createElement("a"),blob=new Blob([JSON.stringify({version:1,exported_ms:Date.now(),records:journal},null,2)],{type:"application/json"});a.href=URL.createObjectURL(blob);a.download="edgex-journal.json";a.click();URL.revokeObjectURL(a.href)};
+document.getElementById("importJournal").onchange=function(e){var file=e.target.files&&e.target.files[0];if(!file)return;var reader=new FileReader();reader.onload=function(){try{var j=JSON.parse(reader.result),records=Array.isArray(j)?j:j.records;if(!Array.isArray(records))throw new Error("records not found");journal=records;saveJournalStore();renderJournal();document.getElementById("journalStatus").textContent="JSONを読み込みました。"}catch(err){document.getElementById("journalStatus").innerHTML='<span class="error">'+err.message+'</span>'}};reader.readAsText(file)};
+renderJournal();
 
 document.getElementById("calc").onclick=async function(){function v(id){return document.getElementById(id).value}var p={equity:+v("equity"),risk_pct:+v("riskPct"),entry:+v("entry"),stop:+v("stop")};if(v("target"))p.target=+v("target");if(v("step"))p.step_size=+v("step");if(v("minOrder"))p.min_order_size=+v("minOrder");if(v("maxOrder"))p.max_order_size=+v("maxOrder");if(v("lev"))p.leverage=+v("lev");var s=document.getElementById("riskStatus"),o=document.getElementById("riskOut");try{var r=await jf("/api/risk",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(p)});s.innerHTML="計算完了 — <b>"+r.side+"</b>"+(r.below_min_order?' <span class="bad">Min Order未満</span>':'')+(r.margin_capped?' <span class="warn">証拠金上限</span>':'')+(r.max_order_capped?' <span class="warn">Max Order上限</span>':'');o.innerHTML=card("Risk budget",fmt(r.risk_budget,4)+" USDC")+card("Size",fmt(r.size,8))+card("Notional",fmt(r.notional,2)+" USDC")+card("Max loss",fmt(r.max_loss,4)+" USDC")+card("Actual risk",pct(r.actual_risk_pct))+card("RR",fmt(r.rr,2))+card("Target profit",r.target_profit==null?"—":fmt(r.target_profit,4)+" USDC")}catch(e){s.innerHTML='<span class="error">'+e.message+'</span>'}};
 </script></body></html>
