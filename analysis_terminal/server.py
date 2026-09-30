@@ -125,10 +125,10 @@ def _score_breakdown(
     return {
         "volume": round(min(10.0, max(0.0, volume_ratio * 4.0)), 1),
         "trend": 20.0 if trend else 0.0,
-        "breakout": 25.0 if breakout else 0.0,
+        "breakout": 20.0 if breakout else 0.0,
         "retest": 20.0 if retest else 0.0,
         "confirmation": 15.0 if confirmed else 0.0,
-        "rr": round(min(20.0, rr / SETTINGS.min_rr * 20.0), 1) if rr is not None else 0.0,
+        "rr": round(min(15.0, rr / SETTINGS.min_rr * 15.0), 1) if rr is not None else 0.0,
     }
 
 
