@@ -1769,6 +1769,7 @@ async def _background_collector() -> None:
                 _persist_scan_result(contracts, rows)
                 await _maybe_push_candidate_changes(rows)
                 await _refresh_paper_signal_results(contracts)
+                await _refresh_candidate_event_results(contracts)
                 await _maybe_push_daily_summary(rows)
                 last_bucket = bucket
             except Exception as exc:
@@ -2265,6 +2266,13 @@ async def push_events_api(
         "count": len(events),
         "events": events,
     }
+
+
+@app.get("/api/opportunity-analysis")
+async def opportunity_analysis_api(
+    limit: int = Query(default=500, ge=1, le=1000),
+):
+    return _opportunity_analysis(limit=limit)
 
 
 @app.get("/api/candidate-events")
