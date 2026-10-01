@@ -1547,6 +1547,263 @@ async def _refresh_candidate_event_results(
         _upsert_candidate_event_result(int(event["id"]), result)
 
 
+async def _refresh_approach_event_results(
+    contracts: dict[str, scanner.Contract],
+) -> None:
+    events = _load_approach_events_with_results(limit=1000)
+    trackable = [
+        event
+        for event in events
+        if event.get("entry") is not None
+        and event.get("stop") is not None
+        and event.get("target") is not None
+        and str(event.get("direction") or "") in {"LONG", "SHORT"}
+        and (
+            not event.get("result")
+            or str((event.get("result") or {}).get("status") or "")
+            not in {"TP", "SL", "AMBIGUOUS"}
+        )
+    ]
+    if not trackable:
+        return
+
+    by_name = {
+        contract.contract_name.upper(): contract
+        for contract in contracts.values()
+    }
+    contract_ids: list[str] = []
+    event_contract: dict[int, scanner.Contract] = {}
+    for event in trackable:
+        contract = by_name.get(str(event.get("ticker") or "").upper())
+        if contract is None:
+            continue
+        event_contract[int(event["id"])] = contract
+        if contract.contract_id not in contract_ids:
+            contract_ids.append(contract.contract_id)
+
+    if not contract_ids:
+        return
+
+    snapshots: dict[tuple[str, str], list[scanner.Candle]] = {}
+    for start in range(0, len(contract_ids), 50):
+        chunk = contract_ids[start : start + 50]
+        try:
+            part = await fetch_snapshots(
+                chunk,
+                intervals=(SETTINGS.entry_interval,),
+                timeout=25.0,
+            )
+            snapshots.update(part)
+        except Exception as exc:
+            print(f"Approach outcome refresh chunk error: {exc}", flush=True)
+
+    for event in trackable:
+        contract = event_contract.get(int(event["id"]))
+        if contract is None:
+            continue
+        candles = snapshots.get(
+            (contract.contract_id, SETTINGS.entry_interval),
+            [],
+        )
+        if not candles:
+            continue
+        signal = {
+            "key": f"approach-{event['id']}",
+            "ticker": event["ticker"],
+            "side": event["direction"],
+            "entry": event["entry"],
+            "stop": event["stop"],
+            "target": event["target"],
+            "created_ms": event["created_ms"],
+            "result": event.get("result"),
+        }
+        result = _evaluate_paper_signal(signal, candles)
+        _upsert_approach_event_result(int(event["id"]), result)
+
+
+def _approach_score_band(value: float) -> str:
+    if value >= 90:
+        return "90+"
+    if value >= 80:
+        return "80-89"
+    return "70-79"
+
+
+def _approach_validation_metrics(
+    items: list[dict[str, Any]],
+) -> dict[str, Any]:
+    resolved = [
+        item
+        for item in items
+        if str((item.get("result") or {}).get("status") or "")
+        in {"TP", "SL"}
+        and (item.get("result") or {}).get("coverage_complete") is not False
+    ]
+    tp = sum(
+        1
+        for item in resolved
+        if (item.get("result") or {}).get("status") == "TP"
+    )
+    sl = sum(
+        1
+        for item in resolved
+        if (item.get("result") or {}).get("status") == "SL"
+    )
+    rs = [
+        float((item.get("result") or {}).get("final_r"))
+        for item in resolved
+        if (item.get("result") or {}).get("final_r") is not None
+    ]
+    mfes = [
+        float((item.get("result") or {}).get("mfe_r") or 0)
+        for item in items
+        if item.get("result")
+        and (item.get("result") or {}).get("coverage_complete") is not False
+    ]
+    maes = [
+        float((item.get("result") or {}).get("mae_r") or 0)
+        for item in items
+        if item.get("result")
+        and (item.get("result") or {}).get("coverage_complete") is not False
+    ]
+    ready_items = [item for item in items if item.get("became_ready")]
+    ready_minutes = [
+        float(item["minutes_to_ready"])
+        for item in ready_items
+        if item.get("minutes_to_ready") is not None
+    ]
+    matured = [item for item in items if item.get("matured")]
+    return {
+        "tracked": len(items),
+        "matured": len(matured),
+        "became_ready": len(ready_items),
+        "ready_rate": (
+            round(len(ready_items) / len(matured) * 100.0, 1)
+            if matured
+            else None
+        ),
+        "avg_minutes_to_ready": (
+            round(mean(ready_minutes), 1)
+            if ready_minutes
+            else None
+        ),
+        "resolved": len(resolved),
+        "tp": tp,
+        "sl": sl,
+        "win_rate": (
+            round(tp / len(resolved) * 100.0, 1)
+            if resolved
+            else None
+        ),
+        "avg_r": round(mean(rs), 3) if rs else None,
+        "avg_mfe_r": round(mean(mfes), 3) if mfes else None,
+        "avg_mae_r": round(mean(maes), 3) if maes else None,
+    }
+
+
+def _approach_validation(limit: int = 500) -> dict[str, Any]:
+    events = _load_approach_events_with_results(limit=limit)
+    now_ms = int(time.time() * 1000)
+    horizon_ms = 48 * 60 * 60 * 1000
+
+    with _db_connect() as conn:
+        ready_rows = conn.execute(
+            """
+            SELECT ticker, created_ms
+            FROM candidate_events
+            WHERE kind = 'READY'
+            ORDER BY created_ms
+            """
+        ).fetchall()
+
+    ready_by_ticker: dict[str, list[int]] = {}
+    for row in ready_rows:
+        ready_by_ticker.setdefault(str(row["ticker"]), []).append(
+            int(row["created_ms"])
+        )
+
+    enriched: list[dict[str, Any]] = []
+    for event in events:
+        if (
+            event.get("entry") is None
+            or event.get("stop") is None
+            or event.get("target") is None
+        ):
+            continue
+        created_ms = int(event["created_ms"])
+        result = event.get("result") or {}
+        outcome_time = result.get("outcome_time_ms")
+        observation_end = min(
+            created_ms + horizon_ms,
+            int(outcome_time) if outcome_time else now_ms,
+        )
+        ready_time = next(
+            (
+                ready_ms
+                for ready_ms in ready_by_ticker.get(str(event["ticker"]), [])
+                if created_ms < ready_ms <= observation_end
+            ),
+            None,
+        )
+        terminal = str(result.get("status") or "") in {
+            "TP",
+            "SL",
+            "AMBIGUOUS",
+        }
+        matured = (
+            ready_time is not None
+            or terminal
+            or now_ms >= created_ms + horizon_ms
+        )
+        enriched_event = dict(event)
+        enriched_event["became_ready"] = ready_time is not None
+        enriched_event["ready_time_ms"] = ready_time
+        enriched_event["minutes_to_ready"] = (
+            round((ready_time - created_ms) / 60000.0, 1)
+            if ready_time is not None
+            else None
+        )
+        enriched_event["matured"] = matured
+        enriched.append(enriched_event)
+
+    groups: list[dict[str, Any]] = []
+    for band in ("70-79", "80-89", "90+"):
+        members = [
+            item
+            for item in enriched
+            if _approach_score_band(float(item.get("current_score") or 0))
+            == band
+        ]
+        groups.append({
+            "label": band,
+            "metrics": _approach_validation_metrics(members),
+        })
+
+    overall = _approach_validation_metrics(enriched)
+    latest = sorted(
+        enriched,
+        key=lambda item: int(item["created_ms"]),
+        reverse=True,
+    )[:50]
+    decision_sample = int(overall["matured"])
+    if decision_sample < 10:
+        assessment = "INSUFFICIENT"
+    elif overall["ready_rate"] is not None and overall["ready_rate"] >= 50:
+        assessment = "PROMISING"
+    else:
+        assessment = "MIXED"
+
+    return {
+        "threshold": 70.0,
+        "observation_hours": 48,
+        "overall": overall,
+        "groups": groups,
+        "decision_sample": decision_sample,
+        "assessment": assessment,
+        "latest": latest,
+    }
+
+
 def _opportunity_metrics(items: list[dict[str, Any]]) -> dict[str, Any]:
     usable = [
         item
