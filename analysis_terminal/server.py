@@ -613,6 +613,95 @@ def _market_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+async def _scan_market_rows(
+    force: bool = False,
+) -> tuple[dict[str, scanner.Contract], list[dict[str, Any]]]:
+    contracts = await CLIENT.get_contracts()
+    data = await market_snapshots(force=force)
+    rows: list[dict[str, Any]] = []
+    for cid, contract in contracts.items():
+        row = analyze_contract(
+            contract,
+            data.get((cid, SETTINGS.monitor_interval), []),
+            data.get((cid, SETTINGS.entry_interval), []),
+        )
+        if row.get("current_price") is not None:
+            rows.append(row)
+    return contracts, rows
+
+
+def _persist_scan_result(
+    contracts: dict[str, scanner.Contract],
+    rows: list[dict[str, Any]],
+) -> dict[str, Any]:
+    now_ms = int(time.time() * 1000)
+    bucket_ms = (now_ms // scanner.INTERVAL_MS[SETTINGS.entry_interval]) * scanner.INTERVAL_MS[SETTINGS.entry_interval]
+    summary = _market_summary(rows)
+    payload = {
+        "time_ms": bucket_ms,
+        "universe": len(contracts),
+        "scanned": len(rows),
+        "coverage_pct": round(len(rows) / len(contracts) * 100.0, 1) if contracts else 0.0,
+        "ready": summary["ready_count"],
+        "near": summary["near_signal_count"],
+        "qualified_near": summary["qualified_near_count"],
+        "avg_score": summary["average_score"],
+        "long": summary["direction_counts"].get("LONG", 0),
+        "short": summary["direction_counts"].get("SHORT", 0),
+        "neutral": summary["direction_counts"].get("NEUTRAL", 0),
+        "stages": summary["stage_counts"],
+        "top_ready": summary["top_ready"],
+        "top_near": summary["top_near"],
+        "top_qualified_near": summary["top_qualified_near"],
+    }
+    _save_market_snapshot(payload)
+
+    for row in rows:
+        if row.get("stage") != "READY":
+            continue
+        source_ms = int(row.get("latest_15m_time_ms") or 0)
+        direction = str(row.get("direction") or "")
+        if not source_ms or direction not in {"LONG", "SHORT"}:
+            continue
+        signal = {
+            "key": f"{row['ticker']}|{source_ms}|{direction}",
+            "ticker": row["ticker"],
+            "side": direction,
+            "action": "AUTO ENTER",
+            "stage": "READY",
+            "entry": row.get("entry_reference"),
+            "stop": row.get("stop_loss"),
+            "tp1": row.get("tp1_2r"),
+            "target": row.get("take_profit"),
+            "rr": row.get("rr"),
+            "score": row.get("score"),
+            "source_candle_ms": source_ms,
+            "created_ms": source_ms + scanner.INTERVAL_MS[SETTINGS.entry_interval] + 1,
+            "eligible": True,
+            "auto": True,
+            "source": "server-background",
+        }
+        if signal["entry"] is not None and signal["stop"] is not None and signal["target"] is not None:
+            _insert_paper_signal(signal)
+    return payload
+
+
+async def _background_collector() -> None:
+    last_bucket: int | None = None
+    await asyncio.sleep(5)
+    while True:
+        now_ms = int(time.time() * 1000)
+        bucket = (now_ms // scanner.INTERVAL_MS[SETTINGS.entry_interval]) * scanner.INTERVAL_MS[SETTINGS.entry_interval]
+        if bucket != last_bucket:
+            try:
+                contracts, rows = await _scan_market_rows(force=True)
+                _persist_scan_result(contracts, rows)
+                last_bucket = bucket
+            except Exception as exc:
+                print(f"Background analysis collector error: {exc}", flush=True)
+        await asyncio.sleep(30)
+
+
 app = FastAPI(title="EdgeX Analysis Terminal", version="6.2.0")
 
 
@@ -868,23 +957,12 @@ async def screener_api(
     q: str | None = Query(default=None, max_length=64),
 ):
     try:
-        contracts = await CLIENT.get_contracts()
-        data = await market_snapshots(force=force)
+        contracts, all_rows = await _scan_market_rows(force=force)
     except Exception as exc:
         raise HTTPException(
             502,
             f"EdgeX market scan failed: {exc}",
         ) from exc
-
-    all_rows = []
-    for cid, contract in contracts.items():
-        row = analyze_contract(
-            contract,
-            data.get((cid, SETTINGS.monitor_interval), []),
-            data.get((cid, SETTINGS.entry_interval), []),
-        )
-        if row.get("current_price") is not None:
-            all_rows.append(row)
 
     rows = all_rows
     if stage and stage.upper() != "ALL":
