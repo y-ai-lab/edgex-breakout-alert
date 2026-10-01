@@ -509,6 +509,18 @@ def _push_row_summary(row: dict[str, Any]) -> str:
     return " / ".join(parts)
 
 
+def _push_trade_levels(row: dict[str, Any]) -> str:
+    entry = row.get("entry_reference")
+    stop = row.get("stop_loss")
+    target = row.get("take_profit")
+    if entry is None or stop is None or target is None:
+        return ""
+    return (
+        f"\nEntry {float(entry):.8g} / "
+        f"SL {float(stop):.8g} / TP {float(target):.8g}"
+    )
+
+
 async def _maybe_push_candidate_changes(rows: list[dict[str, Any]]) -> None:
     ready = [
         row for row in _sort_rows(rows)
@@ -549,10 +561,18 @@ async def _maybe_push_candidate_changes(rows: list[dict[str, Any]]) -> None:
             if ticker in prev_near
             else "新しくエントリー可能"
         )
+        _log_candidate_event(
+            row,
+            kind="READY",
+            label=label,
+        )
         await _broadcast_push(
             {
                 "title": "EdgeX エントリー候補",
-                "body": f"{label}\n{_push_row_summary(row)}",
+                "body": (
+                    f"{label}\n{_push_row_summary(row)}"
+                    f"{_push_trade_levels(row)}"
+                ),
                 "url": f"/?tab=analysis&ticker={ticker}",
                 "tag": f"edgex-ready-{ticker}",
             },
@@ -563,6 +583,11 @@ async def _maybe_push_candidate_changes(rows: list[dict[str, Any]]) -> None:
         ticker = str(row["ticker"])
         if ticker in prev_near or ticker in prev_ready:
             continue
+        _log_candidate_event(
+            row,
+            kind="NEAR",
+            label="有力な直前候補に追加",
+        )
         await _broadcast_push(
             {
                 "title": "EdgeX 有力な直前候補",
@@ -1963,6 +1988,17 @@ async def push_events_api(
     limit: int = Query(default=50, ge=1, le=200),
 ):
     events = _load_push_events(limit=limit)
+    return {
+        "count": len(events),
+        "events": events,
+    }
+
+
+@app.get("/api/candidate-events")
+async def candidate_events_api(
+    limit: int = Query(default=100, ge=1, le=500),
+):
+    events = _load_candidate_events(limit=limit)
     return {
         "count": len(events),
         "events": events,
