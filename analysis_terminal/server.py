@@ -228,8 +228,36 @@ def _init_db() -> None:
                 stage TEXT,
                 direction TEXT,
                 rr REAL,
+                priority_score REAL,
+                entry REAL,
+                stop REAL,
+                target REAL,
                 created_ms INTEGER NOT NULL,
                 UNIQUE(bucket_ms, ticker)
+            )
+            """
+        )
+        approach_columns = {
+            str(row["name"])
+            for row in conn.execute("PRAGMA table_info(approach_events)").fetchall()
+        }
+        for column_name, column_type in (
+            ("priority_score", "REAL"),
+            ("entry", "REAL"),
+            ("stop", "REAL"),
+            ("target", "REAL"),
+        ):
+            if column_name not in approach_columns:
+                conn.execute(
+                    f"ALTER TABLE approach_events ADD COLUMN {column_name} {column_type}"
+                )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS approach_event_results (
+                event_id INTEGER PRIMARY KEY,
+                payload TEXT NOT NULL,
+                updated_ms INTEGER NOT NULL,
+                FOREIGN KEY(event_id) REFERENCES approach_events(id)
             )
             """
         )
@@ -2533,6 +2561,10 @@ def _log_approach_event(
     stage: str,
     direction: str | None,
     rr: float | None,
+    priority_score: float | None,
+    entry: float | None,
+    stop: float | None,
+    target: float | None,
 ) -> None:
     now_ms = int(time.time() * 1000)
     with _db_connect() as conn:
@@ -2540,9 +2572,10 @@ def _log_approach_event(
             """
             INSERT OR IGNORE INTO approach_events(
                 bucket_ms, ticker, previous_score, current_score,
-                current_rank, stage, direction, rr, created_ms
+                current_rank, stage, direction, rr, priority_score,
+                entry, stop, target, created_ms
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 int(bucket_ms),
@@ -2553,6 +2586,10 @@ def _log_approach_event(
                 stage,
                 direction,
                 rr,
+                priority_score,
+                entry,
+                stop,
+                target,
                 now_ms,
             ),
         )
@@ -2569,7 +2606,8 @@ def _load_approach_events(limit: int = 100) -> list[dict[str, Any]]:
         rows = conn.execute(
             """
             SELECT id, bucket_ms, ticker, previous_score, current_score,
-                   current_rank, stage, direction, rr, created_ms
+                   current_rank, stage, direction, rr, priority_score,
+                   entry, stop, target, created_ms
             FROM approach_events
             ORDER BY id DESC
             LIMIT ?
