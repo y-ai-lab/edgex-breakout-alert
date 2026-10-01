@@ -1288,7 +1288,9 @@ async def _background_collector() -> None:
             try:
                 contracts, rows = await _scan_market_rows(force=True)
                 _persist_scan_result(contracts, rows)
+                await _maybe_push_candidate_changes(rows)
                 await _refresh_paper_signal_results(contracts)
+                await _maybe_push_daily_summary(rows)
                 last_bucket = bucket
             except Exception as exc:
                 print(f"Background analysis collector error: {exc}", flush=True)
@@ -1314,7 +1316,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="EdgeX Analysis Terminal",
-    version="7.4.0",
+    version="8.0.0",
     lifespan=lifespan,
 )
 
@@ -1326,12 +1328,17 @@ async def health():
     return {
         "ok": True,
         "service": "edgex-analysis-terminal",
-        "version": "7.4.0",
+        "version": "8.0.0",
         "time_ms": int(time.time() * 1000),
         "storage": {
             "market_snapshots_48h": len(history),
             "paper_signals": len(paper),
             "db_exists": DB_PATH.exists(),
+        },
+        "push": {
+            "enabled": _push_enabled(),
+            "subscribers": _subscription_count(),
+            "daily_summary_hour_jst": DAILY_SUMMARY_HOUR_JST,
         },
     }
 
@@ -1666,6 +1673,56 @@ async def screener_api(
         "qualified_near_candidates": qualified_near_candidates,
         "watch_status": watch_status,
         "results": rows[:limit],
+    }
+
+
+@app.get("/api/push/config")
+async def push_config_api():
+    return {
+        "enabled": _push_enabled(),
+        "public_key": VAPID_PUBLIC_KEY if _push_enabled() else None,
+        "subscribers": _subscription_count(),
+        "daily_summary_hour_jst": DAILY_SUMMARY_HOUR_JST,
+    }
+
+
+@app.post("/api/push/subscribe")
+async def push_subscribe_api(req: PushSubscriptionRequest):
+    if not _push_enabled():
+        raise HTTPException(503, "Web Push is not configured")
+    endpoint = _save_push_subscription(req)
+    subscriptions = [
+        row for row in _load_push_subscriptions()
+        if str(row["endpoint"]) == endpoint
+    ]
+    delivered = False
+    if subscriptions:
+        delivered = await asyncio.to_thread(
+            _send_push_sync,
+            subscriptions[0],
+            {
+                "title": "EdgeX バックグラウンド通知",
+                "body": (
+                    "有効になりました。候補の変化と毎朝の市場サマリーを"
+                    "アプリを閉じていても通知します。"
+                ),
+                "url": "/?tab=dashboard",
+                "tag": "edgex-push-enabled",
+            },
+        )
+    return {
+        "ok": True,
+        "test_delivered": delivered,
+        "subscribers": _subscription_count(),
+    }
+
+
+@app.post("/api/push/unsubscribe")
+async def push_unsubscribe_api(req: PushUnsubscribeRequest):
+    _delete_push_subscription(req.endpoint)
+    return {
+        "ok": True,
+        "subscribers": _subscription_count(),
     }
 
 
