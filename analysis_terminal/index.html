@@ -4,7 +4,7 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b0d12"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="EdgeX分析">
 <link rel="manifest" href="/manifest.webmanifest"><link rel="icon" href="/app-icon.svg" type="image/svg+xml">
-<title>EdgeX 分析ターミナル v16</title>
+<title>EdgeX 分析ターミナル v17</title>
 <style>
 :root{color-scheme:dark;--bg:#0b0d12;--panel:#131720;--muted:#8d96a8;--line:#252c38;--text:#f3f5f8;--good:#4ade80;--warn:#facc15;--bad:#fb7185;--accent:#7dd3fc}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif}main{max-width:1260px;margin:auto;padding:26px 16px 60px}h1{margin:0 0 5px;font-size:28px}h2{font-size:20px}.sub,.status,label,.k{color:var(--muted)}.tabs,.row,.filters{display:flex;gap:9px;flex-wrap:wrap}.tabs{margin:20px 0}.tab,.primary,.ghost{border-radius:9px;padding:10px 13px;cursor:pointer;font:inherit}.tab,.ghost{border:1px solid var(--line);background:#0f131b;color:var(--text)}.tab.active{border-color:var(--accent);color:var(--accent)}.primary{border:0;background:#e6f6ff;color:#071018;font-weight:700}.panel{display:none;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:17px}.panel.active{display:block}.field{display:flex;flex-direction:column;gap:5px;min-width:130px;flex:1}.field.small{max-width:170px}input,select{background:#0c1017;color:var(--text);border:1px solid var(--line);border-radius:9px;padding:10px}.status{margin:13px 0}.scroll{overflow:auto}table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}th{color:var(--muted)}.badge{padding:3px 7px;border:1px solid var(--line);border-radius:999px;font-size:11px}.READY{color:var(--good)}.CONFIRMATION_WAIT,.RETEST_WAIT{color:var(--warn)}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:10px;margin-top:12px}.card{background:#0e1219;border:1px solid var(--line);border-radius:10px;padding:12px}.v{font-size:17px;margin-top:4px}.error{color:var(--bad)}.section{border-top:1px solid var(--line);margin-top:17px;padding-top:12px}.star{font-size:18px;cursor:pointer}.muted{color:var(--muted)}.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:9px;margin:12px 0}.check{transform:scale(1.15)}.pill{padding:6px 9px;border:1px solid var(--line);border-radius:999px}.right{margin-left:auto}.good{color:var(--good)}.warn{color:var(--warn)}.bad{color:var(--bad)}.resultTP{color:var(--good);font-weight:700}.resultSL{color:var(--bad);font-weight:700}.resultTP1{color:var(--warn);font-weight:700}.resultAMBIGUOUS{color:#f0abfc;font-weight:700}.analyticsGrid{display:grid;grid-template-columns:1fr;gap:12px;margin-top:14px}@media(min-width:980px){.analyticsGrid{grid-template-columns:1fr 1fr}}.analyticsBox{background:#0e1219;border:1px solid var(--line);border-radius:12px;padding:12px}.metricTable td,.metricTable th{font-size:12px}.lowSample{color:var(--warn)}.enoughSample{color:var(--good)}.chartWrap{margin-top:12px;background:#0e1219;border:1px solid var(--line);border-radius:12px;padding:10px}.chartTitle{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}.chart{width:100%;height:310px;display:block}.actionBox{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:12px 0;padding:12px;border:1px solid var(--line);border-radius:10px;background:#0e1219}.actionMain{font-size:18px;font-weight:700}.legend{display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--muted)}.legend span:before{content:"";display:inline-block;width:10px;height:3px;margin-right:5px;vertical-align:middle;background:currentColor}.chartGrid{display:grid;grid-template-columns:1fr;gap:12px}@media(min-width:980px){.chartGrid{grid-template-columns:1fr 1fr}}
@@ -55,6 +55,21 @@ button{-webkit-tap-highlight-color:transparent}
 #screen .filters{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px}#screen .row{align-items:center}
 #analysis>.row:first-of-type{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px}
 #risk>.row{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px}
+
+.entryNowZone{margin:10px 0 14px;border:1px solid var(--line);border-radius:16px;padding:15px;background:linear-gradient(180deg,#111720,#0c1118)}
+.entryNowZone.hasReady{border-color:rgba(74,222,128,.55);background:linear-gradient(180deg,rgba(74,222,128,.10),#0c1510);box-shadow:0 0 0 1px rgba(74,222,128,.06),0 16px 44px rgba(0,0,0,.16)}
+.entryNowZone.waiting{border-color:#303747}
+.entryNowHead{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.entryNowHead h3{margin:2px 0 0;font-size:20px;letter-spacing:-.02em}
+.entryNowBadge{border:1px solid var(--line);border-radius:999px;padding:7px 11px;font-size:12px;font-weight:800;white-space:nowrap}
+.entryNowBadge.ready{color:var(--good);border-color:rgba(74,222,128,.45);background:rgba(74,222,128,.08)}
+.entryNowBadge.wait{color:var(--warn);border-color:rgba(250,204,21,.28);background:rgba(250,204,21,.06)}
+.entryNowContent{margin-top:12px}.entryReadyGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:9px}
+.entryReadyCard{border:1px solid rgba(74,222,128,.35);border-radius:13px;background:#0d1812;padding:13px;cursor:pointer;text-align:left;color:var(--text)}
+.entryReadyTop{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.entryTicker{font-size:21px;font-weight:900;letter-spacing:-.02em}.entryDirection{font-size:11px;font-weight:800;border-radius:999px;padding:4px 7px;border:1px solid rgba(74,222,128,.28);color:var(--good)}
+.entryNumbers{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin-top:10px}.entryMetric{background:rgba(255,255,255,.025);border:1px solid var(--line);border-radius:9px;padding:8px;min-width:0}.entryMetric .k{font-size:10px}.entryMetric .v{font-size:13px;font-weight:800;overflow-wrap:anywhere}
+.entryRiskLine{margin-top:9px;color:var(--muted);font-size:12px;line-height:1.55}.entryRiskLine b{color:var(--text)}
+.noEntryState{display:flex;align-items:flex-start;gap:12px;padding:12px;border-radius:12px;background:#0d1118;border:1px solid var(--line)}.noEntryIcon{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;background:rgba(250,204,21,.08);color:var(--warn);font-weight:900;flex:0 0 auto}.noEntryTitle{font-size:17px;font-weight:900}.nearLine{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.nearChip{border:1px solid var(--line);border-radius:999px;padding:6px 9px;font-size:11px;color:var(--muted);cursor:pointer;background:#0e131b}.nearChip b{color:var(--text)}.nearChip .waitWord{color:var(--warn);font-weight:800}
+@media(max-width:720px){.entryNowZone{padding:12px;margin-top:8px}.entryNowHead h3{font-size:18px}.entryNowBadge{padding:6px 8px}.entryNumbers{grid-template-columns:repeat(2,minmax(0,1fr))}.entryReadyGrid{grid-template-columns:1fr}.entryReadyCard{padding:11px}.entryTicker{font-size:19px}}
 @media(max-width:900px){.decisionGrid{grid-template-columns:1fr 1fr}.decisionGrid .keyBox:last-child{grid-column:1/-1}.executiveSummary{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:720px){
  .appHeader{align-items:flex-start}.headerChips{display:none}.appHeader h1{font-size:22px}
@@ -78,7 +93,7 @@ button{-webkit-tap-highlight-color:transparent}
 <div class="appHeader">
   <div>
     <div class="eyebrow">EDGEX MARKET WORKSPACE</div>
-    <h1>分析ターミナル <span class="versionBadge">v16</span></h1>
+    <h1>分析ターミナル <span class="versionBadge">v17</span></h1>
     <div class="sub">公開市場データを使う分析専用ツール。自動売買は行いません。</div>
   </div>
   <div class="headerChips"><span class="statusChip">分析専用</span><span class="statusChip">15分更新</span></div>
@@ -100,6 +115,14 @@ button{-webkit-tap-highlight-color:transparent}
     <div class="sub">最初に見る情報だけを上に集約しています。</div>
   </div>
   <div class="heroActions"><button class="primary" id="dashScan">最新に更新</button><span id="dashUpdated" class="pill">未更新</span></div>
+</div>
+
+<div id="entryNowZone" class="entryNowZone">
+  <div class="entryNowHead">
+    <div><div class="eyebrow">ENTRY NOW</div><h3>いまエントリー条件を満たしている銘柄</h3></div>
+    <div id="entryNowBadge" class="entryNowBadge">確認中</div>
+  </div>
+  <div id="entryNowContent" class="entryNowContent"><span class="muted">最新スキャン後に表示します。</span></div>
 </div>
 
 <div id="dashSummary" class="summary executiveSummary"></div>
@@ -526,7 +549,36 @@ function renderApproachValidation(j){
  body.querySelectorAll(".approachValTicker").forEach(function(x){x.onclick=function(){document.getElementById("ticker").value=this.dataset.ticker;tab("analysis");analyze()}});
 }
 async function loadApproachValidation(){try{var j=await jf("/api/approach-validation?limit=500");renderApproachValidation(j)}catch(e){var st=document.getElementById("approachValidationStatus");if(st)st.innerHTML='<span class="error">'+e.message+'</span>'}}
+async function dashboardReadyRisk(r){
+ var equity=Number(document.getElementById("equity").value)||0,riskPct=Number(document.getElementById("riskPct").value)||0;
+ if(!equity||!riskPct||r.entry_reference==null||r.stop_loss==null)return null;
+ var p={equity:equity,risk_pct:riskPct,entry:r.entry_reference,stop:r.stop_loss};
+ if(r.take_profit!=null)p.target=r.take_profit;
+ if(r.step_size!=null)p.step_size=r.step_size;
+ if(r.min_order_size!=null)p.min_order_size=r.min_order_size;
+ if(r.max_order_size!=null)p.max_order_size=r.max_order_size;
+ var lev=r.direction==="LONG"?r.max_long_leverage:r.max_short_leverage;if(lev)p.leverage=lev;
+ try{return await jf("/api/risk",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(p)})}catch(e){return null}
+}
+function entryMetric(k,v){return '<div class="entryMetric"><div class="k">'+k+'</div><div class="v">'+v+'</div></div>'}
+async function renderEntryNow(j){
+ var zone=document.getElementById("entryNowZone"),badge=document.getElementById("entryNowBadge"),content=document.getElementById("entryNowContent");if(!zone||!badge||!content)return;
+ var ready=(j&&j.ready_candidates)||[],near=(j&&j.qualified_near_candidates)||[];
+ if(ready.length){
+  zone.classList.add("hasReady");zone.classList.remove("waiting");badge.className="entryNowBadge ready";badge.textContent="READY "+ready.length+"件";
+  var top=ready.slice(0,3),risks=await Promise.all(top.map(dashboardReadyRisk));
+  content.innerHTML='<div class="entryReadyGrid">'+top.map(function(r,i){var x=risks[i],riskText=x?'<b>注文数量 '+fmt(x.size,8)+'</b> / 最大損失 '+fmt(x.max_loss,2)+' USDC'+(x.target_profit==null?'':' / 目標利益 '+fmt(x.target_profit,2)+' USDC'):'資金設定後に注文数量を自動計算';return '<button class="entryReadyCard" data-ticker="'+r.ticker+'"><div class="entryReadyTop"><span class="entryTicker">'+r.ticker+'</span><span class="entryDirection">'+directionJa(r.direction)+'</span><span class="pill">RR '+fmt(r.rr,2)+'</span><span class="pill">スコア '+fmt(r.score,1)+'</span></div><div class="entryNumbers">'+entryMetric("Entry",fmt(r.entry_reference,8))+entryMetric("SL",fmt(r.stop_loss,8))+entryMetric("TP",fmt(r.take_profit,8))+entryMetric("15M確定",new Date((Number(r.latest_15m_time_ms)||Date.now())+15*60*1000).toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit"}))+'</div><div class="entryRiskLine">'+riskText+'<br><span class="good">戦略条件は成立済み</span> — タップして詳細確認</div></button>'}).join("")+'</div>';
+  content.querySelectorAll(".entryReadyCard").forEach(function(b){b.onclick=function(){document.getElementById("ticker").value=this.dataset.ticker;tab("analysis");analyze()}});
+ }else{
+  zone.classList.remove("hasReady");zone.classList.add("waiting");badge.className="entryNowBadge wait";badge.textContent="WAIT";
+  var chips=near.slice(0,5).map(function(r){return '<button class="nearChip" data-ticker="'+r.ticker+'"><b>'+r.ticker+'</b> '+directionJa(r.direction)+' / RR '+fmt(r.rr,2)+' <span class="waitWord">まだ待つ</span></button>'}).join("");
+  content.innerHTML='<div class="noEntryState"><div class="noEntryIcon">Ⅱ</div><div><div class="noEntryTitle">今はエントリー条件成立なし</div><div class="sub">READYになるまで入らない。直前候補は監視だけにします。</div>'+(chips?'<div class="nearLine"><span class="sub">次に近い：</span>'+chips+'</div>':'')+'</div></div>';
+  content.querySelectorAll(".nearChip").forEach(function(b){b.onclick=function(){document.getElementById("ticker").value=this.dataset.ticker;tab("analysis");analyze()}});
+ }
+}
+
 function renderDailyConvenience(j){
+ renderEntryNow(j);
  var re=document.getElementById("marketRegime"),pe=document.getElementById("dailyPicks"),r=j&&j.market_regime,picks=(j&&j.daily_picks)||[];renderWatchStatus((j&&j.watch_status)||[]);renderPriorityRanking((j&&j.priority_ranking)||[]);renderEarlyWatch((j&&j.early_watch)||[]);
  if(re){re.innerHTML=r?'<span class="pill"><b>'+regimeBiasJa(r.bias)+'</b></span><span class="pill">'+regimeActivityJa(r.activity)+'</span><span class="pill">偏り '+fmt(Math.abs(r.bias_pct||0),1)+'%</span><span class="pill">平均 '+fmt(r.average_score,1)+'点</span>':'<span class="muted">データ待ち</span>'}
  if(pe){pe.innerHTML=picks.length?picks.map(function(p,i){return '<button class="pickCard" data-ticker="'+p.ticker+'"><div class="k">確認優先 '+(i+1)+' / 総合 '+fmt(p.priority_score,1)+'点</div><b>'+p.ticker+'</b><div class="pickMeta"><span class="badge '+p.stage+'">'+stageJa(p.stage)+'</span><span class="pill">'+directionJa(p.direction)+'</span><span class="pill">セットアップ '+fmt(p.score,1)+'</span><span class="pill">RR '+fmt(p.rr,2)+'</span></div><div class="pickReason">'+reasonJa(p.reason)+'</div></button>'}).join(""):'<span class="muted">候補なし</span>';pe.querySelectorAll(".pickCard").forEach(function(b){b.onclick=function(){document.getElementById("ticker").value=this.dataset.ticker;tab("analysis");analyze()}})}
@@ -765,7 +817,7 @@ document.getElementById("exportJournal").onclick=function(){var a=document.creat
 document.getElementById("importJournal").onchange=function(e){var file=e.target.files&&e.target.files[0];if(!file)return;var reader=new FileReader();reader.onload=function(){try{var j=JSON.parse(reader.result),records=Array.isArray(j)?j:j.records;if(!Array.isArray(records))throw new Error("records not found");journal=records;saveJournalStore();renderJournal();document.getElementById("journalStatus").textContent="JSONを読み込みました。"}catch(err){document.getElementById("journalStatus").innerHTML='<span class="error">'+err.message+'</span>'}};reader.readAsText(file)};
 function loadRiskProfile(){try{var p=JSON.parse(localStorage.getItem("edgexRiskProfile")||"{}");if(p.equity)document.getElementById("equity").value=p.equity;if(p.riskPct)document.getElementById("riskPct").value=p.riskPct}catch(e){}}
 function saveRiskProfile(){localStorage.setItem("edgexRiskProfile",JSON.stringify({equity:Number(document.getElementById("equity").value)||0,riskPct:Number(document.getElementById("riskPct").value)||0}))}
-document.getElementById("equity").addEventListener("change",function(){saveRiskProfile();if(lastAnalysis)renderQuickRisk(lastAnalysis)});document.getElementById("riskPct").addEventListener("change",function(){saveRiskProfile();if(lastAnalysis)renderQuickRisk(lastAnalysis)});
+document.getElementById("equity").addEventListener("change",function(){saveRiskProfile();if(lastAnalysis)renderQuickRisk(lastAnalysis);if(lastMarketPayload)renderEntryNow(lastMarketPayload)});document.getElementById("riskPct").addEventListener("change",function(){saveRiskProfile();if(lastAnalysis)renderQuickRisk(lastAnalysis);if(lastMarketPayload)renderEntryNow(lastMarketPayload)});
 function applyDeepLink(){var u=new URL(location.href),tabName=u.searchParams.get("tab"),ticker=u.searchParams.get("ticker");if(ticker)document.getElementById("ticker").value=ticker.toUpperCase();if(tabName&&document.getElementById(tabName))tab(tabName);if((tabName==="analysis"||ticker)&&ticker)analyze()}
 loadRiskProfile();renderQuickAccess();renderCandidateAlerts();loadServerCandidateEvents();loadConfirmationDiagnostics();loadOpportunityAnalysis();loadPriorityEvents();loadApproachEvents();loadApproachValidation();initWatchSync();loadDailyReports();syncCandidateNotifyButton();renderPushGuide();syncBackgroundPushButton();loadNotificationCenter();updateCandleCountdown();setInterval(updateCandleCountdown,1000);
 syncAutoJournalButton();renderJournal();renderDashboard();
