@@ -1429,7 +1429,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="EdgeX Analysis Terminal",
-    version="8.1.0",
+    version="8.2.0",
     lifespan=lifespan,
 )
 
@@ -1441,7 +1441,7 @@ async def health():
     return {
         "ok": True,
         "service": "edgex-analysis-terminal",
-        "version": "8.1.0",
+        "version": "8.2.0",
         "time_ms": int(time.time() * 1000),
         "storage": {
             "market_snapshots_48h": len(history),
@@ -1836,6 +1836,53 @@ async def push_unsubscribe_api(req: PushUnsubscribeRequest):
     return {
         "ok": True,
         "subscribers": _subscription_count(),
+    }
+
+
+@app.post("/api/push/preferences")
+async def push_preferences_api(req: PushPreferenceRequest):
+    if not _update_push_preferences(req):
+        raise HTTPException(404, "Push subscription not found")
+    row = _get_push_subscription(req.endpoint)
+    return {
+        "ok": True,
+        "candidate_alerts": bool(row["candidate_alerts"]) if row else False,
+        "daily_summary": bool(row["daily_summary"]) if row else False,
+    }
+
+
+@app.post("/api/push/test")
+async def push_test_api(req: PushTestRequest):
+    row = _get_push_subscription(req.endpoint)
+    if row is None:
+        raise HTTPException(404, "Push subscription not found")
+    payload = {
+        "title": "EdgeX テスト通知",
+        "body": "バックグラウンド通知は正常です。",
+        "url": "/?tab=dashboard",
+        "tag": "edgex-test",
+    }
+    delivered = await asyncio.to_thread(_send_push_sync, row, payload)
+    _log_push_event(
+        kind="test",
+        payload=payload,
+        sent=1 if delivered else 0,
+        attempted=1,
+    )
+    return {
+        "ok": True,
+        "delivered": delivered,
+    }
+
+
+@app.get("/api/push/events")
+async def push_events_api(
+    limit: int = Query(default=50, ge=1, le=200),
+):
+    events = _load_push_events(limit=limit)
+    return {
+        "count": len(events),
+        "events": events,
     }
 
 
