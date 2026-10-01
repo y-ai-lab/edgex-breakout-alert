@@ -188,6 +188,34 @@ def _init_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS priority_snapshots (
+                bucket_ms INTEGER PRIMARY KEY,
+                payload TEXT NOT NULL,
+                created_ms INTEGER NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS priority_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                bucket_ms INTEGER NOT NULL,
+                ticker TEXT NOT NULL,
+                event_type TEXT NOT NULL,
+                previous_rank INTEGER,
+                current_rank INTEGER NOT NULL,
+                rank_change INTEGER,
+                priority_score REAL NOT NULL,
+                stage TEXT,
+                direction TEXT,
+                rr REAL,
+                created_ms INTEGER NOT NULL,
+                UNIQUE(bucket_ms, ticker, event_type)
+            )
+            """
+        )
         conn.commit()
 
     if VAPID_PRIVATE_KEY:
