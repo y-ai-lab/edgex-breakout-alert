@@ -1877,6 +1877,49 @@ def _opportunity_metrics(items: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _confirmation_outcome_groups(
+    limit: int = 1000,
+) -> dict[str, Any]:
+    events = _load_candidate_events_with_results(limit=limit)
+    diagnosed = [
+        event
+        for event in events
+        if event.get("kind") == "NEAR"
+        and event.get("confirmation_color_ok") is not None
+        and event.get("confirmation_level_ok") is not None
+        and event.get("result")
+    ]
+
+    groups: list[dict[str, Any]] = []
+    for key, label in (
+        ("COLOR_ONLY", "ローソク足の色だけ未達"),
+        ("LEVEL_ONLY", "ロール水準だけ未達"),
+        ("BOTH", "両方未達"),
+    ):
+        members = [
+            event
+            for event in diagnosed
+            if _confirmation_failure_type(event) == key
+        ]
+        groups.append({
+            "key": key,
+            "label": label,
+            "metrics": _opportunity_metrics(members),
+        })
+
+    resolved = [
+        event
+        for event in diagnosed
+        if str((event.get("result") or {}).get("status") or "")
+        in {"TP", "SL"}
+    ]
+    return {
+        "sample_size": len(diagnosed),
+        "resolved": len(resolved),
+        "groups": groups,
+    }
+
+
 def _opportunity_analysis(limit: int = 500) -> dict[str, Any]:
     events = _load_candidate_events_with_results(limit=limit)
     ordered = sorted(events, key=lambda item: int(item["created_ms"]))
@@ -3353,6 +3396,7 @@ def _persist_scan_result(
     now_ms = int(time.time() * 1000)
     bucket_ms = (now_ms // scanner.INTERVAL_MS[SETTINGS.entry_interval]) * scanner.INTERVAL_MS[SETTINGS.entry_interval]
     summary = _market_summary(rows)
+    confirmation = _confirmation_diagnostics(rows)
     payload = {
         "time_ms": bucket_ms,
         "universe": len(contracts),
@@ -3369,6 +3413,15 @@ def _persist_scan_result(
         "top_ready": summary["top_ready"],
         "top_near": summary["top_near"],
         "top_qualified_near": summary["top_qualified_near"],
+        "confirmation": {
+            "touched_count": confirmation["touched_count"],
+            "confirmed_count": confirmation["confirmed_count"],
+            "confirmation_wait_count": confirmation["confirmation_wait_count"],
+            "pass_rate_pct": confirmation["pass_rate_pct"],
+            "failure_counts": confirmation["failure_counts"],
+            "avg_body_atr": confirmation["avg_body_atr"],
+            "avg_roll_margin_atr": confirmation["avg_roll_margin_atr"],
+        },
     }
     _save_market_snapshot(payload)
 
@@ -3809,6 +3862,7 @@ async def screener_api(
             else None
         ),
         "summary": _market_summary(all_rows),
+        "confirmation_diagnostics": _confirmation_diagnostics(all_rows),
         "market_regime": _market_regime(all_rows),
         "daily_picks": priority_ranking[:3],
         "priority_ranking": priority_ranking,
@@ -3817,6 +3871,25 @@ async def screener_api(
         "qualified_near_candidates": qualified_near_candidates,
         "watch_status": watch_status,
         "results": rows[:limit],
+    }
+
+
+@app.get("/api/confirmation-diagnostics")
+async def confirmation_diagnostics_api(
+    force: bool = False,
+):
+    try:
+        contracts, rows = await _scan_market_rows(force=force)
+    except Exception as exc:
+        raise HTTPException(
+            502,
+            f"EdgeX market scan failed: {exc}",
+        ) from exc
+    return {
+        "universe": len(contracts),
+        "scanned": len(rows),
+        "current": _confirmation_diagnostics(rows),
+        "history": _confirmation_outcome_groups(limit=1000),
     }
 
 
