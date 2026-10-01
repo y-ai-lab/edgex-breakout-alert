@@ -2073,40 +2073,198 @@ def _market_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def _daily_picks(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    def pick_priority(row: dict[str, Any]) -> tuple[int, float, float]:
-        stage = str(row.get("stage") or "")
-        rr = row.get("rr")
-        rr_value = float(rr) if rr is not None else 0.0
-        if stage == "READY":
-            rank = 0
-        elif stage in {"CONFIRMATION_WAIT", "RETEST_WAIT"} and rr_value >= SETTINGS.min_rr:
-            rank = 1
-        elif stage in {"CONFIRMATION_WAIT", "RETEST_WAIT"}:
-            rank = 2
-        elif stage == "BREAKOUT_WAIT":
-            rank = 3
-        else:
-            rank = 4
-        return (
-            rank,
-            -float(row.get("score") or 0),
-            -rr_value,
-        )
+def _score_band(value: float) -> str:
+    if value >= 90:
+        return "90+"
+    if value >= 80:
+        return "80-89"
+    if value >= 70:
+        return "70-79"
+    if value >= 60:
+        return "60-69"
+    return "<60"
 
-    selected = sorted(rows, key=pick_priority)[:3]
-    return [
-        {
+
+def _priority_evidence_index() -> dict[tuple[str, str], dict[str, Any]]:
+    events = _load_candidate_events_with_results(limit=1000)
+    grouped: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for event in events:
+        result = event.get("result")
+        if not result:
+            continue
+        direction = str(event.get("direction") or "")
+        if direction not in {"LONG", "SHORT"}:
+            continue
+        key = (
+            direction,
+            _score_band(float(event.get("score") or 0)),
+        )
+        grouped.setdefault(key, []).append(event)
+
+    index: dict[tuple[str, str], dict[str, Any]] = {}
+    for key, items in grouped.items():
+        mfes = [
+            float((item.get("result") or {}).get("mfe_r") or 0)
+            for item in items
+        ]
+        maes = [
+            float((item.get("result") or {}).get("mae_r") or 0)
+            for item in items
+        ]
+        resolved = [
+            item
+            for item in items
+            if str((item.get("result") or {}).get("status") or "")
+            in {"TP", "SL"}
+        ]
+        final_rs = [
+            float((item.get("result") or {}).get("final_r"))
+            for item in resolved
+            if (item.get("result") or {}).get("final_r") is not None
+        ]
+        index[key] = {
+            "n": len(items),
+            "resolved_n": len(resolved),
+            "avg_mfe_r": round(mean(mfes), 3) if mfes else None,
+            "avg_mae_r": round(mean(maes), 3) if maes else None,
+            "avg_r": round(mean(final_rs), 3) if final_rs else None,
+        }
+    return index
+
+
+def _priority_stage_points(stage: str) -> float:
+    return {
+        "READY": 35.0,
+        "CONFIRMATION_WAIT": 31.0,
+        "RETEST_WAIT": 26.0,
+        "BREAKOUT_WAIT": 18.0,
+        "RR_WAIT": 12.0,
+        "STRUCTURE_WAIT": 8.0,
+        "TREND_WAIT": 4.0,
+        "DATA_WAIT": 0.0,
+    }.get(stage, 0.0)
+
+
+def _priority_freshness_points(age_seconds: float | None) -> float:
+    if age_seconds is None:
+        return 0.0
+    age = max(0.0, float(age_seconds))
+    if age <= 90:
+        return 10.0
+    if age <= 300:
+        return 8.0
+    if age <= 900:
+        return 5.0
+    if age <= 3600:
+        return 2.0
+    return 0.0
+
+
+def _priority_evidence_points(
+    row: dict[str, Any],
+    evidence_index: dict[tuple[str, str], dict[str, Any]],
+) -> tuple[float, dict[str, Any]]:
+    direction = str(row.get("direction") or "")
+    band = _score_band(float(row.get("score") or 0))
+    evidence = evidence_index.get((direction, band))
+    if not evidence:
+        return 5.0, {
+            "n": 0,
+            "resolved_n": 0,
+            "confidence": 0.0,
+            "confidence_label": "NO_SAMPLE",
+            "avg_mfe_r": None,
+            "avg_mae_r": None,
+            "avg_r": None,
+        }
+
+    n = int(evidence.get("n") or 0)
+    confidence = min(1.0, n / 30.0)
+    avg_mfe = float(evidence.get("avg_mfe_r") or 0)
+    avg_mae = float(evidence.get("avg_mae_r") or 0)
+    edge_proxy = max(-1.0, min(1.0, (avg_mfe - avg_mae - 0.5) / 1.5))
+    points = max(0.0, min(10.0, 5.0 + 5.0 * edge_proxy * confidence))
+    label = "LOW" if n < 10 else "EARLY" if n < 30 else "OK"
+    detail = dict(evidence)
+    detail["confidence"] = round(confidence, 3)
+    detail["confidence_label"] = label
+    return round(points, 1), detail
+
+
+def _priority_ranking(
+    rows: list[dict[str, Any]],
+    limit: int = 10,
+) -> list[dict[str, Any]]:
+    evidence_index = _priority_evidence_index()
+    ranked: list[dict[str, Any]] = []
+    for row in rows:
+        stage = str(row.get("stage") or "")
+        stage_points = _priority_stage_points(stage)
+        setup_points = min(
+            30.0,
+            max(0.0, float(row.get("score") or 0) * 0.30),
+        )
+        rr = row.get("rr")
+        rr_points = (
+            min(
+                15.0,
+                max(
+                    0.0,
+                    float(rr) / max(float(SETTINGS.min_rr), 0.01) * 10.0,
+                ),
+            )
+            if rr is not None
+            else 0.0
+        )
+        freshness_points = _priority_freshness_points(
+            row.get("data_age_seconds")
+        )
+        evidence_points, evidence = _priority_evidence_points(
+            row,
+            evidence_index,
+        )
+        total = (
+            stage_points
+            + setup_points
+            + rr_points
+            + freshness_points
+            + evidence_points
+        )
+        ranked.append({
             "ticker": row.get("ticker"),
-            "stage": row.get("stage"),
+            "stage": stage,
             "direction": row.get("direction"),
             "score": row.get("score"),
             "rr": row.get("rr"),
             "current_price": row.get("current_price"),
+            "data_age_seconds": row.get("data_age_seconds"),
+            "entry_reference": row.get("entry_reference"),
+            "stop_loss": row.get("stop_loss"),
+            "take_profit": row.get("take_profit"),
             "reason": row.get("reason"),
-        }
-        for row in selected
-    ]
+            "priority_score": round(total, 1),
+            "priority_breakdown": {
+                "stage": round(stage_points, 1),
+                "setup": round(setup_points, 1),
+                "rr": round(rr_points, 1),
+                "freshness": round(freshness_points, 1),
+                "evidence": round(evidence_points, 1),
+            },
+            "evidence": evidence,
+        })
+
+    ranked.sort(
+        key=lambda item: (
+            -float(item["priority_score"]),
+            -float(item.get("score") or 0),
+            -float(item.get("rr") or 0),
+        )
+    )
+    return ranked[: max(1, min(limit, 50))]
+
+
+def _daily_picks(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return _priority_ranking(rows, limit=3)
 
 
 def _market_regime(rows: list[dict[str, Any]]) -> dict[str, Any]:
