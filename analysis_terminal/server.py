@@ -1130,6 +1130,7 @@ def _opportunity_analysis(limit: int = 500) -> dict[str, Any]:
     near_tp_without_ready = 0
     near_sl_without_ready = 0
     near_became_ready = 0
+    near_mfe_2r_without_ready = 0
     latest: list[dict[str, Any]] = []
 
     for event in reversed(ordered):
@@ -1150,6 +1151,8 @@ def _opportunity_analysis(limit: int = 500) -> dict[str, Any]:
                 near_tp_without_ready += 1
             elif status == "SL":
                 near_sl_without_ready += 1
+            if float(result.get("mfe_r") or 0) >= 2.0:
+                near_mfe_2r_without_ready += 1
 
         latest.append({
             "id": event["id"],
@@ -1179,7 +1182,13 @@ def _opportunity_analysis(limit: int = 500) -> dict[str, Any]:
             "near_tp_without_ready": near_tp_without_ready,
             "near_sl_without_ready": near_sl_without_ready,
             "near_became_ready": near_became_ready,
+            "near_mfe_2r_without_ready": near_mfe_2r_without_ready,
             "sample_size": len(near),
+            "decision_sample": (
+                near_tp_without_ready
+                + near_sl_without_ready
+                + near_became_ready
+            ),
         },
         "latest": latest,
     }
