@@ -111,6 +111,24 @@ def _init_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS candidate_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ticker TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                label TEXT NOT NULL,
+                stage TEXT,
+                direction TEXT,
+                score REAL,
+                rr REAL,
+                entry REAL,
+                stop REAL,
+                target REAL,
+                created_ms INTEGER NOT NULL
+            )
+            """
+        )
         conn.commit()
 
     if VAPID_PRIVATE_KEY:
@@ -425,6 +443,56 @@ def _load_push_events(limit: int = 50) -> list[dict[str, Any]]:
             LIMIT ?
             """,
             (max(1, min(limit, 200)),),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def _log_candidate_event(
+    row: dict[str, Any],
+    *,
+    kind: str,
+    label: str,
+) -> None:
+    now_ms = int(time.time() * 1000)
+    with _db_connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO candidate_events(
+                ticker, kind, label, stage, direction, score, rr,
+                entry, stop, target, created_ms
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                str(row.get("ticker") or ""),
+                kind,
+                label,
+                row.get("stage"),
+                row.get("direction"),
+                row.get("score"),
+                row.get("rr"),
+                row.get("entry_reference"),
+                row.get("stop_loss"),
+                row.get("take_profit"),
+                now_ms,
+            ),
+        )
+        cutoff = now_ms - 30 * 24 * 60 * 60 * 1000
+        conn.execute("DELETE FROM candidate_events WHERE created_ms < ?", (cutoff,))
+        conn.commit()
+
+
+def _load_candidate_events(limit: int = 100) -> list[dict[str, Any]]:
+    with _db_connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, ticker, kind, label, stage, direction, score, rr,
+                   entry, stop, target, created_ms
+            FROM candidate_events
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (max(1, min(limit, 500)),),
         ).fetchall()
     return [dict(row) for row in rows]
 
