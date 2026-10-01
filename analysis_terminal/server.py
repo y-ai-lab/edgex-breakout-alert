@@ -971,6 +971,80 @@ async def _refresh_paper_signal_results(
         _update_paper_signal(signal)
 
 
+async def _refresh_candidate_event_results(
+    contracts: dict[str, scanner.Contract],
+) -> None:
+    events = _load_candidate_events_with_results(limit=1000)
+    trackable = [
+        event
+        for event in events
+        if event.get("entry") is not None
+        and event.get("stop") is not None
+        and event.get("target") is not None
+        and str(event.get("direction") or "") in {"LONG", "SHORT"}
+        and (
+            not event.get("result")
+            or str((event.get("result") or {}).get("status") or "")
+            not in {"TP", "SL", "AMBIGUOUS"}
+        )
+    ]
+    if not trackable:
+        return
+
+    by_name = {
+        contract.contract_name.upper(): contract
+        for contract in contracts.values()
+    }
+    contract_ids: list[str] = []
+    event_contract: dict[int, scanner.Contract] = {}
+    for event in trackable:
+        contract = by_name.get(str(event.get("ticker") or "").upper())
+        if contract is None:
+            continue
+        event_contract[int(event["id"])] = contract
+        if contract.contract_id not in contract_ids:
+            contract_ids.append(contract.contract_id)
+
+    if not contract_ids:
+        return
+
+    snapshots: dict[tuple[str, str], list[scanner.Candle]] = {}
+    for start in range(0, len(contract_ids), 50):
+        chunk = contract_ids[start : start + 50]
+        try:
+            part = await fetch_snapshots(
+                chunk,
+                intervals=(SETTINGS.entry_interval,),
+                timeout=25.0,
+            )
+            snapshots.update(part)
+        except Exception as exc:
+            print(f"Candidate outcome refresh chunk error: {exc}", flush=True)
+
+    for event in trackable:
+        contract = event_contract.get(int(event["id"]))
+        if contract is None:
+            continue
+        candles = snapshots.get(
+            (contract.contract_id, SETTINGS.entry_interval),
+            [],
+        )
+        if not candles:
+            continue
+        signal = {
+            "key": f"candidate-{event['id']}",
+            "ticker": event["ticker"],
+            "side": event["direction"],
+            "entry": event["entry"],
+            "stop": event["stop"],
+            "target": event["target"],
+            "created_ms": event["created_ms"],
+            "result": event.get("result"),
+        }
+        result = _evaluate_paper_signal(signal, candles)
+        _upsert_candidate_event_result(int(event["id"]), result)
+
+
 def _score_breakdown(
     *,
     volume_ratio: float,
