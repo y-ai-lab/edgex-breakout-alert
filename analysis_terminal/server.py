@@ -2104,7 +2104,19 @@ def analyze_contract(
 
     if direction == "LONG":
         touched = any(c.low <= roll_level + tolerance for c in retest_window)
-        confirmed = latest15.close > latest15.open and latest15.close > roll_level
+        confirmation_color_ok = latest15.close > latest15.open
+        confirmation_level_ok = latest15.close > roll_level
+        confirmation_body_atr = (
+            (latest15.close - latest15.open) / atr15
+            if atr15 > 0
+            else 0.0
+        )
+        confirmation_roll_margin_atr = (
+            (latest15.close - roll_level) / atr15
+            if atr15 > 0
+            else 0.0
+        )
+        confirmed = confirmation_color_ok and confirmation_level_ok
         structural_stop = min(
             roll_level,
             min(c.low for c in monitor[breakout_index:]),
@@ -2120,7 +2132,19 @@ def analyze_contract(
         )
     else:
         touched = any(c.high >= roll_level - tolerance for c in retest_window)
-        confirmed = latest15.close < latest15.open and latest15.close < roll_level
+        confirmation_color_ok = latest15.close < latest15.open
+        confirmation_level_ok = latest15.close < roll_level
+        confirmation_body_atr = (
+            (latest15.open - latest15.close) / atr15
+            if atr15 > 0
+            else 0.0
+        )
+        confirmation_roll_margin_atr = (
+            (roll_level - latest15.close) / atr15
+            if atr15 > 0
+            else 0.0
+        )
+        confirmed = confirmation_color_ok and confirmation_level_ok
         structural_stop = max(
             roll_level,
             max(c.high for c in monitor[breakout_index:]),
@@ -2180,6 +2204,12 @@ def analyze_contract(
         "breakout_time_ms": monitor[breakout_index].time_ms,
         "retest_touched": touched,
         "confirmed": confirmed,
+        "confirmation_color_ok": confirmation_color_ok,
+        "confirmation_level_ok": confirmation_level_ok,
+        "confirmation_body_atr": round(confirmation_body_atr, 4),
+        "confirmation_roll_margin_atr": round(confirmation_roll_margin_atr, 4),
+        "confirmation_latest_open": latest15.open,
+        "confirmation_latest_close": latest15.close,
         "entry_reference": latest15.close,
         "stop_loss": stop if structure_ok else None,
         "take_profit": target if structure_ok else None,
