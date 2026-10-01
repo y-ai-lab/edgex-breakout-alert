@@ -1261,6 +1261,7 @@ async def screener_api(
     min_score: float = Query(default=0.0, ge=0, le=100),
     min_rr: float | None = Query(default=None, ge=0),
     q: str | None = Query(default=None, max_length=64),
+    watch: str | None = Query(default=None, max_length=1000),
 ):
     try:
         contracts, all_rows = await _scan_market_rows(force=force)
@@ -1316,6 +1317,22 @@ async def screener_api(
         row for row in _sort_rows(all_rows)
         if row.get("stage") == "READY"
     ][:20]
+    qualified_near_candidates = [
+        row for row in _sort_rows(all_rows)
+        if row.get("stage") in {"CONFIRMATION_WAIT", "RETEST_WAIT"}
+        and row.get("rr") is not None
+        and float(row["rr"]) >= SETTINGS.min_rr
+    ][:50]
+    watch_names = {
+        item.strip().upper()
+        for item in (watch or "").split(",")
+        if item.strip()
+    }
+    watch_status = [
+        row
+        for row in _sort_rows(all_rows)
+        if str(row.get("ticker") or "").upper() in watch_names
+    ]
 
     return {
         "universe": len(contracts),
@@ -1331,6 +1348,8 @@ async def screener_api(
         "market_regime": _market_regime(all_rows),
         "daily_picks": _daily_picks(all_rows),
         "ready_candidates": ready_candidates,
+        "qualified_near_candidates": qualified_near_candidates,
+        "watch_status": watch_status,
         "results": rows[:limit],
     }
 
