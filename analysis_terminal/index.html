@@ -86,7 +86,7 @@
 </section>
 </main>
 <script>
-var rows=[], watch=new Set(JSON.parse(localStorage.getItem("edgexWatch")||"[]")), showWatch=false, lastAnalysis=null, journal=JSON.parse(localStorage.getItem("edgexJournal")||"[]"), marketHistory=JSON.parse(localStorage.getItem("edgexMarketHistory")||"[]"), autoScanTimer=null, lastMarketPayload=null, autoJournalReady=localStorage.getItem("edgexAutoJournalReady")!=="false";
+var rows=[], watch=new Set(JSON.parse(localStorage.getItem("edgexWatch")||"[]")), showWatch=false, lastAnalysis=null, journal=JSON.parse(localStorage.getItem("edgexJournal")||"[]"), marketHistory=JSON.parse(localStorage.getItem("edgexMarketHistory")||"[]"), autoScanTimer=null, lastMarketPayload=null, autoJournalReady=localStorage.getItem("edgexAutoJournalReady")!=="false", serverSync={history:0,paper:0,ok:false};
 function fmt(x,d){return x==null?"—":Number(x).toLocaleString("ja-JP",{maximumFractionDigits:d==null?4:d})}
 function pct(x){return x==null?"—":(x>=0?"+":"")+Number(x).toFixed(2)+"%"}
 function card(k,v){return '<div class="card"><div class="k">'+k+'</div><div class="v">'+v+'</div></div>'}
@@ -96,6 +96,14 @@ function tab(name){document.querySelector('[data-tab="'+name+'"]').click()}
 document.querySelectorAll("[data-tab]").forEach(function(b){b.onclick=function(){document.querySelectorAll("[data-tab]").forEach(x=>x.classList.remove("active"));document.querySelectorAll(".panel").forEach(x=>x.classList.remove("active"));b.classList.add("active");document.getElementById(b.dataset.tab).classList.add("active")}});
 
 function stageAction(stage){return stage==="READY"?"ENTER":stage==="CONFIRMATION_WAIT"?"WAIT 15M":stage==="RETEST_WAIT"?"WAIT RETEST":stage==="BREAKOUT_WAIT"?"WAIT BREAKOUT":"SKIP"}
+async function hydrateServerState(){
+ try{
+  var pair=await Promise.all([jf("/api/server-history?hours=720"),jf("/api/server-paper-signals?limit=1000")]),history=pair[0].snapshots||[],signals=pair[1].signals||[];
+  var byTime={};marketHistory.concat(history).forEach(x=>{if(x&&x.time_ms!=null)byTime[x.time_ms]=x});marketHistory=Object.values(byTime).sort((a,b)=>a.time_ms-b.time_ms);var cutoff=Date.now()-30*24*60*60*1000;marketHistory=marketHistory.filter(x=>x.time_ms>=cutoff);saveMarketHistory();
+  signals.forEach(function(p){if(!p||!p.ticker)return;var exists=journal.some(x=>x.ticker===p.ticker&&x.side===p.side&&Number(x.source_candle_ms||0)===Number(p.source_candle_ms||0));if(!exists)journal.push(p)});
+  saveJournalStore();serverSync={history:history.length,paper:signals.length,ok:true};renderJournal();renderDashboard();
+ }catch(e){serverSync={history:0,paper:0,ok:false,error:e.message};renderDashboard()}
+}
 function saveMarketHistory(){localStorage.setItem("edgexMarketHistory",JSON.stringify(marketHistory))}
 function recordMarketSnapshot(j){
  if(!j||!j.summary)return;var now=Date.now(),bucket=Math.floor(now/900000)*900000,s=j.summary;
@@ -133,7 +141,7 @@ function renderDashboard(){
  chg.innerHTML=card("READY Δ",deltaText(latest,old,"ready"))+card("Qualified Near Δ",deltaText(latest,old,"qualified_near"))+card("All Near Δ",deltaText(latest,old,"near"))+card("Avg Score Δ",deltaText(latest,old,"avg_score"))+card("LONG Δ",deltaText(latest,old,"long"))+card("SHORT Δ",deltaText(latest,old,"short"));
  var total=(latest.long||0)+(latest.short||0);var bias=total?((latest.long-latest.short)/total*100):0,biasLabel=Math.abs(bias)<5?"BALANCED":bias>0?"LONG-heavy "+fmt(Math.abs(bias),1)+"%":"SHORT-heavy "+fmt(Math.abs(bias),1)+"%";breadth.innerHTML=card("Directional bias",biasLabel)+card("Neutral",latest.neutral||0)+card("Universe",latest.universe||0)+card("Scanned",latest.scanned||0);
  function cb(arr){return arr&&arr.length?arr.map(t=>"<button class=\"ghost dashTicker\" data-ticker=\""+t+"\">"+t+"</button>").join(" "):"なし"}top.innerHTML="<b>READY:</b> "+cb(latest.top_ready)+"<br><b>Qualified Near:</b> "+cb(latest.top_qualified_near)+"<br><b>All Near:</b> "+cb(latest.top_near);top.querySelectorAll(".dashTicker").forEach(b=>b.onclick=function(){document.getElementById("ticker").value=this.dataset.ticker;tab("analysis");analyze()});
- var partial=journal.filter(x=>x.result&&x.result.coverage_complete===false).length,st=journalStats();health.innerHTML="Snapshots: <b>"+marketHistory.length+"</b> / oldest: "+new Date(marketHistory[0].time_ms).toLocaleString("ja-JP")+"<br>Journal: <b>"+journal.length+"</b> / ENTER: "+st.signals+" / resolved: "+st.resolved+" / partial history: "+partial+"<br>Auto Journal READY: <b>"+(autoJournalReady?"ON":"OFF")+"</b>";
+ var partial=journal.filter(x=>x.result&&x.result.coverage_complete===false).length,st=journalStats();health.innerHTML="Snapshots: <b>"+marketHistory.length+"</b> / oldest: "+new Date(marketHistory[0].time_ms).toLocaleString("ja-JP")+"<br>Journal: <b>"+journal.length+"</b> / ENTER: "+st.signals+" / resolved: "+st.resolved+" / partial history: "+partial+"<br>Auto Journal READY: <b>"+(autoJournalReady?"ON":"OFF")+"</b><br>Server persistence: <b>"+(serverSync.ok?"SYNCED":"LOCAL ONLY")+"</b>"+(serverSync.ok?" / history "+serverSync.history+" / paper "+serverSync.paper:"");
  hyp.innerHTML=buildHypotheses().map(x=>"• "+x).join("<br>");upd.textContent="更新 "+new Date(latest.time_ms).toLocaleString("ja-JP");drawMarketHistory();
 }
 function summaryView(s){var el=document.getElementById("summary");if(!s){el.innerHTML="";return}el.innerHTML=card("READY",s.ready_count)+card("Qualified Near",s.qualified_near_count||0)+card("All Near",s.near_signal_count)+card("LONG",s.direction_counts.LONG||0)+card("SHORT",s.direction_counts.SHORT||0)+card("Avg Score",fmt(s.average_score,1))+card("Top Qualified",(s.top_qualified_near||[]).join(", ")||"—")}
@@ -293,7 +301,7 @@ document.getElementById("refreshJournal").onclick=refreshJournal;
 document.getElementById("exportJournal").onclick=function(){var a=document.createElement("a"),blob=new Blob([JSON.stringify({version:1,exported_ms:Date.now(),records:journal},null,2)],{type:"application/json"});a.href=URL.createObjectURL(blob);a.download="edgex-journal.json";a.click();URL.revokeObjectURL(a.href)};
 document.getElementById("importJournal").onchange=function(e){var file=e.target.files&&e.target.files[0];if(!file)return;var reader=new FileReader();reader.onload=function(){try{var j=JSON.parse(reader.result),records=Array.isArray(j)?j:j.records;if(!Array.isArray(records))throw new Error("records not found");journal=records;saveJournalStore();renderJournal();document.getElementById("journalStatus").textContent="JSONを読み込みました。"}catch(err){document.getElementById("journalStatus").innerHTML='<span class="error">'+err.message+'</span>'}};reader.readAsText(file)};
 syncAutoJournalButton();renderJournal();renderDashboard();
-setTimeout(function(){scan(false)},80);
+hydrateServerState().finally(function(){setTimeout(function(){scan(false)},80)});
 
 document.getElementById("calc").onclick=async function(){function v(id){return document.getElementById(id).value}var p={equity:+v("equity"),risk_pct:+v("riskPct"),entry:+v("entry"),stop:+v("stop")};if(v("target"))p.target=+v("target");if(v("step"))p.step_size=+v("step");if(v("minOrder"))p.min_order_size=+v("minOrder");if(v("maxOrder"))p.max_order_size=+v("maxOrder");if(v("lev"))p.leverage=+v("lev");var s=document.getElementById("riskStatus"),o=document.getElementById("riskOut");try{var r=await jf("/api/risk",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(p)});s.innerHTML="計算完了 — <b>"+r.side+"</b>"+(r.below_min_order?' <span class="bad">Min Order未満</span>':'')+(r.margin_capped?' <span class="warn">証拠金上限</span>':'')+(r.max_order_capped?' <span class="warn">Max Order上限</span>':'');o.innerHTML=card("Risk budget",fmt(r.risk_budget,4)+" USDC")+card("Size",fmt(r.size,8))+card("Notional",fmt(r.notional,2)+" USDC")+card("Max loss",fmt(r.max_loss,4)+" USDC")+card("Actual risk",pct(r.actual_risk_pct))+card("RR",fmt(r.rr,2))+card("Target profit",r.target_profit==null?"—":fmt(r.target_profit,4)+" USDC")}catch(e){s.innerHTML='<span class="error">'+e.message+'</span>'}};
 </script></body></html>
