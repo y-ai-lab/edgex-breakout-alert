@@ -821,6 +821,75 @@ def _market_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _daily_picks(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def pick_priority(row: dict[str, Any]) -> tuple[int, float, float]:
+        stage = str(row.get("stage") or "")
+        rr = row.get("rr")
+        rr_value = float(rr) if rr is not None else 0.0
+        if stage == "READY":
+            rank = 0
+        elif stage in {"CONFIRMATION_WAIT", "RETEST_WAIT"} and rr_value >= SETTINGS.min_rr:
+            rank = 1
+        elif stage in {"CONFIRMATION_WAIT", "RETEST_WAIT"}:
+            rank = 2
+        elif stage == "BREAKOUT_WAIT":
+            rank = 3
+        else:
+            rank = 4
+        return (
+            rank,
+            -float(row.get("score") or 0),
+            -rr_value,
+        )
+
+    selected = sorted(rows, key=pick_priority)[:3]
+    return [
+        {
+            "ticker": row.get("ticker"),
+            "stage": row.get("stage"),
+            "direction": row.get("direction"),
+            "score": row.get("score"),
+            "rr": row.get("rr"),
+            "current_price": row.get("current_price"),
+            "reason": row.get("reason"),
+        }
+        for row in selected
+    ]
+
+
+def _market_regime(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    summary = _market_summary(rows)
+    directions = summary["direction_counts"]
+    long_count = int(directions.get("LONG", 0))
+    short_count = int(directions.get("SHORT", 0))
+    directional = long_count + short_count
+    bias = ((long_count - short_count) / directional) if directional else 0.0
+    if bias >= 0.15:
+        bias_code = "LONG_BIASED"
+    elif bias <= -0.15:
+        bias_code = "SHORT_BIASED"
+    else:
+        bias_code = "BALANCED"
+
+    if summary["ready_count"] > 0:
+        activity_code = "SIGNAL_ACTIVE"
+    elif summary["qualified_near_count"] >= 3:
+        activity_code = "SETUP_BUILDING"
+    elif summary["average_score"] < 25:
+        activity_code = "QUIET"
+    else:
+        activity_code = "SELECTIVE"
+
+    return {
+        "bias": bias_code,
+        "activity": activity_code,
+        "bias_pct": round(bias * 100.0, 1),
+        "ready_count": summary["ready_count"],
+        "qualified_near_count": summary["qualified_near_count"],
+        "average_score": summary["average_score"],
+    }
+
+
 async def _scan_market_rows(
     force: bool = False,
 ) -> tuple[dict[str, scanner.Contract], list[dict[str, Any]]]:
@@ -1259,6 +1328,8 @@ async def screener_api(
             else None
         ),
         "summary": _market_summary(all_rows),
+        "market_regime": _market_regime(all_rows),
+        "daily_picks": _daily_picks(all_rows),
         "ready_candidates": ready_candidates,
         "results": rows[:limit],
     }
