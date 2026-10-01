@@ -1,0 +1,19 @@
+{
+  "name": "EdgeX 分析ターミナル",
+  "short_name": "EdgeX分析",
+  "description": "EdgeXの銘柄スキャン・個別分析・資金管理・検証記録",
+  "lang": "ja",
+  "start_url": "/?tab=dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0b0d12",
+  "theme_color": "#0b0d12",
+  "icons": [
+    {
+      "src": "/app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
