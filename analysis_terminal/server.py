@@ -3273,6 +3273,7 @@ async def _background_collector() -> None:
                 await _evaluate_custom_alerts(rows)
                 await _refresh_paper_signal_results(contracts)
                 await _refresh_candidate_event_results(contracts)
+                await _refresh_approach_event_results(contracts)
                 _maybe_generate_daily_report()
                 await _maybe_push_daily_summary(rows)
                 last_bucket = bucket
@@ -3673,6 +3674,13 @@ async def screener_api(
         "watch_status": watch_status,
         "results": rows[:limit],
     }
+
+
+@app.get("/api/approach-validation")
+async def approach_validation_api(
+    limit: int = Query(default=500, ge=1, le=1000),
+):
+    return _approach_validation(limit=limit)
 
 
 @app.get("/api/approach-events")
