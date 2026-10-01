@@ -16,7 +16,7 @@ from typing import Any
 import uvicorn
 import websockets
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel, Field
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -1288,6 +1288,36 @@ async def server_paper_signals_api(
 @app.post("/api/risk")
 async def risk_api(req: RiskRequest):
     return risk_plan(req)
+
+
+@app.get("/manifest.webmanifest")
+async def manifest():
+    return FileResponse(
+        Path(__file__).with_name("manifest.webmanifest"),
+        media_type="application/manifest+json",
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
+
+
+@app.get("/sw.js")
+async def service_worker():
+    return FileResponse(
+        Path(__file__).with_name("sw.js"),
+        media_type="application/javascript",
+        headers={
+            "Cache-Control": "no-cache",
+            "Service-Worker-Allowed": "/",
+        },
+    )
+
+
+@app.get("/app-icon.svg")
+async def app_icon():
+    return FileResponse(
+        Path(__file__).with_name("app-icon.svg"),
+        media_type="image/svg+xml",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
 
 
 @app.get("/", response_class=HTMLResponse)
