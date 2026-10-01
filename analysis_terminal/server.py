@@ -96,6 +96,21 @@ def _init_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS push_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                kind TEXT NOT NULL,
+                title TEXT NOT NULL,
+                body TEXT NOT NULL,
+                url TEXT,
+                tag TEXT,
+                sent INTEGER NOT NULL,
+                attempted INTEGER NOT NULL,
+                created_ms INTEGER NOT NULL
+            )
+            """
+        )
         conn.commit()
 
     if VAPID_PRIVATE_KEY:
@@ -1006,6 +1021,16 @@ class PushSubscriptionRequest(BaseModel):
 
 
 class PushUnsubscribeRequest(BaseModel):
+    endpoint: str = Field(min_length=10, max_length=4096)
+
+
+class PushPreferenceRequest(BaseModel):
+    endpoint: str = Field(min_length=10, max_length=4096)
+    candidate_alerts: bool = True
+    daily_summary: bool = True
+
+
+class PushTestRequest(BaseModel):
     endpoint: str = Field(min_length=10, max_length=4096)
 
 
