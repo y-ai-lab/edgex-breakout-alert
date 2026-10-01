@@ -2295,6 +2295,263 @@ def _daily_picks(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return _priority_ranking(rows, limit=3)
 
 
+def _save_priority_snapshot(
+    bucket_ms: int,
+    ranking: list[dict[str, Any]],
+) -> None:
+    now_ms = int(time.time() * 1000)
+    payload = [
+        {
+            "ticker": item.get("ticker"),
+            "rank": index + 1,
+            "priority_score": item.get("priority_score"),
+            "stage": item.get("stage"),
+            "direction": item.get("direction"),
+            "rr": item.get("rr"),
+        }
+        for index, item in enumerate(ranking)
+    ]
+    with _db_connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO priority_snapshots(bucket_ms, payload, created_ms)
+            VALUES (?, ?, ?)
+            ON CONFLICT(bucket_ms) DO UPDATE SET
+                payload=excluded.payload,
+                created_ms=excluded.created_ms
+            """,
+            (
+                int(bucket_ms),
+                json.dumps(payload, separators=(",", ":")),
+                now_ms,
+            ),
+        )
+        cutoff = now_ms - 30 * 24 * 60 * 60 * 1000
+        conn.execute(
+            "DELETE FROM priority_snapshots WHERE bucket_ms < ?",
+            (cutoff,),
+        )
+        conn.execute(
+            "DELETE FROM priority_events WHERE created_ms < ?",
+            (cutoff,),
+        )
+        conn.commit()
+
+
+def _load_previous_priority_snapshot(
+    bucket_ms: int,
+) -> list[dict[str, Any]]:
+    with _db_connect() as conn:
+        row = conn.execute(
+            """
+            SELECT payload
+            FROM priority_snapshots
+            WHERE bucket_ms < ?
+            ORDER BY bucket_ms DESC
+            LIMIT 1
+            """,
+            (int(bucket_ms),),
+        ).fetchone()
+    if row is None:
+        return []
+    try:
+        value = json.loads(row["payload"])
+    except json.JSONDecodeError:
+        return []
+    return value if isinstance(value, list) else []
+
+
+def _log_priority_event(
+    *,
+    bucket_ms: int,
+    ticker: str,
+    event_type: str,
+    previous_rank: int | None,
+    current_rank: int,
+    priority_score: float,
+    stage: str,
+    direction: str | None,
+    rr: float | None,
+) -> None:
+    now_ms = int(time.time() * 1000)
+    rank_change = (
+        int(previous_rank) - int(current_rank)
+        if previous_rank is not None
+        else None
+    )
+    with _db_connect() as conn:
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO priority_events(
+                bucket_ms, ticker, event_type, previous_rank, current_rank,
+                rank_change, priority_score, stage, direction, rr, created_ms
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                int(bucket_ms),
+                ticker,
+                event_type,
+                previous_rank,
+                int(current_rank),
+                rank_change,
+                float(priority_score),
+                stage,
+                direction,
+                rr,
+                now_ms,
+            ),
+        )
+        conn.commit()
+
+
+def _load_priority_events(limit: int = 100) -> list[dict[str, Any]]:
+    with _db_connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, bucket_ms, ticker, event_type, previous_rank,
+                   current_rank, rank_change, priority_score, stage,
+                   direction, rr, created_ms
+            FROM priority_events
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (max(1, min(limit, 500)),),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def _priority_event_stage_ja(stage: str) -> str:
+    return {
+        "READY": "エントリー可能",
+        "CONFIRMATION_WAIT": "15分足確認待ち",
+        "RETEST_WAIT": "リテスト待ち",
+    }.get(stage, stage)
+
+
+async def _process_priority_changes(
+    rows: list[dict[str, Any]],
+    bucket_ms: int,
+) -> None:
+    ranking = _priority_ranking(rows, limit=20)
+    previous = _load_previous_priority_snapshot(bucket_ms)
+    previous_map = {
+        str(item.get("ticker") or ""): int(item.get("rank") or 0)
+        for item in previous
+        if item.get("ticker") and item.get("rank")
+    }
+
+    if not previous:
+        _save_priority_snapshot(bucket_ms, ranking)
+        return
+
+    for current_rank, item in enumerate(ranking, start=1):
+        ticker = str(item.get("ticker") or "")
+        stage = str(item.get("stage") or "")
+        priority_score = float(item.get("priority_score") or 0)
+        rr = item.get("rr")
+        actionable = stage in {
+            "READY",
+            "CONFIRMATION_WAIT",
+            "RETEST_WAIT",
+        }
+        rr_ok = (
+            stage == "READY"
+            or (
+                rr is not None
+                and float(rr) >= float(SETTINGS.min_rr)
+            )
+        )
+        if not actionable or not rr_ok or priority_score < 65.0:
+            continue
+
+        previous_rank = previous_map.get(ticker)
+        event_type: str | None = None
+        if current_rank <= 3 and (
+            previous_rank is None
+            or previous_rank > 3
+        ):
+            event_type = "TOP3_ENTRY"
+        elif (
+            previous_rank is not None
+            and previous_rank - current_rank >= 5
+            and current_rank <= 10
+        ):
+            event_type = "RANK_SURGE"
+
+        if event_type is None:
+            continue
+
+        _log_priority_event(
+            bucket_ms=bucket_ms,
+            ticker=ticker,
+            event_type=event_type,
+            previous_rank=previous_rank,
+            current_rank=current_rank,
+            priority_score=priority_score,
+            stage=stage,
+            direction=item.get("direction"),
+            rr=float(rr) if rr is not None else None,
+        )
+
+        if event_type == "TOP3_ENTRY":
+            movement = (
+                f"{previous_rank}位→{current_rank}位"
+                if previous_rank is not None
+                else f"新規TOP{current_rank}"
+            )
+            title = "EdgeX TOP3入り"
+        else:
+            movement = f"{previous_rank}位→{current_rank}位"
+            title = "EdgeX ランキング急上昇"
+
+        await _broadcast_push(
+            {
+                "title": title,
+                "body": (
+                    f"{ticker} {movement}\n"
+                    f"{_priority_event_stage_ja(stage)} / "
+                    f"優先度 {priority_score:.1f}点"
+                    + (
+                        f" / RR {float(rr):.2f}"
+                        if rr is not None
+                        else ""
+                    )
+                ),
+                "url": f"/?tab=analysis&ticker={ticker}",
+                "tag": f"edgex-rank-{ticker}-{bucket_ms}",
+            },
+            kind="candidate",
+        )
+
+    _save_priority_snapshot(bucket_ms, ranking)
+
+
+def _priority_rank_changes(
+    ranking: list[dict[str, Any]],
+    bucket_ms: int,
+) -> list[dict[str, Any]]:
+    previous = _load_previous_priority_snapshot(bucket_ms)
+    previous_map = {
+        str(item.get("ticker") or ""): int(item.get("rank") or 0)
+        for item in previous
+        if item.get("ticker") and item.get("rank")
+    }
+    output: list[dict[str, Any]] = []
+    for current_rank, item in enumerate(ranking, start=1):
+        enriched = dict(item)
+        previous_rank = previous_map.get(str(item.get("ticker") or ""))
+        enriched["current_rank"] = current_rank
+        enriched["previous_rank"] = previous_rank
+        enriched["rank_change"] = (
+            previous_rank - current_rank
+            if previous_rank is not None
+            else None
+        )
+        output.append(enriched)
+    return output
+
+
 def _market_regime(rows: list[dict[str, Any]]) -> dict[str, Any]:
     summary = _market_summary(rows)
     directions = summary["direction_counts"]
