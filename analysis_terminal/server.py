@@ -223,6 +223,194 @@ def closed(candles: list[scanner.Candle], interval: str) -> list[scanner.Candle]
     ]
 
 
+def _evaluate_paper_signal(
+    signal: dict[str, Any],
+    candles: list[scanner.Candle],
+) -> dict[str, Any]:
+    entries = closed(candles, SETTINGS.entry_interval)
+    prior = signal.get("result") or {}
+    if prior.get("status") in {"TP", "SL", "AMBIGUOUS"}:
+        return prior
+
+    interval_ms = scanner.INTERVAL_MS[SETTINGS.entry_interval]
+    created_ms = int(signal["created_ms"])
+    prior_end = prior.get("history_end_ms")
+
+    if prior_end is None:
+        relevant = [
+            candle
+            for candle in entries
+            if candle.time_ms + interval_ms >= created_ms
+        ]
+        coverage_now = bool(entries) and entries[0].time_ms <= created_ms
+    else:
+        prior_end = int(prior_end)
+        relevant = [
+            candle
+            for candle in entries
+            if candle.time_ms > prior_end
+        ]
+        coverage_now = bool(entries) and entries[0].time_ms <= prior_end + interval_ms
+
+    if not relevant:
+        return prior or {
+            "status": "OPEN",
+            "coverage_complete": coverage_now,
+            "history_start_ms": entries[0].time_ms if entries else None,
+            "history_end_ms": entries[-1].time_ms if entries else None,
+        }
+
+    side = str(signal["side"]).upper()
+    entry = float(signal["entry"])
+    stop = float(signal["stop"])
+    target = float(signal["target"])
+    tp1 = signal.get("tp1")
+    tp1 = float(tp1) if tp1 is not None else None
+    risk = abs(entry - stop)
+    if risk <= 0:
+        return {
+            "status": "ERROR",
+            "error": "invalid risk distance",
+            "coverage_complete": False,
+        }
+
+    prior_mfe = float(prior.get("mfe_r") or 0.0)
+    prior_mae = float(prior.get("mae_r") or 0.0)
+    prior_tp1 = prior.get("tp1_time_ms")
+
+    max_high = max(c.high for c in relevant)
+    min_low = min(c.low for c in relevant)
+    if side == "LONG":
+        current_mfe = max(0.0, (max_high - entry) / risk)
+        current_mae = max(0.0, (entry - min_low) / risk)
+    else:
+        current_mfe = max(0.0, (entry - min_low) / risk)
+        current_mae = max(0.0, (max_high - entry) / risk)
+
+    mfe_r = max(prior_mfe, current_mfe)
+    mae_r = max(prior_mae, current_mae)
+    status = str(prior.get("status") or "OPEN")
+    final_r = prior.get("final_r")
+    outcome_time_ms = prior.get("outcome_time_ms")
+    tp1_time_ms = prior_tp1
+    ambiguous_reason = prior.get("ambiguous_reason")
+
+    for candle in relevant:
+        if side == "LONG":
+            stop_hit = candle.low <= stop
+            target_hit = candle.high >= target
+            tp1_hit = tp1 is not None and candle.high >= tp1
+        else:
+            stop_hit = candle.high >= stop
+            target_hit = candle.low <= target
+            tp1_hit = tp1 is not None and candle.low <= tp1
+
+        if tp1_hit and tp1_time_ms is None:
+            tp1_time_ms = candle.time_ms
+
+        if stop_hit and target_hit:
+            status = "AMBIGUOUS"
+            outcome_time_ms = candle.time_ms
+            ambiguous_reason = "SL and final TP touched in the same 15M candle"
+            final_r = None
+            break
+
+        if stop_hit:
+            if tp1_hit and tp1_time_ms == candle.time_ms:
+                status = "AMBIGUOUS"
+                outcome_time_ms = candle.time_ms
+                ambiguous_reason = "SL and TP1 touched in the same 15M candle"
+                final_r = None
+                break
+            status = "SL"
+            outcome_time_ms = candle.time_ms
+            final_r = -1.0
+            break
+
+        if target_hit:
+            status = "TP"
+            outcome_time_ms = candle.time_ms
+            final_r = abs(target - entry) / risk
+            break
+
+    if status == "OPEN" and tp1_time_ms is not None:
+        status = "TP1"
+
+    prior_coverage = prior.get("coverage_complete")
+    if prior_end is None:
+        coverage_complete = coverage_now
+    elif prior_coverage is False:
+        coverage_complete = False
+    else:
+        coverage_complete = bool(coverage_now)
+
+    return {
+        "status": status,
+        "final_r": round(float(final_r), 4) if final_r is not None else None,
+        "mfe_r": round(mfe_r, 4),
+        "mae_r": round(mae_r, 4),
+        "tp1_time_ms": tp1_time_ms,
+        "outcome_time_ms": outcome_time_ms,
+        "ambiguous_reason": ambiguous_reason,
+        "last_price": relevant[-1].close,
+        "coverage_complete": coverage_complete,
+        "history_start_ms": entries[0].time_ms if entries else None,
+        "history_end_ms": relevant[-1].time_ms,
+        "candles_checked": int(prior.get("candles_checked") or 0) + len(relevant),
+    }
+
+
+async def _refresh_paper_signal_results(
+    contracts: dict[str, scanner.Contract],
+) -> None:
+    signals = _load_paper_signals(limit=1000)
+    pending = [
+        signal
+        for signal in signals
+        if (signal.get("result") or {}).get("status") not in {"TP", "SL", "AMBIGUOUS"}
+    ]
+    if not pending:
+        return
+
+    by_name = {contract.contract_name.upper(): contract for contract in contracts.values()}
+    contract_ids: list[str] = []
+    signal_contract: dict[str, scanner.Contract] = {}
+    for signal in pending:
+        contract = by_name.get(str(signal.get("ticker") or "").upper())
+        if contract is None:
+            continue
+        signal_contract[str(signal["key"])] = contract
+        if contract.contract_id not in contract_ids:
+            contract_ids.append(contract.contract_id)
+
+    if not contract_ids:
+        return
+
+    snapshots: dict[tuple[str, str], list[scanner.Candle]] = {}
+    for start in range(0, len(contract_ids), 50):
+        chunk = contract_ids[start : start + 50]
+        try:
+            part = await fetch_snapshots(
+                chunk,
+                intervals=(SETTINGS.entry_interval,),
+                timeout=25.0,
+            )
+            snapshots.update(part)
+        except Exception as exc:
+            print(f"Paper signal refresh chunk error: {exc}", flush=True)
+
+    for signal in pending:
+        contract = signal_contract.get(str(signal["key"]))
+        if contract is None:
+            continue
+        candles = snapshots.get((contract.contract_id, SETTINGS.entry_interval), [])
+        if not candles:
+            continue
+        result = _evaluate_paper_signal(signal, candles)
+        signal["result"] = result
+        _update_paper_signal(signal)
+
+
 def _score_breakdown(
     *,
     volume_ratio: float,
