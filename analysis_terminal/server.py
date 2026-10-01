@@ -331,6 +331,12 @@ async def _broadcast_push(
 ) -> tuple[int, int]:
     subscriptions = _load_push_subscriptions(kind)
     if not subscriptions:
+        _log_push_event(
+            kind=kind,
+            payload=payload,
+            sent=0,
+            attempted=0,
+        )
         return 0, 0
     results = await asyncio.gather(
         *(
@@ -338,7 +344,89 @@ async def _broadcast_push(
             for subscription in subscriptions
         )
     )
-    return sum(1 for result in results if result), len(results)
+    sent = sum(1 for result in results if result)
+    attempted = len(results)
+    _log_push_event(
+        kind=kind,
+        payload=payload,
+        sent=sent,
+        attempted=attempted,
+    )
+    return sent, attempted
+
+
+def _update_push_preferences(req: PushPreferenceRequest) -> bool:
+    now_ms = int(time.time() * 1000)
+    with _db_connect() as conn:
+        cur = conn.execute(
+            """
+            UPDATE push_subscriptions
+            SET candidate_alerts = ?, daily_summary = ?, updated_ms = ?
+            WHERE endpoint = ?
+            """,
+            (
+                int(req.candidate_alerts),
+                int(req.daily_summary),
+                now_ms,
+                req.endpoint,
+            ),
+        )
+        conn.commit()
+        return cur.rowcount > 0
+
+
+def _get_push_subscription(endpoint: str) -> sqlite3.Row | None:
+    with _db_connect() as conn:
+        return conn.execute(
+            "SELECT * FROM push_subscriptions WHERE endpoint = ?",
+            (endpoint,),
+        ).fetchone()
+
+
+def _log_push_event(
+    *,
+    kind: str,
+    payload: dict[str, Any],
+    sent: int,
+    attempted: int,
+) -> None:
+    now_ms = int(time.time() * 1000)
+    with _db_connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO push_events(
+                kind, title, body, url, tag, sent, attempted, created_ms
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                kind,
+                str(payload.get("title") or ""),
+                str(payload.get("body") or ""),
+                str(payload.get("url") or ""),
+                str(payload.get("tag") or ""),
+                int(sent),
+                int(attempted),
+                now_ms,
+            ),
+        )
+        cutoff = now_ms - 30 * 24 * 60 * 60 * 1000
+        conn.execute("DELETE FROM push_events WHERE created_ms < ?", (cutoff,))
+        conn.commit()
+
+
+def _load_push_events(limit: int = 50) -> list[dict[str, Any]]:
+    with _db_connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, kind, title, body, url, tag, sent, attempted, created_ms
+            FROM push_events
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (max(1, min(limit, 200)),),
+        ).fetchall()
+    return [dict(row) for row in rows]
 
 
 def _push_row_summary(row: dict[str, Any]) -> str:
