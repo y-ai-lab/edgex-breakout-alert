@@ -8,6 +8,7 @@ import sqlite3
 import sys
 import time
 from collections import Counter
+from contextlib import asynccontextmanager
 from pathlib import Path
 from statistics import mean
 from typing import Any
@@ -910,26 +911,28 @@ async def _background_collector() -> None:
         await asyncio.sleep(30)
 
 
-app = FastAPI(title="EdgeX Analysis Terminal", version="6.2.0")
-
-
-@app.on_event("startup")
-async def startup_event():
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
     global _background_task
     _init_db()
     _background_task = asyncio.create_task(_background_collector())
+    try:
+        yield
+    finally:
+        if _background_task is not None:
+            _background_task.cancel()
+            try:
+                await _background_task
+            except asyncio.CancelledError:
+                pass
+            _background_task = None
 
 
-@app.on_event("shutdown")
-async def shutdown_event():
-    global _background_task
-    if _background_task is not None:
-        _background_task.cancel()
-        try:
-            await _background_task
-        except asyncio.CancelledError:
-            pass
-        _background_task = None
+app = FastAPI(
+    title="EdgeX Analysis Terminal",
+    version="7.0.0",
+    lifespan=lifespan,
+)
 
 
 @app.get("/health")
@@ -939,7 +942,7 @@ async def health():
     return {
         "ok": True,
         "service": "edgex-analysis-terminal",
-        "version": "6.2.0",
+        "version": "7.0.0",
         "time_ms": int(time.time() * 1000),
         "storage": {
             "market_snapshots_48h": len(history),
