@@ -2530,10 +2530,12 @@ def _chart_candles(
     interval: str,
     limit: int,
 ) -> list[dict[str, Any]]:
-    items = closed(candles, interval)[-limit:]
-    closes = [candle.close for candle in items]
-    ema20 = _ema_series(closes, SETTINGS.trend_fast_ema)
-    ema50 = _ema_series(closes, SETTINGS.trend_slow_ema)
+    all_items = closed(candles, interval)
+    closes = [candle.close for candle in all_items]
+    ema20_all = _ema_series(closes, SETTINGS.trend_fast_ema)
+    ema50_all = _ema_series(closes, SETTINGS.trend_slow_ema)
+    start = max(0, len(all_items) - limit)
+    items = all_items[start:]
     return [
         {
             "time_ms": candle.time_ms,
@@ -2542,8 +2544,8 @@ def _chart_candles(
             "low": candle.low,
             "close": candle.close,
             "volume": candle.value,
-            "ema20": ema20[index],
-            "ema50": ema50[index],
+            "ema20": ema20_all[start + index],
+            "ema50": ema50_all[start + index],
         }
         for index, candle in enumerate(items)
     ]
@@ -2767,6 +2769,7 @@ async def screener_api(
         "summary": _market_summary(all_rows),
         "market_regime": _market_regime(all_rows),
         "daily_picks": _daily_picks(all_rows),
+        "priority_ranking": _priority_ranking(all_rows, limit=10),
         "ready_candidates": ready_candidates,
         "qualified_near_candidates": qualified_near_candidates,
         "watch_status": watch_status,
