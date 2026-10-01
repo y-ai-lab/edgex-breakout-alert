@@ -2428,6 +2428,91 @@ def _sort_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     )
 
 
+def _confirmation_failure_type(row: dict[str, Any]) -> str | None:
+    if row.get("stage") != "CONFIRMATION_WAIT":
+        return None
+    color_ok = row.get("confirmation_color_ok")
+    level_ok = row.get("confirmation_level_ok")
+    if color_ok is True and level_ok is False:
+        return "LEVEL_ONLY"
+    if color_ok is False and level_ok is True:
+        return "COLOR_ONLY"
+    if color_ok is False and level_ok is False:
+        return "BOTH"
+    return "UNKNOWN"
+
+
+def _confirmation_diagnostics(
+    rows: list[dict[str, Any]],
+) -> dict[str, Any]:
+    touched = [
+        row
+        for row in rows
+        if row.get("retest_touched") is True
+        and row.get("direction") in {"LONG", "SHORT"}
+    ]
+    confirmed = [row for row in touched if row.get("confirmed") is True]
+    waiting = [
+        row for row in touched
+        if row.get("stage") == "CONFIRMATION_WAIT"
+    ]
+    failures = Counter(
+        _confirmation_failure_type(row) or "UNKNOWN"
+        for row in waiting
+    )
+
+    def avg_field(name: str) -> float | None:
+        vals = [
+            float(row[name])
+            for row in waiting
+            if row.get(name) is not None
+        ]
+        return round(mean(vals), 4) if vals else None
+
+    closest = sorted(
+        waiting,
+        key=lambda row: (
+            max(0.0, -float(row.get("confirmation_body_atr") or 0.0))
+            + max(
+                0.0,
+                -float(row.get("confirmation_roll_margin_atr") or 0.0),
+            ),
+            -float(row.get("score") or 0),
+        ),
+    )[:10]
+
+    return {
+        "touched_count": len(touched),
+        "confirmed_count": len(confirmed),
+        "confirmation_wait_count": len(waiting),
+        "pass_rate_pct": (
+            round(len(confirmed) / len(touched) * 100.0, 1)
+            if touched
+            else None
+        ),
+        "failure_counts": dict(failures),
+        "avg_body_atr": avg_field("confirmation_body_atr"),
+        "avg_roll_margin_atr": avg_field("confirmation_roll_margin_atr"),
+        "closest": [
+            {
+                "ticker": row.get("ticker"),
+                "direction": row.get("direction"),
+                "score": row.get("score"),
+                "rr": row.get("rr"),
+                "color_ok": row.get("confirmation_color_ok"),
+                "level_ok": row.get("confirmation_level_ok"),
+                "body_atr": row.get("confirmation_body_atr"),
+                "roll_margin_atr": row.get(
+                    "confirmation_roll_margin_atr"
+                ),
+                "current_price": row.get("current_price"),
+                "breakout_level": row.get("breakout_level"),
+            }
+            for row in closest
+        ],
+    }
+
+
 def _market_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
     stages = Counter(str(row.get("stage") or "UNKNOWN") for row in rows)
     directions = Counter(str(row.get("direction") or "NEUTRAL") for row in rows)
