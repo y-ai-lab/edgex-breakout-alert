@@ -12,9 +12,9 @@ button,input,select{min-height:44px}
 button{-webkit-tap-highlight-color:transparent}
 .tabs{position:sticky;top:0;z-index:30;background:rgba(11,13,18,.96);backdrop-filter:blur(10px);padding:8px 0;margin:14px 0;overflow-x:auto;flex-wrap:nowrap;scrollbar-width:none}
 .tabs::-webkit-scrollbar{display:none}.tab{flex:0 0 auto;white-space:nowrap}
-.tableHint{display:none}.scroll{-webkit-overflow-scrolling:touch}
+.tableHint{display:none}.scroll{-webkit-overflow-scrolling:touch}.help{margin-top:12px;border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:#0e1219}.help summary{cursor:pointer;font-weight:700}.help div{margin-top:8px;color:var(--muted);font-size:13px;line-height:1.65}
 @media(max-width:720px){
- body{font-size:15px}main{padding:14px 10px 88px}h1{font-size:22px;line-height:1.25}h2{font-size:18px;margin:8px 0 12px}
+ body{font-size:15px}input,select{font-size:16px}main{padding:14px 10px 88px}h1{font-size:22px;line-height:1.25}h2{font-size:18px;margin:8px 0 12px}
  .sub{font-size:13px;line-height:1.55}.panel{padding:13px 10px;border-radius:12px}
  .row,.filters{gap:8px}.field,.field.small{min-width:calc(50% - 4px);max-width:none}.field input,.field select{width:100%}
  .primary,.ghost,.tab{padding:11px 12px}.summary{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
@@ -60,7 +60,7 @@ button{-webkit-tap-highlight-color:transparent}
 <div class="analyticsBox"><b>データ状態</b><div id="dashHealth" class="status"></div></div>
 </div>
 <div class="section"><h2>市場の推移</h2><div class="chartWrap"><div class="chartTitle"><b>エントリー候補 / 直前候補 / 平均スコア</b><span class="muted">直近48時間</span></div><canvas id="marketHistoryChart" class="chart"></canvas></div></div>
-<div class="section"><h2>戦略の改善候補</h2><div class="sub">検証記録の実績から改善候補を抽出します。戦略条件は自動変更しません。</div><div id="strategyHypotheses" class="status"></div></div>
+<div class="section"><h2>戦略の改善候補</h2><div class="sub">検証記録の実績から改善候補を抽出します。戦略条件は自動変更しません。</div><div id="strategyHypotheses" class="status"></div></div><details class="help"><summary>表示の見方</summary><div><b>エントリー可能</b>＝現在の戦略条件をすべて満たした候補。<br><b>有力な直前候補</b>＝リテストまたは15分足確認待ちで、RRが2以上ある候補。<br><b>RR</b>＝損失1に対して狙える利益の比率です。RR 2なら「1の損失リスクに対して2の利益余地」です。</div></details>
 </section>
 
 <section id="screen" class="panel">
@@ -96,7 +96,7 @@ button{-webkit-tap-highlight-color:transparent}
 <div class="sub">分析シナリオと結果を保存します。サーバー側にも同期されるため再デプロイ後も残ります。</div>
 <div class="row" style="margin-top:10px"><button class="primary" id="refreshJournal">結果を再確認</button><button class="ghost" id="exportJournal">記録を保存</button><label class="ghost" style="cursor:pointer">記録を読込<input id="importJournal" type="file" accept="application/json" style="display:none"></label></div>
 <div id="journalSummary" class="summary"></div>
-<div class="section"><h2>成績分析</h2><div id="journalEvidence" class="summary"></div><div id="journalAnalytics"></div><div class="chartWrap"><div class="chartTitle"><b>正式シグナルの累積R</b><span class="muted">累積R</span></div><canvas id="equityCurve" class="chart"></canvas></div></div>
+<div class="section"><h2>成績分析</h2><details class="help"><summary>成績指標の見方</summary><div><b>R</b>＝1回の許容損失を1とした損益。+2Rなら許容損失の2倍の利益です。<br><b>PF</b>＝利益合計 ÷ 損失合計。1を超えるほど利益側が大きいことを示します。<br><b>MFE</b>＝エントリー後にどこまで有利に進んだか。<br><b>MAE</b>＝エントリー後にどこまで逆行したか。<br>10件未満の条件はサンプル不足として判断対象外にします。</div></details><div id="journalEvidence" class="summary"></div><div id="journalAnalytics"></div><div class="chartWrap"><div class="chartTitle"><b>正式シグナルの累積R</b><span class="muted">累積R</span></div><canvas id="equityCurve" class="chart"></canvas></div></div>
 <div id="journalStatus" class="status">保存したシナリオはまだありません。</div>
 <div class="scroll"><table><thead><tr><th>日時</th><th>銘柄</th><th>方向</th><th>判断</th><th>エントリー</th><th>SL</th><th>TP</th><th>RR</th><th>スコア</th><th>結果</th><th>MFE</th><th>MAE</th><th>R</th><th>履歴</th><th>操作</th></tr></thead><tbody id="journalBody"></tbody></table></div>
 </section>
@@ -110,7 +110,7 @@ button{-webkit-tap-highlight-color:transparent}
 <div class="field"><label>最小注文量</label><input id="minOrder" type="number" step="any"></div><div class="field"><label>最大注文量</label><input id="maxOrder" type="number" step="any"></div>
 <div class="field"><label>レバレッジ</label><input id="lev" type="number" step="any"></div><button class="primary" id="calc">計算</button>
 </div>
-<div id="riskStatus" class="status">SL到達時の最大損失から枚数を逆算します。</div><div id="riskOut" class="grid"></div>
+<div id="riskStatus" class="status">損切りに到達したときの最大損失から、安全な注文数量を逆算します。</div><div id="riskOut" class="grid"></div><details class="help"><summary>資金管理の考え方</summary><div>「1回の許容損失 %」を先に決め、エントリー価格と損切り価格の距離から注文数量を計算します。注文刻み・最小注文量・最大注文量・レバレッジ上限も反映します。</div></details>
 </section>
 </main>
 <script>
