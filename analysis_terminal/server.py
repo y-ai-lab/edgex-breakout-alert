@@ -2617,6 +2617,57 @@ def _load_approach_events(limit: int = 100) -> list[dict[str, Any]]:
     return [dict(row) for row in rows]
 
 
+def _upsert_approach_event_result(
+    event_id: int,
+    result: dict[str, Any],
+) -> None:
+    now_ms = int(time.time() * 1000)
+    with _db_connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO approach_event_results(event_id, payload, updated_ms)
+            VALUES (?, ?, ?)
+            ON CONFLICT(event_id) DO UPDATE SET
+                payload=excluded.payload,
+                updated_ms=excluded.updated_ms
+            """,
+            (
+                int(event_id),
+                json.dumps(result, separators=(",", ":")),
+                now_ms,
+            ),
+        )
+        conn.commit()
+
+
+def _load_approach_events_with_results(
+    limit: int = 500,
+) -> list[dict[str, Any]]:
+    with _db_connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT
+                e.id, e.bucket_ms, e.ticker, e.previous_score,
+                e.current_score, e.current_rank, e.stage, e.direction,
+                e.rr, e.priority_score, e.entry, e.stop, e.target,
+                e.created_ms, r.payload AS result_payload,
+                r.updated_ms AS result_updated_ms
+            FROM approach_events e
+            LEFT JOIN approach_event_results r ON r.event_id = e.id
+            ORDER BY e.id DESC
+            LIMIT ?
+            """,
+            (max(1, min(limit, 1000)),),
+        ).fetchall()
+    items: list[dict[str, Any]] = []
+    for row in rows:
+        item = dict(row)
+        raw = item.pop("result_payload", None)
+        item["result"] = json.loads(raw) if raw else None
+        items.append(item)
+    return items
+
+
 async def _process_priority_changes(
     rows: list[dict[str, Any]],
     bucket_ms: int,
@@ -2756,6 +2807,10 @@ async def _process_priority_changes(
                 stage=stage,
                 direction=item.get("direction"),
                 rr=float(rr) if rr is not None else None,
+                priority_score=priority_score,
+                entry=item.get("entry_reference"),
+                stop=item.get("stop_loss"),
+                target=item.get("take_profit"),
             )
             await _broadcast_push(
                 {
