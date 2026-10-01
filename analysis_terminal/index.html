@@ -4,7 +4,7 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b0d12"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="EdgeX分析">
 <link rel="manifest" href="/manifest.webmanifest"><link rel="icon" href="/app-icon.svg" type="image/svg+xml">
-<title>EdgeX 分析ターミナル v7.2</title>
+<title>EdgeX 分析ターミナル v7.3</title>
 <style>
 :root{color-scheme:dark;--bg:#0b0d12;--panel:#131720;--muted:#8d96a8;--line:#252c38;--text:#f3f5f8;--good:#4ade80;--warn:#facc15;--bad:#fb7185;--accent:#7dd3fc}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif}main{max-width:1260px;margin:auto;padding:26px 16px 60px}h1{margin:0 0 5px;font-size:28px}h2{font-size:20px}.sub,.status,label,.k{color:var(--muted)}.tabs,.row,.filters{display:flex;gap:9px;flex-wrap:wrap}.tabs{margin:20px 0}.tab,.primary,.ghost{border-radius:9px;padding:10px 13px;cursor:pointer;font:inherit}.tab,.ghost{border:1px solid var(--line);background:#0f131b;color:var(--text)}.tab.active{border-color:var(--accent);color:var(--accent)}.primary{border:0;background:#e6f6ff;color:#071018;font-weight:700}.panel{display:none;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:17px}.panel.active{display:block}.field{display:flex;flex-direction:column;gap:5px;min-width:130px;flex:1}.field.small{max-width:170px}input,select{background:#0c1017;color:var(--text);border:1px solid var(--line);border-radius:9px;padding:10px}.status{margin:13px 0}.scroll{overflow:auto}table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}th{color:var(--muted)}.badge{padding:3px 7px;border:1px solid var(--line);border-radius:999px;font-size:11px}.READY{color:var(--good)}.CONFIRMATION_WAIT,.RETEST_WAIT{color:var(--warn)}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:10px;margin-top:12px}.card{background:#0e1219;border:1px solid var(--line);border-radius:10px;padding:12px}.v{font-size:17px;margin-top:4px}.error{color:var(--bad)}.section{border-top:1px solid var(--line);margin-top:17px;padding-top:12px}.star{font-size:18px;cursor:pointer}.muted{color:var(--muted)}.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:9px;margin:12px 0}.check{transform:scale(1.15)}.pill{padding:6px 9px;border:1px solid var(--line);border-radius:999px}.right{margin-left:auto}.good{color:var(--good)}.warn{color:var(--warn)}.bad{color:var(--bad)}.resultTP{color:var(--good);font-weight:700}.resultSL{color:var(--bad);font-weight:700}.resultTP1{color:var(--warn);font-weight:700}.resultAMBIGUOUS{color:#f0abfc;font-weight:700}.analyticsGrid{display:grid;grid-template-columns:1fr;gap:12px;margin-top:14px}@media(min-width:980px){.analyticsGrid{grid-template-columns:1fr 1fr}}.analyticsBox{background:#0e1219;border:1px solid var(--line);border-radius:12px;padding:12px}.metricTable td,.metricTable th{font-size:12px}.lowSample{color:var(--warn)}.enoughSample{color:var(--good)}.chartWrap{margin-top:12px;background:#0e1219;border:1px solid var(--line);border-radius:12px;padding:10px}.chartTitle{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}.chart{width:100%;height:310px;display:block}.actionBox{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:12px 0;padding:12px;border:1px solid var(--line);border-radius:10px;background:#0e1219}.actionMain{font-size:18px;font-weight:700}.legend{display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--muted)}.legend span:before{content:"";display:inline-block;width:10px;height:3px;margin-right:5px;vertical-align:middle;background:currentColor}.chartGrid{display:grid;grid-template-columns:1fr;gap:12px}@media(min-width:980px){.chartGrid{grid-template-columns:1fr 1fr}}
@@ -39,7 +39,7 @@ button{-webkit-tap-highlight-color:transparent}
 </style>
 </head>
 <body><main>
-<h1>EdgeX 分析ターミナル <span class="muted">v7.2</span></h1>
+<h1>EdgeX 分析ターミナル <span class="muted">v7.3</span></h1>
 <div class="sub">通知Botとは完全に分離した分析専用ツールです。EdgeXの公開データだけを使います。</div>
 <div class="tabs">
 <button class="tab active" data-tab="dashboard">今日の状況</button>
@@ -58,6 +58,8 @@ button{-webkit-tap-highlight-color:transparent}
 <div class="analyticsGrid">
 <div class="analyticsBox"><b>現在の市場レジーム</b><div id="marketRegime" class="regimeBox"><span class="muted">スキャン後に表示</span></div></div>
 <div class="analyticsBox"><b>今日まず確認する3銘柄</b><div id="dailyPicks" class="pickList"><span class="muted">スキャン後に表示</span></div></div>
+<div class="analyticsBox"><b>★ お気に入り</b><div id="dashWatch" class="status">まだありません</div></div>
+<div class="analyticsBox"><b>最近見た銘柄</b><div id="recentTickers" class="status">まだありません</div></div>
 <div class="analyticsBox"><b>24時間の変化</b><div id="dashChange" class="summary"></div></div>
 <div class="analyticsBox"><b>市場の方向感</b><div id="dashBreadth" class="summary"></div></div>
 <div class="analyticsBox"><b>注目候補</b><div id="dashTop" class="status"></div></div>
@@ -118,16 +120,19 @@ button{-webkit-tap-highlight-color:transparent}
 </section>
 </main>
 <script>
-var rows=[], watch=new Set(JSON.parse(localStorage.getItem("edgexWatch")||"[]")), showWatch=false, lastAnalysis=null, journal=JSON.parse(localStorage.getItem("edgexJournal")||"[]"), marketHistory=JSON.parse(localStorage.getItem("edgexMarketHistory")||"[]"), autoScanTimer=null, lastMarketPayload=null, autoJournalReady=localStorage.getItem("edgexAutoJournalReady")!=="false", serverSync={history:0,paper:0,ok:false}, deferredInstallPrompt=null;
+var rows=[], watch=new Set(JSON.parse(localStorage.getItem("edgexWatch")||"[]")), showWatch=false, lastAnalysis=null, journal=JSON.parse(localStorage.getItem("edgexJournal")||"[]"), marketHistory=JSON.parse(localStorage.getItem("edgexMarketHistory")||"[]"), autoScanTimer=null, lastMarketPayload=null, autoJournalReady=localStorage.getItem("edgexAutoJournalReady")!=="false", serverSync={history:0,paper:0,ok:false}, deferredInstallPrompt=null, recentTickers=JSON.parse(localStorage.getItem("edgexRecentTickers")||"[]");
 function fmt(x,d){return x==null?"—":Number(x).toLocaleString("ja-JP",{maximumFractionDigits:d==null?4:d})}
 function pct(x){return x==null?"—":(x>=0?"+":"")+Number(x).toFixed(2)+"%"}
 function card(k,v){return '<div class="card"><div class="k">'+k+'</div><div class="v">'+v+'</div></div>'}
 async function jf(url,opt){var r=await fetch(url,opt),j={};try{j=await r.json()}catch(e){}if(!r.ok)throw new Error(j.detail||("HTTP "+r.status));return j}
-function saveWatch(){localStorage.setItem("edgexWatch",JSON.stringify(Array.from(watch)))}
+function saveWatch(){localStorage.setItem("edgexWatch",JSON.stringify(Array.from(watch)));renderQuickAccess()}
 function tab(name){var b=document.querySelector('[data-tab="'+name+'"]');if(b)b.click()}
 function updateUrl(tabName,ticker){var u=new URL(location.href);u.searchParams.set("tab",tabName);if(tabName==="analysis"&&ticker)u.searchParams.set("ticker",ticker);else u.searchParams.delete("ticker");history.replaceState(null,"",u)}
 document.querySelectorAll("[data-tab]").forEach(function(b){b.onclick=function(){document.querySelectorAll("[data-tab]").forEach(x=>x.classList.remove("active"));document.querySelectorAll(".panel").forEach(x=>x.classList.remove("active"));b.classList.add("active");document.getElementById(b.dataset.tab).classList.add("active");updateUrl(b.dataset.tab,b.dataset.tab==="analysis"?document.getElementById("ticker").value.trim():"")}});
 
+function addRecentTicker(ticker){if(!ticker)return;recentTickers=[ticker].concat(recentTickers.filter(x=>x!==ticker)).slice(0,8);localStorage.setItem("edgexRecentTickers",JSON.stringify(recentTickers));renderQuickAccess()}
+function quickButtons(items){return items&&items.length?items.map(t=>'<button class="ghost quickTicker" data-ticker="'+t+'">'+t+'</button>').join(" "):'<span class="muted">まだありません</span>'}
+function renderQuickAccess(){var w=document.getElementById("dashWatch"),r=document.getElementById("recentTickers");if(w)w.innerHTML=quickButtons(Array.from(watch));if(r)r.innerHTML=quickButtons(recentTickers);document.querySelectorAll(".quickTicker").forEach(function(b){b.onclick=function(){document.getElementById("ticker").value=this.dataset.ticker;tab("analysis");analyze()}})}
 function regimeBiasJa(v){return ({LONG_BIASED:"ロング優勢",SHORT_BIASED:"ショート優勢",BALANCED:"ほぼ均衡"}[v]||"不明")}
 function regimeActivityJa(v){return ({SIGNAL_ACTIVE:"シグナルあり",SETUP_BUILDING:"セットアップ形成中",QUIET:"静観相場",SELECTIVE:"選別相場"}[v]||"不明")}
 function renderDailyConvenience(j){
@@ -244,7 +249,7 @@ async function analyze(){
  var t=document.getElementById("ticker").value.trim(),s=document.getElementById("analysisStatus"),o=document.getElementById("analysisOut"),a=document.getElementById("actionOut");
  s.textContent="分析・チャート取得中…";o.innerHTML="";a.innerHTML="";
  try{
-  var pack=await jf("/api/chart?ticker="+encodeURIComponent(t));var r=pack.analysis,b=r.score_breakdown||{};lastAnalysis=r;
+  var pack=await jf("/api/chart?ticker="+encodeURIComponent(t));var r=pack.analysis,b=r.score_breakdown||{};lastAnalysis=r;addRecentTicker(r.ticker);
   s.innerHTML='<span class="badge '+r.stage+'">'+stageJa(r.stage)+'</span> '+directionJa(r.direction)+' — '+reasonJa(r.reason);
   a.innerHTML='<div class="actionBox"><div><div class="k">いまの判断</div><div class="actionMain '+actionClass(r.action)+'">'+actionJa(r.action)+'</div></div><div class="pill">スコア '+fmt(r.score,1)+'/100</div><div class="pill">RR '+fmt(r.rr,2)+'</div><div class="pill">'+directionJa(r.direction)+'</div></div>';
   o.innerHTML='<div class="grid">'+card("現在価格",fmt(r.current_price,8))+card("24時間変化",pct(r.change_24h_pct))+card("4時間足の方向",trendJa(r.trend))+card("データ鮮度",fmt(r.data_age_seconds,0)+"秒前")+card("EMA20 / EMA50",fmt(r.ema20_4h,8)+" / "+fmt(r.ema50_4h,8))+card("ATR 4H / 15M",fmt(r.atr_4h,8)+" / "+fmt(r.atr_15m,8))+card("出来高比",fmt(r.volume_ratio,2)+"倍")+card("総合スコア",fmt(r.score,1))+'</div><div class="section"><h2>スコア内訳</h2><div class="grid">'+card("出来高",fmt(b.volume,1)+" /10")+card("トレンド",fmt(b.trend,1)+" /20")+card("ブレイク",fmt(b.breakout,1)+" /20")+card("リテスト",fmt(b.retest,1)+" /20")+card("15分足確認",fmt(b.confirmation,1)+" /15")+card("RR",fmt(b.rr,1)+" /15")+'</div></div><div class="section"><h2>売買シナリオ</h2><div class="grid">'+card("ブレイク基準",fmt(r.breakout_level,8))+card("エントリー目安",fmt(r.entry_reference,8))+card("損切り SL",fmt(r.stop_loss,8))+card("第1利確 TP1 (2R)",fmt(r.tp1_2r,8))+card("最終利確 TP",fmt(r.take_profit,8))+card("RR",fmt(r.rr,2))+card("4H サポート",fmt(r.support_4h,8))+card("4H レジスタンス",fmt(r.resistance_4h,8))+'</div></div><div class="section"><h2>EdgeX 注文条件</h2><div class="grid">'+card("注文刻み",fmt(r.step_size,8))+card("最小注文量",fmt(r.min_order_size,8))+card("最大注文量",fmt(r.max_order_size,8))+card("最大ロング倍率",fmt(r.max_long_leverage,2))+card("最大ショート倍率",fmt(r.max_short_leverage,2))+'</div></div>';
@@ -352,7 +357,7 @@ function loadRiskProfile(){try{var p=JSON.parse(localStorage.getItem("edgexRiskP
 function saveRiskProfile(){localStorage.setItem("edgexRiskProfile",JSON.stringify({equity:Number(document.getElementById("equity").value)||0,riskPct:Number(document.getElementById("riskPct").value)||0}))}
 document.getElementById("equity").addEventListener("change",saveRiskProfile);document.getElementById("riskPct").addEventListener("change",saveRiskProfile);
 function applyDeepLink(){var u=new URL(location.href),tabName=u.searchParams.get("tab"),ticker=u.searchParams.get("ticker");if(ticker)document.getElementById("ticker").value=ticker.toUpperCase();if(tabName&&document.getElementById(tabName))tab(tabName);if((tabName==="analysis"||ticker)&&ticker)analyze()}
-loadRiskProfile();
+loadRiskProfile();renderQuickAccess();
 syncAutoJournalButton();renderJournal();renderDashboard();
 window.addEventListener("beforeinstallprompt",function(e){e.preventDefault();deferredInstallPrompt=e;document.getElementById("installApp").classList.add("good")});
 document.getElementById("installApp").onclick=async function(){if(deferredInstallPrompt){deferredInstallPrompt.prompt();await deferredInstallPrompt.userChoice;deferredInstallPrompt=null;this.textContent="ホーム画面追加済み/確認"}else{var ios=/iphone|ipad|ipod/i.test(navigator.userAgent);alert(ios?"Safariの共有ボタン →「ホーム画面に追加」を選んでください。":"ブラウザのメニューから「アプリをインストール」または「ホーム画面に追加」を選んでください。")}};
