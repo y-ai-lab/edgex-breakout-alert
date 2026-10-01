@@ -2748,23 +2748,58 @@ def _priority_rank_changes(
 ) -> list[dict[str, Any]]:
     previous = _load_previous_priority_snapshot(bucket_ms)
     previous_map = {
-        str(item.get("ticker") or ""): int(item.get("rank") or 0)
+        str(item.get("ticker") or ""): item
         for item in previous
-        if item.get("ticker") and item.get("rank")
+        if item.get("ticker")
     }
     output: list[dict[str, Any]] = []
     for current_rank, item in enumerate(ranking, start=1):
         enriched = dict(item)
-        previous_rank = previous_map.get(str(item.get("ticker") or ""))
-        enriched["current_rank"] = current_rank
-        enriched["previous_rank"] = previous_rank
-        enriched["rank_change"] = (
-            previous_rank - current_rank
-            if previous_rank is not None
+        previous_item = previous_map.get(str(item.get("ticker") or "")) or {}
+        previous_rank = (
+            int(previous_item.get("rank"))
+            if previous_item.get("rank") is not None
+            else None
+        )
+        enriched.update(
+            _approach_score(
+                item,
+                current_rank=current_rank,
+                previous_rank=previous_rank,
+            )
+        )
+        enriched["previous_approach_score"] = (
+            float(previous_item.get("approach_score"))
+            if previous_item.get("approach_score") is not None
             else None
         )
         output.append(enriched)
     return output
+
+
+def _early_watchlist(
+    ranking: list[dict[str, Any]],
+    limit: int = 8,
+) -> list[dict[str, Any]]:
+    candidates = [
+        item
+        for item in ranking
+        if str(item.get("stage") or "")
+        in {"CONFIRMATION_WAIT", "RETEST_WAIT"}
+        and item.get("rr") is not None
+        and float(item["rr"]) >= float(SETTINGS.min_rr)
+        and int(item.get("current_rank") or 999) > 3
+    ]
+    candidates.sort(
+        key=lambda item: (
+            -float(item.get("approach_score") or 0),
+            int(item.get("current_rank") or 999),
+            -float(item.get("priority_score") or 0),
+        )
+    )
+    return candidates[: max(1, min(limit, 20))]
+
+
 
 
 def _market_regime(rows: list[dict[str, Any]]) -> dict[str, Any]:
@@ -3284,6 +3319,17 @@ async def screener_api(
         "qualified_near_candidates": qualified_near_candidates,
         "watch_status": watch_status,
         "results": rows[:limit],
+    }
+
+
+@app.get("/api/approach-events")
+async def approach_events_api(
+    limit: int = Query(default=50, ge=1, le=500),
+):
+    events = _load_approach_events(limit=limit)
+    return {
+        "count": len(events),
+        "events": events,
     }
 
 
