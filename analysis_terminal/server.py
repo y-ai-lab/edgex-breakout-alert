@@ -930,7 +930,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="EdgeX Analysis Terminal",
-    version="7.0.0",
+    version="7.1.0",
     lifespan=lifespan,
 )
 
@@ -942,7 +942,7 @@ async def health():
     return {
         "ok": True,
         "service": "edgex-analysis-terminal",
-        "version": "7.0.0",
+        "version": "7.1.0",
         "time_ms": int(time.time() * 1000),
         "storage": {
             "market_snapshots_48h": len(history),
