@@ -4,6 +4,7 @@ import asyncio
 import json
 import math
 import os
+import sqlite3
 import sys
 import time
 from collections import Counter
@@ -27,6 +28,96 @@ DETECTOR = scanner.RollReversalDetector(SETTINGS)
 
 _snapshot_cache: tuple[float, dict[tuple[str, str], list[scanner.Candle]]] | None = None
 _cache_lock = asyncio.Lock()
+DB_PATH = Path(os.getenv("ANALYSIS_DB_PATH", "/data/analysis_terminal.db"))
+_background_task: asyncio.Task | None = None
+
+
+def _db_connect() -> sqlite3.Connection:
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def _init_db() -> None:
+    with _db_connect() as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS market_snapshots (
+                bucket_ms INTEGER PRIMARY KEY,
+                payload TEXT NOT NULL,
+                created_ms INTEGER NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS paper_signals (
+                signal_key TEXT PRIMARY KEY,
+                payload TEXT NOT NULL,
+                created_ms INTEGER NOT NULL,
+                updated_ms INTEGER NOT NULL
+            )
+            """
+        )
+        conn.commit()
+
+
+def _save_market_snapshot(payload: dict[str, Any]) -> None:
+    bucket_ms = int(payload["time_ms"])
+    now_ms = int(time.time() * 1000)
+    with _db_connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO market_snapshots(bucket_ms, payload, created_ms)
+            VALUES (?, ?, ?)
+            ON CONFLICT(bucket_ms) DO UPDATE SET
+                payload=excluded.payload,
+                created_ms=excluded.created_ms
+            """,
+            (bucket_ms, json.dumps(payload, separators=(",", ":")), now_ms),
+        )
+        cutoff = now_ms - 30 * 24 * 60 * 60 * 1000
+        conn.execute("DELETE FROM market_snapshots WHERE bucket_ms < ?", (cutoff,))
+        conn.commit()
+
+
+def _insert_paper_signal(signal: dict[str, Any]) -> bool:
+    now_ms = int(time.time() * 1000)
+    with _db_connect() as conn:
+        cur = conn.execute(
+            """
+            INSERT OR IGNORE INTO paper_signals(signal_key, payload, created_ms, updated_ms)
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                str(signal["key"]),
+                json.dumps(signal, separators=(",", ":")),
+                int(signal["created_ms"]),
+                now_ms,
+            ),
+        )
+        conn.commit()
+        return cur.rowcount > 0
+
+
+def _load_market_history(hours: int = 48) -> list[dict[str, Any]]:
+    cutoff = int(time.time() * 1000) - max(1, hours) * 60 * 60 * 1000
+    with _db_connect() as conn:
+        rows = conn.execute(
+            "SELECT payload FROM market_snapshots WHERE bucket_ms >= ? ORDER BY bucket_ms",
+            (cutoff,),
+        ).fetchall()
+    return [json.loads(row["payload"]) for row in rows]
+
+
+def _load_paper_signals(limit: int = 200) -> list[dict[str, Any]]:
+    with _db_connect() as conn:
+        rows = conn.execute(
+            "SELECT payload FROM paper_signals ORDER BY created_ms DESC LIMIT ?",
+            (max(1, min(limit, 1000)),),
+        ).fetchall()
+    return [json.loads(row["payload"]) for row in rows]
 
 
 async def fetch_snapshots(
