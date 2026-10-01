@@ -2447,6 +2447,138 @@ def _priority_event_stage_ja(stage: str) -> str:
     }.get(stage, stage)
 
 
+def _approach_readiness_points(stage: str) -> float:
+    return {
+        "READY": 30.0,
+        "CONFIRMATION_WAIT": 28.0,
+        "RETEST_WAIT": 22.0,
+        "BREAKOUT_WAIT": 12.0,
+        "RR_WAIT": 8.0,
+        "STRUCTURE_WAIT": 6.0,
+        "TREND_WAIT": 2.0,
+        "DATA_WAIT": 0.0,
+    }.get(stage, 0.0)
+
+
+def _approach_score(
+    item: dict[str, Any],
+    *,
+    current_rank: int,
+    previous_rank: int | None,
+) -> dict[str, Any]:
+    stage = str(item.get("stage") or "")
+    readiness = _approach_readiness_points(stage)
+
+    rank_change = (
+        int(previous_rank) - int(current_rank)
+        if previous_rank is not None
+        else 0
+    )
+    velocity = min(25.0, max(0.0, float(rank_change) * 5.0))
+
+    rr = item.get("rr")
+    rr_points = (
+        min(
+            15.0,
+            max(
+                0.0,
+                float(rr) / max(float(SETTINGS.min_rr), 0.01) * 10.0,
+            ),
+        )
+        if rr is not None
+        else 0.0
+    )
+
+    evidence = item.get("evidence") or {}
+    n = int(evidence.get("n") or 0)
+    confidence = min(1.0, n / 30.0)
+    avg_mfe = evidence.get("avg_mfe_r")
+    if avg_mfe is None:
+        mfe_points = 10.0
+    else:
+        normalized = min(1.0, max(0.0, float(avg_mfe) / 2.0))
+        mfe_points = 10.0 + 10.0 * normalized * confidence
+
+    freshness = min(
+        10.0,
+        max(
+            0.0,
+            _priority_freshness_points(item.get("data_age_seconds")),
+        ),
+    )
+
+    total = readiness + velocity + rr_points + mfe_points + freshness
+    return {
+        "approach_score": round(min(100.0, total), 1),
+        "approach_breakdown": {
+            "readiness": round(readiness, 1),
+            "velocity": round(velocity, 1),
+            "rr": round(rr_points, 1),
+            "mfe": round(mfe_points, 1),
+            "freshness": round(freshness, 1),
+        },
+        "rank_change": rank_change if previous_rank is not None else None,
+        "previous_rank": previous_rank,
+        "current_rank": current_rank,
+    }
+
+
+def _log_approach_event(
+    *,
+    bucket_ms: int,
+    ticker: str,
+    previous_score: float | None,
+    current_score: float,
+    current_rank: int,
+    stage: str,
+    direction: str | None,
+    rr: float | None,
+) -> None:
+    now_ms = int(time.time() * 1000)
+    with _db_connect() as conn:
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO approach_events(
+                bucket_ms, ticker, previous_score, current_score,
+                current_rank, stage, direction, rr, created_ms
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                int(bucket_ms),
+                ticker,
+                previous_score,
+                float(current_score),
+                int(current_rank),
+                stage,
+                direction,
+                rr,
+                now_ms,
+            ),
+        )
+        cutoff = now_ms - 30 * 24 * 60 * 60 * 1000
+        conn.execute(
+            "DELETE FROM approach_events WHERE created_ms < ?",
+            (cutoff,),
+        )
+        conn.commit()
+
+
+def _load_approach_events(limit: int = 100) -> list[dict[str, Any]]:
+    with _db_connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, bucket_ms, ticker, previous_score, current_score,
+                   current_rank, stage, direction, rr, created_ms
+            FROM approach_events
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (max(1, min(limit, 500)),),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
 async def _process_priority_changes(
     rows: list[dict[str, Any]],
     bucket_ms: int,
