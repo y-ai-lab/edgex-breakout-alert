@@ -87,6 +87,22 @@ def _init_db() -> None:
             )
             """
         )
+        columns = {
+            str(row["name"])
+            for row in conn.execute("PRAGMA table_info(push_subscriptions)").fetchall()
+        }
+        if "snooze_until_ms" not in columns:
+            conn.execute(
+                "ALTER TABLE push_subscriptions ADD COLUMN snooze_until_ms INTEGER"
+            )
+        if "quiet_start" not in columns:
+            conn.execute(
+                "ALTER TABLE push_subscriptions ADD COLUMN quiet_start TEXT"
+            )
+        if "quiet_end" not in columns:
+            conn.execute(
+                "ALTER TABLE push_subscriptions ADD COLUMN quiet_end TEXT"
+            )
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS app_state (
@@ -302,6 +318,46 @@ def _delete_push_subscription(endpoint: str) -> None:
         conn.commit()
 
 
+def _hhmm_minutes(value: str | None) -> int | None:
+    if not value:
+        return None
+    try:
+        hour_text, minute_text = value.split(":", 1)
+        hour = int(hour_text)
+        minute = int(minute_text)
+    except (ValueError, AttributeError):
+        return None
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        return None
+    return hour * 60 + minute
+
+
+def _subscription_suppressed(
+    subscription: sqlite3.Row,
+    kind: str | None,
+) -> bool:
+    if kind != "candidate":
+        return False
+    now_ms = int(time.time() * 1000)
+    snooze_until = subscription["snooze_until_ms"]
+    if snooze_until is not None and int(snooze_until) > now_ms:
+        return True
+
+    start = _hhmm_minutes(subscription["quiet_start"])
+    end = _hhmm_minutes(subscription["quiet_end"])
+    if start is None or end is None or start == end:
+        return False
+    try:
+        timezone = ZoneInfo(str(subscription["timezone"] or "Asia/Tokyo"))
+    except Exception:
+        timezone = JST
+    local_now = datetime.now(timezone)
+    current = local_now.hour * 60 + local_now.minute
+    if start < end:
+        return start <= current < end
+    return current >= start or current < end
+
+
 def _load_push_subscriptions(kind: str | None = None) -> list[sqlite3.Row]:
     where = ""
     if kind == "candidate":
@@ -312,7 +368,11 @@ def _load_push_subscriptions(kind: str | None = None) -> list[sqlite3.Row]:
         rows = conn.execute(
             f"SELECT * FROM push_subscriptions {where} ORDER BY created_ms"
         ).fetchall()
-    return list(rows)
+    return [
+        row
+        for row in rows
+        if not _subscription_suppressed(row, kind)
+    ]
 
 
 def _send_push_sync(subscription: sqlite3.Row, payload: dict[str, Any]) -> bool:
@@ -389,12 +449,20 @@ def _update_push_preferences(req: PushPreferenceRequest) -> bool:
         cur = conn.execute(
             """
             UPDATE push_subscriptions
-            SET candidate_alerts = ?, daily_summary = ?, updated_ms = ?
+            SET candidate_alerts = ?,
+                daily_summary = ?,
+                snooze_until_ms = ?,
+                quiet_start = ?,
+                quiet_end = ?,
+                updated_ms = ?
             WHERE endpoint = ?
             """,
             (
                 int(req.candidate_alerts),
                 int(req.daily_summary),
+                req.snooze_until_ms,
+                req.quiet_start,
+                req.quiet_end,
                 now_ms,
                 req.endpoint,
             ),
@@ -1491,6 +1559,9 @@ class PushPreferenceRequest(BaseModel):
     endpoint: str = Field(min_length=10, max_length=4096)
     candidate_alerts: bool = True
     daily_summary: bool = True
+    snooze_until_ms: int | None = Field(default=None, ge=0)
+    quiet_start: str | None = Field(default=None, max_length=5)
+    quiet_end: str | None = Field(default=None, max_length=5)
 
 
 class PushTestRequest(BaseModel):
@@ -2227,6 +2298,9 @@ async def push_preferences_get_api(
         "daily_summary": bool(row["daily_summary"]),
         "timezone": str(row["timezone"]),
         "last_success_ms": row["last_success_ms"],
+        "snooze_until_ms": row["snooze_until_ms"],
+        "quiet_start": row["quiet_start"],
+        "quiet_end": row["quiet_end"],
     }
 
 
@@ -2239,6 +2313,9 @@ async def push_preferences_api(req: PushPreferenceRequest):
         "ok": True,
         "candidate_alerts": bool(row["candidate_alerts"]) if row else False,
         "daily_summary": bool(row["daily_summary"]) if row else False,
+        "snooze_until_ms": row["snooze_until_ms"] if row else None,
+        "quiet_start": row["quiet_start"] if row else None,
+        "quiet_end": row["quiet_end"] if row else None,
     }
 
 
