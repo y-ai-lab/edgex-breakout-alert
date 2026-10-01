@@ -903,6 +903,7 @@ async def _background_collector() -> None:
             try:
                 contracts, rows = await _scan_market_rows(force=True)
                 _persist_scan_result(contracts, rows)
+                await _refresh_paper_signal_results(contracts)
                 last_bucket = bucket
             except Exception as exc:
                 print(f"Background analysis collector error: {exc}", flush=True)
