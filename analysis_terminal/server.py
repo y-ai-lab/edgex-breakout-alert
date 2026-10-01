@@ -657,6 +657,334 @@ def _load_candidate_events_with_results(
     return items
 
 
+def _normalize_sync_key(value: str) -> str:
+    key = value.strip()
+    if len(key) < 24 or len(key) > 128:
+        raise HTTPException(400, "Invalid sync key")
+    return key
+
+
+def _load_synced_watchlist(sync_key: str) -> list[str]:
+    key = _normalize_sync_key(sync_key)
+    with _db_connect() as conn:
+        row = conn.execute(
+            "SELECT payload FROM synced_watchlists WHERE sync_key = ?",
+            (key,),
+        ).fetchone()
+    if row is None:
+        return []
+    try:
+        values = json.loads(row["payload"])
+    except json.JSONDecodeError:
+        return []
+    return [
+        str(item).strip().upper()
+        for item in values
+        if str(item).strip()
+    ][:200]
+
+
+def _save_synced_watchlist(req: WatchlistSyncRequest) -> list[str]:
+    key = _normalize_sync_key(req.sync_key)
+    values = list(dict.fromkeys(
+        str(item).strip().upper()
+        for item in req.tickers
+        if str(item).strip()
+    ))[:200]
+    now_ms = int(time.time() * 1000)
+    with _db_connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO synced_watchlists(sync_key, payload, updated_ms)
+            VALUES (?, ?, ?)
+            ON CONFLICT(sync_key) DO UPDATE SET
+                payload=excluded.payload,
+                updated_ms=excluded.updated_ms
+            """,
+            (
+                key,
+                json.dumps(values, separators=(",", ":")),
+                now_ms,
+            ),
+        )
+        conn.commit()
+    return values
+
+
+def _create_custom_alert(req: CustomAlertCreateRequest) -> dict[str, Any]:
+    condition = req.condition.strip().upper()
+    allowed = {"PRICE_ABOVE", "PRICE_BELOW", "ENTRY_NEAR", "RR_ABOVE"}
+    if condition not in allowed:
+        raise HTTPException(400, "Unsupported alert condition")
+    if _get_push_subscription(req.endpoint) is None:
+        raise HTTPException(404, "Push subscription not found")
+    ticker = req.ticker.strip().upper()
+    now_ms = int(time.time() * 1000)
+    with _db_connect() as conn:
+        cur = conn.execute(
+            """
+            INSERT INTO custom_alerts(
+                endpoint, ticker, condition, threshold, active,
+                created_ms, updated_ms
+            )
+            VALUES (?, ?, ?, ?, 1, ?, ?)
+            """,
+            (
+                req.endpoint,
+                ticker,
+                condition,
+                float(req.threshold),
+                now_ms,
+                now_ms,
+            ),
+        )
+        alert_id = int(cur.lastrowid)
+        conn.commit()
+    return {
+        "id": alert_id,
+        "ticker": ticker,
+        "condition": condition,
+        "threshold": float(req.threshold),
+        "active": True,
+        "created_ms": now_ms,
+        "triggered_ms": None,
+    }
+
+
+def _delete_custom_alert(req: CustomAlertDeleteRequest) -> bool:
+    with _db_connect() as conn:
+        cur = conn.execute(
+            "DELETE FROM custom_alerts WHERE id = ? AND endpoint = ?",
+            (int(req.alert_id), req.endpoint),
+        )
+        conn.commit()
+        return cur.rowcount > 0
+
+
+def _load_custom_alerts(
+    endpoint: str | None = None,
+    *,
+    active_only: bool = False,
+) -> list[dict[str, Any]]:
+    clauses: list[str] = []
+    params: list[Any] = []
+    if endpoint:
+        clauses.append("endpoint = ?")
+        params.append(endpoint)
+    if active_only:
+        clauses.append("active = 1")
+    where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+    with _db_connect() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT id, endpoint, ticker, condition, threshold, active,
+                   created_ms, updated_ms, triggered_ms
+            FROM custom_alerts
+            {where}
+            ORDER BY active DESC, id DESC
+            """,
+            tuple(params),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def _custom_alert_match(
+    alert: dict[str, Any],
+    row: dict[str, Any],
+) -> tuple[bool, str]:
+    condition = str(alert["condition"])
+    threshold = float(alert["threshold"])
+    price = row.get("current_price")
+    entry = row.get("entry_reference")
+    rr = row.get("rr")
+    if condition == "PRICE_ABOVE" and price is not None:
+        matched = float(price) >= threshold
+        return matched, f"価格 {float(price):.8g} ≥ {threshold:.8g}"
+    if condition == "PRICE_BELOW" and price is not None:
+        matched = float(price) <= threshold
+        return matched, f"価格 {float(price):.8g} ≤ {threshold:.8g}"
+    if condition == "RR_ABOVE" and rr is not None:
+        matched = float(rr) >= threshold
+        return matched, f"RR {float(rr):.2f} ≥ {threshold:.2f}"
+    if condition == "ENTRY_NEAR" and price is not None and entry is not None and float(entry) > 0:
+        distance_pct = abs(float(price) - float(entry)) / float(entry) * 100.0
+        matched = distance_pct <= threshold
+        return matched, f"Entryまで {distance_pct:.2f}% ≤ {threshold:.2f}%"
+    return False, ""
+
+
+async def _evaluate_custom_alerts(rows: list[dict[str, Any]]) -> None:
+    alerts = _load_custom_alerts(active_only=True)
+    if not alerts:
+        return
+    row_map = {
+        str(row.get("ticker") or "").upper(): row
+        for row in rows
+    }
+    for alert in alerts:
+        row = row_map.get(str(alert["ticker"]).upper())
+        if row is None:
+            continue
+        matched, detail = _custom_alert_match(alert, row)
+        if not matched:
+            continue
+        subscription = _get_push_subscription(str(alert["endpoint"]))
+        if subscription is None:
+            continue
+        if _subscription_suppressed(subscription, "candidate"):
+            continue
+        payload = {
+            "title": f"EdgeX 条件アラート — {alert['ticker']}",
+            "body": detail,
+            "url": f"/?tab=analysis&ticker={alert['ticker']}",
+            "tag": f"edgex-custom-{alert['id']}",
+        }
+        delivered = await asyncio.to_thread(
+            _send_push_sync,
+            subscription,
+            payload,
+        )
+        _log_push_event(
+            kind="custom",
+            payload=payload,
+            sent=1 if delivered else 0,
+            attempted=1,
+        )
+        if delivered:
+            now_ms = int(time.time() * 1000)
+            with _db_connect() as conn:
+                conn.execute(
+                    """
+                    UPDATE custom_alerts
+                    SET active = 0, triggered_ms = ?, updated_ms = ?
+                    WHERE id = ?
+                    """,
+                    (now_ms, now_ms, int(alert["id"])),
+                )
+                conn.commit()
+
+
+def _jst_day_bounds(date_value) -> tuple[int, int]:
+    start = datetime(
+        date_value.year,
+        date_value.month,
+        date_value.day,
+        tzinfo=JST,
+    )
+    end = start + timedelta(days=1)
+    return int(start.timestamp() * 1000), int(end.timestamp() * 1000)
+
+
+def _build_daily_report(report_date: str) -> dict[str, Any]:
+    date_value = datetime.strptime(report_date, "%Y-%m-%d").date()
+    start_ms, end_ms = _jst_day_bounds(date_value)
+    with _db_connect() as conn:
+        snapshot_rows = conn.execute(
+            """
+            SELECT payload FROM market_snapshots
+            WHERE bucket_ms >= ? AND bucket_ms < ?
+            ORDER BY bucket_ms
+            """,
+            (start_ms, end_ms),
+        ).fetchall()
+        candidate_rows = conn.execute(
+            """
+            SELECT kind, ticker, created_ms
+            FROM candidate_events
+            WHERE created_ms >= ? AND created_ms < ?
+            ORDER BY created_ms
+            """,
+            (start_ms, end_ms),
+        ).fetchall()
+        paper_rows = conn.execute(
+            """
+            SELECT payload FROM paper_signals
+            WHERE created_ms >= ? AND created_ms < ?
+            ORDER BY created_ms
+            """,
+            (start_ms, end_ms),
+        ).fetchall()
+
+    snapshots = [json.loads(row["payload"]) for row in snapshot_rows]
+    candidates = [dict(row) for row in candidate_rows]
+    paper = [json.loads(row["payload"]) for row in paper_rows]
+    ready_events = [item for item in candidates if item["kind"] == "READY"]
+    near_events = [item for item in candidates if item["kind"] == "NEAR"]
+    latest = snapshots[-1] if snapshots else {}
+    peak_ready = max((int(item.get("ready") or 0) for item in snapshots), default=0)
+    peak_qualified_near = max(
+        (int(item.get("qualified_near") or 0) for item in snapshots),
+        default=0,
+    )
+    return {
+        "date": report_date,
+        "snapshot_count": len(snapshots),
+        "ready_events": len(ready_events),
+        "near_events": len(near_events),
+        "paper_signals": len(paper),
+        "peak_ready": peak_ready,
+        "peak_qualified_near": peak_qualified_near,
+        "last_market": latest,
+        "top_ready_tickers": list(dict.fromkeys(
+            str(item["ticker"]) for item in ready_events
+        ))[:10],
+        "top_near_tickers": list(dict.fromkeys(
+            str(item["ticker"]) for item in near_events
+        ))[:10],
+    }
+
+
+def _save_daily_report(report: dict[str, Any]) -> None:
+    now_ms = int(time.time() * 1000)
+    with _db_connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO daily_reports(report_date, payload, created_ms)
+            VALUES (?, ?, ?)
+            ON CONFLICT(report_date) DO UPDATE SET
+                payload=excluded.payload,
+                created_ms=excluded.created_ms
+            """,
+            (
+                str(report["date"]),
+                json.dumps(report, ensure_ascii=False, separators=(",", ":")),
+                now_ms,
+            ),
+        )
+        cutoff_date = (datetime.now(JST).date() - timedelta(days=45)).isoformat()
+        conn.execute(
+            "DELETE FROM daily_reports WHERE report_date < ?",
+            (cutoff_date,),
+        )
+        conn.commit()
+
+
+def _load_daily_reports(limit: int = 30) -> list[dict[str, Any]]:
+    with _db_connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT payload FROM daily_reports
+            ORDER BY report_date DESC
+            LIMIT ?
+            """,
+            (max(1, min(limit, 90)),),
+        ).fetchall()
+    return [json.loads(row["payload"]) for row in rows]
+
+
+def _maybe_generate_daily_report() -> None:
+    target_date = datetime.now(JST).date() - timedelta(days=1)
+    report_date = target_date.isoformat()
+    with _db_connect() as conn:
+        exists = conn.execute(
+            "SELECT 1 FROM daily_reports WHERE report_date = ?",
+            (report_date,),
+        ).fetchone()
+    if exists:
+        return
+    _save_daily_report(_build_daily_report(report_date))
+
+
 def _push_row_summary(row: dict[str, Any]) -> str:
     direction = "ロング" if row.get("direction") == "LONG" else "ショート"
     rr = row.get("rr")
