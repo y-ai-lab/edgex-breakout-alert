@@ -4,7 +4,7 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b0d12"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="EdgeX分析">
 <link rel="manifest" href="/manifest.webmanifest"><link rel="icon" href="/app-icon.svg" type="image/svg+xml">
-<title>EdgeX 分析ターミナル v8.1</title>
+<title>EdgeX 分析ターミナル v8.2</title>
 <style>
 :root{color-scheme:dark;--bg:#0b0d12;--panel:#131720;--muted:#8d96a8;--line:#252c38;--text:#f3f5f8;--good:#4ade80;--warn:#facc15;--bad:#fb7185;--accent:#7dd3fc}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif}main{max-width:1260px;margin:auto;padding:26px 16px 60px}h1{margin:0 0 5px;font-size:28px}h2{font-size:20px}.sub,.status,label,.k{color:var(--muted)}.tabs,.row,.filters{display:flex;gap:9px;flex-wrap:wrap}.tabs{margin:20px 0}.tab,.primary,.ghost{border-radius:9px;padding:10px 13px;cursor:pointer;font:inherit}.tab,.ghost{border:1px solid var(--line);background:#0f131b;color:var(--text)}.tab.active{border-color:var(--accent);color:var(--accent)}.primary{border:0;background:#e6f6ff;color:#071018;font-weight:700}.panel{display:none;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:17px}.panel.active{display:block}.field{display:flex;flex-direction:column;gap:5px;min-width:130px;flex:1}.field.small{max-width:170px}input,select{background:#0c1017;color:var(--text);border:1px solid var(--line);border-radius:9px;padding:10px}.status{margin:13px 0}.scroll{overflow:auto}table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}th{color:var(--muted)}.badge{padding:3px 7px;border:1px solid var(--line);border-radius:999px;font-size:11px}.READY{color:var(--good)}.CONFIRMATION_WAIT,.RETEST_WAIT{color:var(--warn)}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:10px;margin-top:12px}.card{background:#0e1219;border:1px solid var(--line);border-radius:10px;padding:12px}.v{font-size:17px;margin-top:4px}.error{color:var(--bad)}.section{border-top:1px solid var(--line);margin-top:17px;padding-top:12px}.star{font-size:18px;cursor:pointer}.muted{color:var(--muted)}.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:9px;margin:12px 0}.check{transform:scale(1.15)}.pill{padding:6px 9px;border:1px solid var(--line);border-radius:999px}.right{margin-left:auto}.good{color:var(--good)}.warn{color:var(--warn)}.bad{color:var(--bad)}.resultTP{color:var(--good);font-weight:700}.resultSL{color:var(--bad);font-weight:700}.resultTP1{color:var(--warn);font-weight:700}.resultAMBIGUOUS{color:#f0abfc;font-weight:700}.analyticsGrid{display:grid;grid-template-columns:1fr;gap:12px;margin-top:14px}@media(min-width:980px){.analyticsGrid{grid-template-columns:1fr 1fr}}.analyticsBox{background:#0e1219;border:1px solid var(--line);border-radius:12px;padding:12px}.metricTable td,.metricTable th{font-size:12px}.lowSample{color:var(--warn)}.enoughSample{color:var(--good)}.chartWrap{margin-top:12px;background:#0e1219;border:1px solid var(--line);border-radius:12px;padding:10px}.chartTitle{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}.chart{width:100%;height:310px;display:block}.actionBox{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:12px 0;padding:12px;border:1px solid var(--line);border-radius:10px;background:#0e1219}.actionMain{font-size:18px;font-weight:700}.legend{display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--muted)}.legend span:before{content:"";display:inline-block;width:10px;height:3px;margin-right:5px;vertical-align:middle;background:currentColor}.chartGrid{display:grid;grid-template-columns:1fr;gap:12px}@media(min-width:980px){.chartGrid{grid-template-columns:1fr 1fr}}
@@ -39,7 +39,7 @@ button{-webkit-tap-highlight-color:transparent}
 </style>
 </head>
 <body><main>
-<h1>EdgeX 分析ターミナル <span class="muted">v8.1</span></h1>
+<h1>EdgeX 分析ターミナル <span class="muted">v8.2</span></h1>
 <div class="sub">通知Botとは完全に分離した分析専用ツールです。EdgeXの公開データだけを使います。</div>
 <div class="tabs">
 <button class="tab active" data-tab="dashboard">今日の状況</button>
@@ -67,6 +67,15 @@ button{-webkit-tap-highlight-color:transparent}
 <div class="analyticsBox"><b>注目候補</b><div id="dashTop" class="status"></div></div>
 <div class="analyticsBox"><b>データ状態</b><div id="dashHealth" class="status"></div></div>
 <div class="analyticsBox"><b>通知状態</b><div id="pushStatus" class="status">確認中…</div><div id="pushGuide" class="sub" style="margin-top:8px"></div></div>
+<div class="analyticsBox"><b>通知センター</b>
+<div class="row" style="margin-top:8px">
+<label class="pill"><input id="pushCandidatePref" type="checkbox"> 候補変化</label>
+<label class="pill"><input id="pushDailyPref" type="checkbox"> 毎朝サマリー</label>
+</div>
+<div class="row" style="margin-top:8px"><button class="ghost" id="pushTest">テスト通知</button><button class="ghost" id="refreshPushEvents">履歴更新</button></div>
+<div id="pushPrefStatus" class="sub" style="margin-top:8px"></div>
+<div id="pushEvents" class="alertList"><span class="muted">配信履歴を読み込みます</span></div>
+</div>
 </div>
 <div class="section"><h2>市場の推移</h2><div class="chartWrap"><div class="chartTitle"><b>エントリー候補 / 直前候補 / 平均スコア</b><span class="muted">直近48時間</span></div><canvas id="marketHistoryChart" class="chart"></canvas></div></div>
 <div class="section"><h2>戦略の改善候補</h2><div class="sub">検証記録の実績から改善候補を抽出します。戦略条件は自動変更しません。</div><div id="strategyHypotheses" class="status"></div></div><details class="help"><summary>表示の見方</summary><div><b>エントリー可能</b>＝現在の戦略条件をすべて満たした候補。<br><b>有力な直前候補</b>＝リテストまたは15分足確認待ちで、RRが2以上ある候補。<br><b>RR</b>＝損失1に対して狙える利益の比率です。RR 2なら「1の損失リスクに対して2の利益余地」です。</div></details>
@@ -92,6 +101,7 @@ button{-webkit-tap-highlight-color:transparent}
 <div class="row"><div class="field"><label>銘柄</label><input id="ticker" value="BTCUSDC"></div><button class="primary" id="analyze">分析</button><button class="ghost" id="savePlan">検証記録へ保存</button><button class="ghost" id="toRisk">資金管理へ</button><button class="ghost" id="copyPlan">プランをコピー</button><button class="ghost" id="sharePlan">共有</button></div>
 <div id="analysisStatus" class="status">BTC のような短縮入力でも検索します。</div>
 <div id="actionOut"></div>
+<div id="quickRiskOut"></div>
 <div id="analysisOut"></div>
 <div class="section"><h2>値動き</h2><div class="legend"><span class="good">TP</span><span style="color:#7dd3fc">エントリー / ブレイク</span><span class="bad">SL</span><span style="color:#c4b5fd">EMA20</span><span style="color:#f9a8d4">EMA50</span></div><div class="chartGrid"><div class="chartWrap"><div class="chartTitle"><b>4H</b><span class="muted">大局</span></div><canvas id="chart4h" class="chart"></canvas></div><div class="chartWrap"><div class="chartTitle"><b>15M</b><span class="muted">エントリー</span></div><canvas id="chart15m" class="chart"></canvas></div></div></div>
 </section>
@@ -163,6 +173,29 @@ function renderPushGuide(){
  g.textContent='この端末はバックグラウンド通知に対応しています。';
 }
 async function currentPushSubscription(){if(!("serviceWorker" in navigator)||!("PushManager" in window))return null;try{var reg=await navigator.serviceWorker.ready;return await reg.pushManager.getSubscription()}catch(e){return null}}
+function renderPushEvents(events){
+ var el=document.getElementById("pushEvents");if(!el)return;
+ if(!events||!events.length){el.innerHTML='<span class="muted">まだ配信履歴はありません</span>';return}
+ el.innerHTML=events.slice(0,8).map(function(e){var ok=e.sent>0,label=e.kind==="daily"?"朝サマリー":e.kind==="candidate"?"候補通知":e.kind==="test"?"テスト通知":e.kind;return '<div class="alertItem '+(ok?"ready":"near")+'"><b>'+label+'</b> — '+(ok?"送信成功":"送信なし")+' '+e.sent+'/'+e.attempted+'<div>'+e.title+'</div><div class="when">'+new Date(e.created_ms).toLocaleString("ja-JP")+'</div></div>'}).join("");
+}
+async function loadPushEvents(){try{var j=await jf("/api/push/events?limit=20");renderPushEvents(j.events||[])}catch(e){document.getElementById("pushEvents").innerHTML='<span class="error">'+e.message+'</span>'}}
+async function loadPushPreferences(){
+ var cbox=document.getElementById("pushCandidatePref"),dbox=document.getElementById("pushDailyPref"),st=document.getElementById("pushPrefStatus"),sub=await currentPushSubscription();
+ if(!sub){cbox.checked=false;dbox.checked=false;cbox.disabled=true;dbox.disabled=true;st.textContent="バックグラウンド通知をONにすると設定できます。";return}
+ cbox.disabled=false;dbox.disabled=false;
+ try{var p=await jf("/api/push/preferences?endpoint="+encodeURIComponent(sub.endpoint));cbox.checked=!!p.candidate_alerts;dbox.checked=!!p.daily_summary;st.textContent="この端末の設定を同期済み"+(p.last_success_ms?" / 最終送信 "+new Date(p.last_success_ms).toLocaleString("ja-JP"):"")}catch(e){st.textContent="設定を取得できません: "+e.message}
+}
+async function savePushPreferences(){
+ var sub=await currentPushSubscription();if(!sub)return;
+ var cbox=document.getElementById("pushCandidatePref"),dbox=document.getElementById("pushDailyPref"),st=document.getElementById("pushPrefStatus");
+ try{await jf("/api/push/preferences",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({endpoint:sub.endpoint,candidate_alerts:cbox.checked,daily_summary:dbox.checked})});st.textContent="通知設定を保存しました。"}catch(e){st.textContent="保存できません: "+e.message}
+}
+async function sendPushTest(){
+ var sub=await currentPushSubscription(),st=document.getElementById("pushPrefStatus");if(!sub){st.textContent="先にバックグラウンド通知をONにしてください。";return}
+ st.textContent="テスト通知を送信中…";
+ try{var j=await jf("/api/push/test",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({endpoint:sub.endpoint})});st.innerHTML=j.delivered?'<span class="good">テスト通知を送信しました。</span>':'<span class="warn">サーバー送信に失敗しました。</span>';setTimeout(loadPushEvents,500)}catch(e){st.innerHTML='<span class="error">'+e.message+'</span>'}
+}
+async function loadNotificationCenter(){await Promise.all([loadPushPreferences(),loadPushEvents()])}
 async function syncBackgroundPushButton(){
  var b=document.getElementById("backgroundPush"),s=document.getElementById("pushStatus");if(!b||!s)return;renderPushGuide();var compat=pushCompatibility();
  if(compat.ios&&!compat.standalone){b.textContent="iPhone: ホーム画面追加後にON";s.innerHTML='<span class="warn">Safariの通常タブではバックグラウンドPushを有効化できません。</span>';return}
@@ -172,6 +205,7 @@ async function syncBackgroundPushButton(){
   b.textContent="バックグラウンド通知 "+(on?"ON":"OFF");b.classList.toggle("good",on);
   if(!cfg.enabled){s.innerHTML='<span class="warn">サーバーPushは準備中です。</span>';return}
   s.innerHTML=on?'<span class="good">有効</span> — アプリを閉じていても候補変化と毎朝'+cfg.daily_summary_hour_jst+'時(JST)のサマリーを受信します。':'OFF — ONにすると、候補変化と毎朝'+cfg.daily_summary_hour_jst+'時(JST)のサマリーを受信します。';
+  loadPushPreferences();
  }catch(e){s.innerHTML='<span class="error">通知状態を確認できません: '+e.message+'</span>'}
 }
 async function toggleBackgroundPush(){
@@ -182,13 +216,14 @@ async function toggleBackgroundPush(){
   var reg=await navigator.serviceWorker.ready,existing=await reg.pushManager.getSubscription();
   if(existing){
    await jf("/api/push/unsubscribe",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({endpoint:existing.endpoint})});
-   await existing.unsubscribe();b.textContent="バックグラウンド通知 OFF";b.classList.remove("good");s.textContent="バックグラウンド通知をOFFにしました。";return;
+   await existing.unsubscribe();b.textContent="バックグラウンド通知 OFF";b.classList.remove("good");s.textContent="バックグラウンド通知をOFFにしました。";await loadNotificationCenter();return;
   }
   var permission=Notification.permission;if(permission!=="granted")permission=await Notification.requestPermission();if(permission!=="granted"){alert("通知が許可されていません。ブラウザまたは端末設定から許可してください。");return}
   var cfg=await jf("/api/push/config");if(!cfg.enabled||!cfg.public_key)throw new Error("サーバーPushが未設定です");
   var sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlBase64ToUint8Array(cfg.public_key)});
   var result=await jf("/api/push/subscribe",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({subscription:sub.toJSON(),candidate_alerts:true,daily_summary:true,timezone:"Asia/Tokyo"})});
   b.textContent="バックグラウンド通知 ON";b.classList.add("good");s.innerHTML='<span class="good">有効</span> — 候補変化 + 毎朝'+cfg.daily_summary_hour_jst+'時(JST)。'+(result.test_delivered?"確認通知を送信しました。":"購読を登録しました。");
+  loadNotificationCenter();
  }catch(e){s.innerHTML='<span class="error">有効化できません: '+e.message+'</span>'}
 }
 async function toggleCandidateNotify(){if(!("Notification" in window)){alert("このブラウザは通知に対応していません。");return}if(!candidateNotifyEnabled){var p=Notification.permission;if(p!=="granted")p=await Notification.requestPermission();if(p!=="granted"){alert("通知が許可されていません。ブラウザ設定から許可できます。");return}candidateNotifyEnabled=true;localStorage.setItem("edgexCandidateNotify","true");if(!autoScanTimer){autoScanTimer=setInterval(function(){scan(false)},240000);document.getElementById("autoScan").textContent="自動更新 ON (4分)"}}else{candidateNotifyEnabled=false;localStorage.setItem("edgexCandidateNotify","false")}syncCandidateNotifyButton()}
@@ -308,6 +343,15 @@ function drawChart(id,series,levels,title){
  specs.forEach(function(s){var v=levels&&levels[s[0]];if(v==null)return;var yy=y(v);ctx.strokeStyle=s[1];ctx.setLineDash(s[0]==="support"||s[0]==="resistance"?[3,4]:[7,4]);ctx.beginPath();ctx.moveTo(pad.l,yy);ctx.lineTo(pad.l+pw,yy);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle=s[1];ctx.fillText(s[2]+" "+fmt(v,6),pad.l+pw-2,yy-3)});
  var last=series[series.length-1];ctx.fillStyle="#8d96a8";ctx.fillText(new Date(series[0].time_ms).toLocaleString("ja-JP",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"}),pad.l,h-5);ctx.textAlign="right";ctx.fillText(new Date(last.time_ms).toLocaleString("ja-JP",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"}),pad.l+pw,h-5);ctx.textAlign="left";
 }
+async function renderQuickRisk(r){
+ var out=document.getElementById("quickRiskOut");if(!out)return;out.innerHTML="";
+ var equity=Number(document.getElementById("equity").value)||0,riskPct=Number(document.getElementById("riskPct").value)||0;
+ if(!r||!r.entry_reference||!r.stop_loss||!equity||!riskPct){out.innerHTML='<div class="status">資金管理で「資金」と「1回の許容損失%」を設定すると、ここに注文数量を自動表示します。</div>';return}
+ var p={equity:equity,risk_pct:riskPct,entry:r.entry_reference,stop:r.stop_loss};
+ if(r.take_profit)p.target=r.take_profit;if(r.step_size)p.step_size=r.step_size;if(r.min_order_size)p.min_order_size=r.min_order_size;if(r.max_order_size)p.max_order_size=r.max_order_size;
+ var lev=r.direction==="LONG"?r.max_long_leverage:r.max_short_leverage;if(lev)p.leverage=lev;
+ try{var x=await jf("/api/risk",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(p)});out.innerHTML='<div class="section"><h2>このシナリオの資金計算</h2><div class="grid">'+card("資金",fmt(equity,2)+" USDC")+card("許容損失",fmt(x.risk_budget,2)+" USDC ("+fmt(riskPct,2)+"%)")+card("注文数量",fmt(x.size,8))+card("想定建玉",fmt(x.notional,2)+" USDC")+card("最大損失",fmt(x.max_loss,2)+" USDC")+card("目標利益",x.target_profit==null?"—":fmt(x.target_profit,2)+" USDC")+card("RR",fmt(x.rr,2))+'</div></div>'}catch(e){out.innerHTML='<div class="status error">資金計算: '+e.message+'</div>'}
+}
 async function analyze(){
  var t=document.getElementById("ticker").value.trim(),s=document.getElementById("analysisStatus"),o=document.getElementById("analysisOut"),a=document.getElementById("actionOut");
  s.textContent="分析・チャート取得中…";o.innerHTML="";a.innerHTML="";
@@ -317,7 +361,7 @@ async function analyze(){
   a.innerHTML='<div class="actionBox"><div><div class="k">いまの判断</div><div class="actionMain '+actionClass(r.action)+'">'+actionJa(r.action)+'</div></div><div class="pill">スコア '+fmt(r.score,1)+'/100</div><div class="pill">RR '+fmt(r.rr,2)+'</div><div class="pill">'+directionJa(r.direction)+'</div></div>';
   o.innerHTML='<div class="grid">'+card("現在価格",fmt(r.current_price,8))+card("24時間変化",pct(r.change_24h_pct))+card("4時間足の方向",trendJa(r.trend))+card("データ鮮度",fmt(r.data_age_seconds,0)+"秒前")+card("EMA20 / EMA50",fmt(r.ema20_4h,8)+" / "+fmt(r.ema50_4h,8))+card("ATR 4H / 15M",fmt(r.atr_4h,8)+" / "+fmt(r.atr_15m,8))+card("出来高比",fmt(r.volume_ratio,2)+"倍")+card("総合スコア",fmt(r.score,1))+'</div><div class="section"><h2>スコア内訳</h2><div class="grid">'+card("出来高",fmt(b.volume,1)+" /10")+card("トレンド",fmt(b.trend,1)+" /20")+card("ブレイク",fmt(b.breakout,1)+" /20")+card("リテスト",fmt(b.retest,1)+" /20")+card("15分足確認",fmt(b.confirmation,1)+" /15")+card("RR",fmt(b.rr,1)+" /15")+'</div></div><div class="section"><h2>売買シナリオ</h2><div class="grid">'+card("ブレイク基準",fmt(r.breakout_level,8))+card("エントリー目安",fmt(r.entry_reference,8))+card("損切り SL",fmt(r.stop_loss,8))+card("第1利確 TP1 (2R)",fmt(r.tp1_2r,8))+card("最終利確 TP",fmt(r.take_profit,8))+card("RR",fmt(r.rr,2))+card("4H サポート",fmt(r.support_4h,8))+card("4H レジスタンス",fmt(r.resistance_4h,8))+'</div></div><div class="section"><h2>EdgeX 注文条件</h2><div class="grid">'+card("注文刻み",fmt(r.step_size,8))+card("最小注文量",fmt(r.min_order_size,8))+card("最大注文量",fmt(r.max_order_size,8))+card("最大ロング倍率",fmt(r.max_long_leverage,2))+card("最大ショート倍率",fmt(r.max_short_leverage,2))+'</div></div>';
   if(r.entry_reference&&r.stop_loss){document.getElementById("entry").value=r.entry_reference;document.getElementById("stop").value=r.stop_loss;document.getElementById("target").value=r.take_profit||"";document.getElementById("step").value=r.step_size||"";document.getElementById("minOrder").value=r.min_order_size||"";document.getElementById("maxOrder").value=r.max_order_size||"";var lev=r.direction==="LONG"?r.max_long_leverage:r.max_short_leverage;if(lev)document.getElementById("lev").value=lev}
-  updateUrl("analysis",r.ticker);requestAnimationFrame(function(){drawChart("chart4h",pack.series.HOUR_4,pack.levels,"4H");drawChart("chart15m",pack.series.MINUTE_15,pack.levels,"15M")});
+  renderQuickRisk(r);updateUrl("analysis",r.ticker);requestAnimationFrame(function(){drawChart("chart4h",pack.series.HOUR_4,pack.levels,"4H");drawChart("chart15m",pack.series.MINUTE_15,pack.levels,"15M")});
  }catch(e){s.innerHTML='<span class="error">'+e.message+'</span>'}
 }
 function planText(r){return [r.ticker+" — "+actionJa(r.action),"方向: "+directionJa(r.direction),"状態: "+stageJa(r.stage),"エントリー: "+fmt(r.entry_reference,8),"損切り SL: "+fmt(r.stop_loss,8),"第1利確 TP1: "+fmt(r.tp1_2r,8),"最終利確 TP: "+fmt(r.take_profit,8),"RR: "+fmt(r.rr,2),"理由: "+reasonJa(r.reason)].join("\n")}
@@ -418,11 +462,15 @@ document.getElementById("exportJournal").onclick=function(){var a=document.creat
 document.getElementById("importJournal").onchange=function(e){var file=e.target.files&&e.target.files[0];if(!file)return;var reader=new FileReader();reader.onload=function(){try{var j=JSON.parse(reader.result),records=Array.isArray(j)?j:j.records;if(!Array.isArray(records))throw new Error("records not found");journal=records;saveJournalStore();renderJournal();document.getElementById("journalStatus").textContent="JSONを読み込みました。"}catch(err){document.getElementById("journalStatus").innerHTML='<span class="error">'+err.message+'</span>'}};reader.readAsText(file)};
 function loadRiskProfile(){try{var p=JSON.parse(localStorage.getItem("edgexRiskProfile")||"{}");if(p.equity)document.getElementById("equity").value=p.equity;if(p.riskPct)document.getElementById("riskPct").value=p.riskPct}catch(e){}}
 function saveRiskProfile(){localStorage.setItem("edgexRiskProfile",JSON.stringify({equity:Number(document.getElementById("equity").value)||0,riskPct:Number(document.getElementById("riskPct").value)||0}))}
-document.getElementById("equity").addEventListener("change",saveRiskProfile);document.getElementById("riskPct").addEventListener("change",saveRiskProfile);
+document.getElementById("equity").addEventListener("change",function(){saveRiskProfile();if(lastAnalysis)renderQuickRisk(lastAnalysis)});document.getElementById("riskPct").addEventListener("change",function(){saveRiskProfile();if(lastAnalysis)renderQuickRisk(lastAnalysis)});
 function applyDeepLink(){var u=new URL(location.href),tabName=u.searchParams.get("tab"),ticker=u.searchParams.get("ticker");if(ticker)document.getElementById("ticker").value=ticker.toUpperCase();if(tabName&&document.getElementById(tabName))tab(tabName);if((tabName==="analysis"||ticker)&&ticker)analyze()}
-loadRiskProfile();renderQuickAccess();renderCandidateAlerts();syncCandidateNotifyButton();renderPushGuide();syncBackgroundPushButton();updateCandleCountdown();setInterval(updateCandleCountdown,1000);
+loadRiskProfile();renderQuickAccess();renderCandidateAlerts();syncCandidateNotifyButton();renderPushGuide();syncBackgroundPushButton();loadNotificationCenter();updateCandleCountdown();setInterval(updateCandleCountdown,1000);
 syncAutoJournalButton();renderJournal();renderDashboard();
 window.addEventListener("beforeinstallprompt",function(e){e.preventDefault();deferredInstallPrompt=e;document.getElementById("installApp").classList.add("good")});
+document.getElementById("pushCandidatePref").onchange=savePushPreferences;
+document.getElementById("pushDailyPref").onchange=savePushPreferences;
+document.getElementById("pushTest").onclick=sendPushTest;
+document.getElementById("refreshPushEvents").onclick=loadPushEvents;
 document.getElementById("backgroundPush").onclick=toggleBackgroundPush;
 document.getElementById("candidateNotify").onclick=toggleCandidateNotify;
 document.getElementById("installApp").onclick=async function(){if(deferredInstallPrompt){deferredInstallPrompt.prompt();await deferredInstallPrompt.userChoice;deferredInstallPrompt=null;this.textContent="ホーム画面追加済み/確認"}else{var ios=/iphone|ipad|ipod/i.test(navigator.userAgent);alert(ios?"Safariで開く → 共有 →「ホーム画面に追加」→「ウェブアプリとして開く」をON → 追加。ホーム画面のEdgeX分析アイコンから起動してください。":"ブラウザのメニューから「アプリをインストール」または「ホーム画面に追加」を選んでください。")}};
