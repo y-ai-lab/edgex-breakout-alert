@@ -2474,13 +2474,17 @@ def _sort_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def _confirmation_failure_type(row: dict[str, Any]) -> str | None:
     if row.get("stage") != "CONFIRMATION_WAIT":
         return None
-    color_ok = row.get("confirmation_color_ok")
-    level_ok = row.get("confirmation_level_ok")
-    if color_ok is True and level_ok is False:
+    color_raw = row.get("confirmation_color_ok")
+    level_raw = row.get("confirmation_level_ok")
+    if color_raw is None or level_raw is None:
+        return "UNKNOWN"
+    color_ok = bool(color_raw)
+    level_ok = bool(level_raw)
+    if color_ok and not level_ok:
         return "LEVEL_ONLY"
-    if color_ok is False and level_ok is True:
+    if not color_ok and level_ok:
         return "COLOR_ONLY"
-    if color_ok is False and level_ok is False:
+    if not color_ok and not level_ok:
         return "BOTH"
     return "UNKNOWN"
 
