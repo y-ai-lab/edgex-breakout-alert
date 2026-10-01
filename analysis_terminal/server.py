@@ -2586,20 +2586,49 @@ async def _process_priority_changes(
     ranking = _priority_ranking(rows, limit=20)
     previous = _load_previous_priority_snapshot(bucket_ms)
     previous_map = {
-        str(item.get("ticker") or ""): int(item.get("rank") or 0)
+        str(item.get("ticker") or ""): item
         for item in previous
-        if item.get("ticker") and item.get("rank")
+        if item.get("ticker")
     }
 
+    enriched_ranking: list[dict[str, Any]] = []
+    for current_rank, item in enumerate(ranking, start=1):
+        ticker = str(item.get("ticker") or "")
+        previous_item = previous_map.get(ticker) or {}
+        previous_rank = (
+            int(previous_item.get("rank"))
+            if previous_item.get("rank") is not None
+            else None
+        )
+        approach = _approach_score(
+            item,
+            current_rank=current_rank,
+            previous_rank=previous_rank,
+        )
+        enriched = dict(item)
+        enriched.update(approach)
+        enriched_ranking.append(enriched)
+
     if not previous:
-        _save_priority_snapshot(bucket_ms, ranking)
+        _save_priority_snapshot(bucket_ms, enriched_ranking)
         return
 
-    for current_rank, item in enumerate(ranking, start=1):
+    for current_rank, item in enumerate(enriched_ranking, start=1):
         ticker = str(item.get("ticker") or "")
         stage = str(item.get("stage") or "")
         priority_score = float(item.get("priority_score") or 0)
+        approach_score = float(item.get("approach_score") or 0)
         rr = item.get("rr")
+        previous_item = previous_map.get(ticker) or {}
+        previous_rank = (
+            int(previous_item.get("rank"))
+            if previous_item.get("rank") is not None
+            else None
+        )
+        previous_approach = previous_item.get("approach_score")
+        if previous_approach is not None:
+            previous_approach = float(previous_approach)
+
         actionable = stage in {
             "READY",
             "CONFIRMATION_WAIT",
@@ -2612,69 +2641,105 @@ async def _process_priority_changes(
                 and float(rr) >= float(SETTINGS.min_rr)
             )
         )
-        if not actionable or not rr_ok or priority_score < 65.0:
-            continue
 
-        previous_rank = previous_map.get(ticker)
         event_type: str | None = None
-        if current_rank <= 3 and (
-            previous_rank is None
-            or previous_rank > 3
-        ):
-            event_type = "TOP3_ENTRY"
-        elif (
-            previous_rank is not None
-            and previous_rank - current_rank >= 5
-            and current_rank <= 10
-        ):
-            event_type = "RANK_SURGE"
+        if actionable and rr_ok and priority_score >= 65.0:
+            if current_rank <= 3 and (
+                previous_rank is None
+                or previous_rank > 3
+            ):
+                event_type = "TOP3_ENTRY"
+            elif (
+                previous_rank is not None
+                and previous_rank - current_rank >= 5
+                and current_rank <= 10
+            ):
+                event_type = "RANK_SURGE"
 
-        if event_type is None:
-            continue
-
-        _log_priority_event(
-            bucket_ms=bucket_ms,
-            ticker=ticker,
-            event_type=event_type,
-            previous_rank=previous_rank,
-            current_rank=current_rank,
-            priority_score=priority_score,
-            stage=stage,
-            direction=item.get("direction"),
-            rr=float(rr) if rr is not None else None,
-        )
-
-        if event_type == "TOP3_ENTRY":
-            movement = (
-                f"{previous_rank}位→{current_rank}位"
-                if previous_rank is not None
-                else f"新規TOP{current_rank}"
+        if event_type is not None:
+            _log_priority_event(
+                bucket_ms=bucket_ms,
+                ticker=ticker,
+                event_type=event_type,
+                previous_rank=previous_rank,
+                current_rank=current_rank,
+                priority_score=priority_score,
+                stage=stage,
+                direction=item.get("direction"),
+                rr=float(rr) if rr is not None else None,
             )
-            title = "EdgeX TOP3入り"
-        else:
-            movement = f"{previous_rank}位→{current_rank}位"
-            title = "EdgeX ランキング急上昇"
 
-        await _broadcast_push(
-            {
-                "title": title,
-                "body": (
-                    f"{ticker} {movement}\n"
-                    f"{_priority_event_stage_ja(stage)} / "
-                    f"優先度 {priority_score:.1f}点"
-                    + (
-                        f" / RR {float(rr):.2f}"
-                        if rr is not None
-                        else ""
-                    )
-                ),
-                "url": f"/?tab=analysis&ticker={ticker}",
-                "tag": f"edgex-rank-{ticker}-{bucket_ms}",
-            },
-            kind="candidate",
+            if event_type == "TOP3_ENTRY":
+                movement = (
+                    f"{previous_rank}位→{current_rank}位"
+                    if previous_rank is not None
+                    else f"新規TOP{current_rank}"
+                )
+                title = "EdgeX TOP3入り"
+            else:
+                movement = f"{previous_rank}位→{current_rank}位"
+                title = "EdgeX ランキング急上昇"
+
+            await _broadcast_push(
+                {
+                    "title": title,
+                    "body": (
+                        f"{ticker} {movement}\n"
+                        f"{_priority_event_stage_ja(stage)} / "
+                        f"優先度 {priority_score:.1f}点"
+                        + (
+                            f" / RR {float(rr):.2f}"
+                            if rr is not None
+                            else ""
+                        )
+                    ),
+                    "url": f"/?tab=analysis&ticker={ticker}",
+                    "tag": f"edgex-rank-{ticker}-{bucket_ms}",
+                },
+                kind="candidate",
+            )
+
+        approach_cross = (
+            actionable
+            and rr_ok
+            and current_rank > 3
+            and current_rank <= 15
+            and previous_approach is not None
+            and previous_approach < 70.0
+            and approach_score >= 70.0
         )
+        if approach_cross:
+            _log_approach_event(
+                bucket_ms=bucket_ms,
+                ticker=ticker,
+                previous_score=previous_approach,
+                current_score=approach_score,
+                current_rank=current_rank,
+                stage=stage,
+                direction=item.get("direction"),
+                rr=float(rr) if rr is not None else None,
+            )
+            await _broadcast_push(
+                {
+                    "title": "EdgeX 急接近候補",
+                    "body": (
+                        f"{ticker} 急接近度 "
+                        f"{previous_approach:.1f}→{approach_score:.1f}点\n"
+                        f"現在{current_rank}位 / "
+                        f"{_priority_event_stage_ja(stage)}"
+                        + (
+                            f" / RR {float(rr):.2f}"
+                            if rr is not None
+                            else ""
+                        )
+                    ),
+                    "url": f"/?tab=analysis&ticker={ticker}",
+                    "tag": f"edgex-approach-{ticker}-{bucket_ms}",
+                },
+                kind="candidate",
+            )
 
-    _save_priority_snapshot(bucket_ms, ranking)
+    _save_priority_snapshot(bucket_ms, enriched_ranking)
 
 
 def _priority_rank_changes(
