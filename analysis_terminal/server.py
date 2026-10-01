@@ -1839,6 +1839,21 @@ async def push_unsubscribe_api(req: PushUnsubscribeRequest):
     }
 
 
+@app.get("/api/push/preferences")
+async def push_preferences_get_api(
+    endpoint: str = Query(min_length=10, max_length=4096),
+):
+    row = _get_push_subscription(endpoint)
+    if row is None:
+        raise HTTPException(404, "Push subscription not found")
+    return {
+        "candidate_alerts": bool(row["candidate_alerts"]),
+        "daily_summary": bool(row["daily_summary"]),
+        "timezone": str(row["timezone"]),
+        "last_success_ms": row["last_success_ms"],
+    }
+
+
 @app.post("/api/push/preferences")
 async def push_preferences_api(req: PushPreferenceRequest):
     if not _update_push_preferences(req):
