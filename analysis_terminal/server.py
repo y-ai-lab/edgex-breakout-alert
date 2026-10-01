@@ -216,6 +216,23 @@ def _init_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS approach_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                bucket_ms INTEGER NOT NULL,
+                ticker TEXT NOT NULL,
+                previous_score REAL,
+                current_score REAL NOT NULL,
+                current_rank INTEGER,
+                stage TEXT,
+                direction TEXT,
+                rr REAL,
+                created_ms INTEGER NOT NULL,
+                UNIQUE(bucket_ms, ticker)
+            )
+            """
+        )
         conn.commit()
 
     if VAPID_PRIVATE_KEY:
@@ -2305,6 +2322,7 @@ def _save_priority_snapshot(
             "ticker": item.get("ticker"),
             "rank": index + 1,
             "priority_score": item.get("priority_score"),
+            "approach_score": item.get("approach_score"),
             "stage": item.get("stage"),
             "direction": item.get("direction"),
             "rr": item.get("rr"),
