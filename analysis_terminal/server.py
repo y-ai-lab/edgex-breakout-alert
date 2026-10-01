@@ -129,6 +129,16 @@ def _init_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS candidate_event_results (
+                event_id INTEGER PRIMARY KEY,
+                payload TEXT NOT NULL,
+                updated_ms INTEGER NOT NULL,
+                FOREIGN KEY(event_id) REFERENCES candidate_events(id)
+            )
+            """
+        )
         conn.commit()
 
     if VAPID_PRIVATE_KEY:
@@ -495,6 +505,55 @@ def _load_candidate_events(limit: int = 100) -> list[dict[str, Any]]:
             (max(1, min(limit, 500)),),
         ).fetchall()
     return [dict(row) for row in rows]
+
+
+def _upsert_candidate_event_result(
+    event_id: int,
+    result: dict[str, Any],
+) -> None:
+    now_ms = int(time.time() * 1000)
+    with _db_connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO candidate_event_results(event_id, payload, updated_ms)
+            VALUES (?, ?, ?)
+            ON CONFLICT(event_id) DO UPDATE SET
+                payload=excluded.payload,
+                updated_ms=excluded.updated_ms
+            """,
+            (
+                int(event_id),
+                json.dumps(result, separators=(",", ":")),
+                now_ms,
+            ),
+        )
+        conn.commit()
+
+
+def _load_candidate_events_with_results(
+    limit: int = 500,
+) -> list[dict[str, Any]]:
+    with _db_connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT
+                e.id, e.ticker, e.kind, e.label, e.stage, e.direction,
+                e.score, e.rr, e.entry, e.stop, e.target, e.created_ms,
+                r.payload AS result_payload, r.updated_ms AS result_updated_ms
+            FROM candidate_events e
+            LEFT JOIN candidate_event_results r ON r.event_id = e.id
+            ORDER BY e.id DESC
+            LIMIT ?
+            """,
+            (max(1, min(limit, 1000)),),
+        ).fetchall()
+    items: list[dict[str, Any]] = []
+    for row in rows:
+        item = dict(row)
+        raw = item.pop("result_payload", None)
+        item["result"] = json.loads(raw) if raw else None
+        items.append(item)
+    return items
 
 
 def _push_row_summary(row: dict[str, Any]) -> str:
