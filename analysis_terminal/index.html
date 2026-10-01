@@ -100,7 +100,7 @@ async function hydrateServerState(){
  try{
   var pair=await Promise.all([jf("/api/server-history?hours=720"),jf("/api/server-paper-signals?limit=1000")]),history=pair[0].snapshots||[],signals=pair[1].signals||[];
   var byTime={};marketHistory.concat(history).forEach(x=>{if(x&&x.time_ms!=null)byTime[x.time_ms]=x});marketHistory=Object.values(byTime).sort((a,b)=>a.time_ms-b.time_ms);var cutoff=Date.now()-30*24*60*60*1000;marketHistory=marketHistory.filter(x=>x.time_ms>=cutoff);saveMarketHistory();
-  signals.forEach(function(p){if(!p||!p.ticker)return;var exists=journal.some(x=>x.ticker===p.ticker&&x.side===p.side&&Number(x.source_candle_ms||0)===Number(p.source_candle_ms||0));if(!exists)journal.push(p)});
+  signals.forEach(function(p){if(!p||!p.ticker)return;var idx=journal.findIndex(x=>x.ticker===p.ticker&&x.side===p.side&&Number(x.source_candle_ms||0)===Number(p.source_candle_ms||0));if(idx<0){journal.push(p)}else{var local=journal[idx],serverNewer=(Number(p.updated_ms)||0)>=(Number(local.updated_ms)||0);if(serverNewer||p.result){journal[idx]=Object.assign({},local,p,{result:p.result||local.result})}}});
   saveJournalStore();serverSync={history:history.length,paper:signals.length,ok:true};renderJournal();renderDashboard();
  }catch(e){serverSync={history:0,paper:0,ok:false,error:e.message};renderDashboard()}
 }
