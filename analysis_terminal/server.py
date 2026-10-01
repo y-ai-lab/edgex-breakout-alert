@@ -101,6 +101,25 @@ def _insert_paper_signal(signal: dict[str, Any]) -> bool:
         return cur.rowcount > 0
 
 
+def _update_paper_signal(signal: dict[str, Any]) -> None:
+    now_ms = int(time.time() * 1000)
+    signal["updated_ms"] = now_ms
+    with _db_connect() as conn:
+        conn.execute(
+            """
+            UPDATE paper_signals
+            SET payload = ?, updated_ms = ?
+            WHERE signal_key = ?
+            """,
+            (
+                json.dumps(signal, separators=(",", ":")),
+                now_ms,
+                str(signal["key"]),
+            ),
+        )
+        conn.commit()
+
+
 def _load_market_history(hours: int = 48) -> list[dict[str, Any]]:
     cutoff = int(time.time() * 1000) - max(1, hours) * 60 * 60 * 1000
     with _db_connect() as conn:
