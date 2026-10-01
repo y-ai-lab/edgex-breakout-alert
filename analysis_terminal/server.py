@@ -1045,6 +1045,146 @@ async def _refresh_candidate_event_results(
         _upsert_candidate_event_result(int(event["id"]), result)
 
 
+def _opportunity_metrics(items: list[dict[str, Any]]) -> dict[str, Any]:
+    usable = [
+        item
+        for item in items
+        if str((item.get("result") or {}).get("status") or "")
+        in {"TP", "SL"}
+    ]
+    tp = sum(
+        1
+        for item in usable
+        if (item.get("result") or {}).get("status") == "TP"
+    )
+    sl = sum(
+        1
+        for item in usable
+        if (item.get("result") or {}).get("status") == "SL"
+    )
+    rs = [
+        float((item.get("result") or {}).get("final_r"))
+        for item in usable
+        if (item.get("result") or {}).get("final_r") is not None
+    ]
+    mfes = [
+        float((item.get("result") or {}).get("mfe_r") or 0)
+        for item in items
+        if item.get("result")
+    ]
+    maes = [
+        float((item.get("result") or {}).get("mae_r") or 0)
+        for item in items
+        if item.get("result")
+    ]
+    return {
+        "tracked": len(items),
+        "resolved": len(usable),
+        "tp": tp,
+        "sl": sl,
+        "win_rate": round(tp / len(usable) * 100.0, 1) if usable else None,
+        "avg_r": round(mean(rs), 3) if rs else None,
+        "avg_mfe_r": round(mean(mfes), 3) if mfes else None,
+        "avg_mae_r": round(mean(maes), 3) if maes else None,
+    }
+
+
+def _opportunity_analysis(limit: int = 500) -> dict[str, Any]:
+    events = _load_candidate_events_with_results(limit=limit)
+    ordered = sorted(events, key=lambda item: int(item["created_ms"]))
+
+    ready_by_ticker: dict[str, list[int]] = {}
+    for event in ordered:
+        if event.get("kind") == "READY":
+            ready_by_ticker.setdefault(str(event["ticker"]), []).append(
+                int(event["created_ms"])
+            )
+
+    def later_ready_before(
+        event: dict[str, Any],
+        end_ms: int | None,
+    ) -> bool:
+        ticker = str(event["ticker"])
+        start_ms = int(event["created_ms"])
+        horizon = (
+            int(end_ms)
+            if end_ms
+            else start_ms + 48 * 60 * 60 * 1000
+        )
+        return any(
+            start_ms < ready_ms <= horizon
+            for ready_ms in ready_by_ticker.get(ticker, [])
+        )
+
+    trackable = [
+        event
+        for event in ordered
+        if event.get("entry") is not None
+        and event.get("stop") is not None
+        and event.get("target") is not None
+        and event.get("result")
+    ]
+    near = [event for event in trackable if event.get("kind") == "NEAR"]
+    ready = [event for event in trackable if event.get("kind") == "READY"]
+
+    near_tp_without_ready = 0
+    near_sl_without_ready = 0
+    near_became_ready = 0
+    latest: list[dict[str, Any]] = []
+
+    for event in reversed(ordered):
+        result = event.get("result") or {}
+        if not result:
+            continue
+        end_ms = result.get("outcome_time_ms") or result.get("history_end_ms")
+        became_ready = (
+            event.get("kind") == "NEAR"
+            and later_ready_before(event, end_ms)
+        )
+        if event.get("kind") == "NEAR" and became_ready:
+            near_became_ready += 1
+
+        status = str(result.get("status") or "OPEN")
+        if event.get("kind") == "NEAR" and not became_ready:
+            if status == "TP":
+                near_tp_without_ready += 1
+            elif status == "SL":
+                near_sl_without_ready += 1
+
+        latest.append({
+            "id": event["id"],
+            "ticker": event["ticker"],
+            "kind": event["kind"],
+            "label": event["label"],
+            "stage": event["stage"],
+            "direction": event["direction"],
+            "score": event["score"],
+            "rr": event["rr"],
+            "entry": event["entry"],
+            "stop": event["stop"],
+            "target": event["target"],
+            "created_ms": event["created_ms"],
+            "became_ready": became_ready,
+            "result": result,
+        })
+        if len(latest) >= 50:
+            break
+
+    return {
+        "total_events": len(events),
+        "trackable": len(trackable),
+        "near": _opportunity_metrics(near),
+        "ready": _opportunity_metrics(ready),
+        "confirmation_effect": {
+            "near_tp_without_ready": near_tp_without_ready,
+            "near_sl_without_ready": near_sl_without_ready,
+            "near_became_ready": near_became_ready,
+            "sample_size": len(near),
+        },
+        "latest": latest,
+    }
+
+
 def _score_breakdown(
     *,
     volume_ratio: float,
