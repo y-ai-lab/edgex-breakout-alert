@@ -3296,10 +3296,12 @@ async def screener_api(
     current_bucket = (
         now_ms // scanner.INTERVAL_MS[SETTINGS.entry_interval]
     ) * scanner.INTERVAL_MS[SETTINGS.entry_interval]
-    priority_ranking = _priority_rank_changes(
-        _priority_ranking(all_rows, limit=10),
+    priority_ranking_full = _priority_rank_changes(
+        _priority_ranking(all_rows, limit=20),
         current_bucket,
     )
+    priority_ranking = priority_ranking_full[:10]
+    early_watch = _early_watchlist(priority_ranking_full, limit=8)
 
     return {
         "universe": len(contracts),
@@ -3315,6 +3317,7 @@ async def screener_api(
         "market_regime": _market_regime(all_rows),
         "daily_picks": priority_ranking[:3],
         "priority_ranking": priority_ranking,
+        "early_watch": early_watch,
         "ready_candidates": ready_candidates,
         "qualified_near_candidates": qualified_near_candidates,
         "watch_status": watch_status,
