@@ -4,7 +4,7 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b0d12"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="EdgeX分析">
 <link rel="manifest" href="/manifest.webmanifest"><link rel="icon" href="/app-icon.svg" type="image/svg+xml">
-<title>EdgeX 分析ターミナル v15</title>
+<title>EdgeX 分析ターミナル v16</title>
 <style>
 :root{color-scheme:dark;--bg:#0b0d12;--panel:#131720;--muted:#8d96a8;--line:#252c38;--text:#f3f5f8;--good:#4ade80;--warn:#facc15;--bad:#fb7185;--accent:#7dd3fc}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif}main{max-width:1260px;margin:auto;padding:26px 16px 60px}h1{margin:0 0 5px;font-size:28px}h2{font-size:20px}.sub,.status,label,.k{color:var(--muted)}.tabs,.row,.filters{display:flex;gap:9px;flex-wrap:wrap}.tabs{margin:20px 0}.tab,.primary,.ghost{border-radius:9px;padding:10px 13px;cursor:pointer;font:inherit}.tab,.ghost{border:1px solid var(--line);background:#0f131b;color:var(--text)}.tab.active{border-color:var(--accent);color:var(--accent)}.primary{border:0;background:#e6f6ff;color:#071018;font-weight:700}.panel{display:none;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:17px}.panel.active{display:block}.field{display:flex;flex-direction:column;gap:5px;min-width:130px;flex:1}.field.small{max-width:170px}input,select{background:#0c1017;color:var(--text);border:1px solid var(--line);border-radius:9px;padding:10px}.status{margin:13px 0}.scroll{overflow:auto}table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}th{color:var(--muted)}.badge{padding:3px 7px;border:1px solid var(--line);border-radius:999px;font-size:11px}.READY{color:var(--good)}.CONFIRMATION_WAIT,.RETEST_WAIT{color:var(--warn)}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:10px;margin-top:12px}.card{background:#0e1219;border:1px solid var(--line);border-radius:10px;padding:12px}.v{font-size:17px;margin-top:4px}.error{color:var(--bad)}.section{border-top:1px solid var(--line);margin-top:17px;padding-top:12px}.star{font-size:18px;cursor:pointer}.muted{color:var(--muted)}.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:9px;margin:12px 0}.check{transform:scale(1.15)}.pill{padding:6px 9px;border:1px solid var(--line);border-radius:999px}.right{margin-left:auto}.good{color:var(--good)}.warn{color:var(--warn)}.bad{color:var(--bad)}.resultTP{color:var(--good);font-weight:700}.resultSL{color:var(--bad);font-weight:700}.resultTP1{color:var(--warn);font-weight:700}.resultAMBIGUOUS{color:#f0abfc;font-weight:700}.analyticsGrid{display:grid;grid-template-columns:1fr;gap:12px;margin-top:14px}@media(min-width:980px){.analyticsGrid{grid-template-columns:1fr 1fr}}.analyticsBox{background:#0e1219;border:1px solid var(--line);border-radius:12px;padding:12px}.metricTable td,.metricTable th{font-size:12px}.lowSample{color:var(--warn)}.enoughSample{color:var(--good)}.chartWrap{margin-top:12px;background:#0e1219;border:1px solid var(--line);border-radius:12px;padding:10px}.chartTitle{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}.chart{width:100%;height:310px;display:block}.actionBox{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:12px 0;padding:12px;border:1px solid var(--line);border-radius:10px;background:#0e1219}.actionMain{font-size:18px;font-weight:700}.legend{display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--muted)}.legend span:before{content:"";display:inline-block;width:10px;height:3px;margin-right:5px;vertical-align:middle;background:currentColor}.chartGrid{display:grid;grid-template-columns:1fr;gap:12px}@media(min-width:980px){.chartGrid{grid-template-columns:1fr 1fr}}
@@ -36,88 +36,207 @@ button{-webkit-tap-highlight-color:transparent}
  .row>.primary,.row>.ghost{flex:1 1 auto}
  .chart{height:220px}
 }
+
+/* v16 — workflow-first UI */
+:root{--panel2:#0f141d;--soft:#171d28;--accentSoft:rgba(125,211,252,.10)}
+.appHeader{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;margin:2px 0 14px}
+.appHeader h1{margin:2px 0 4px;letter-spacing:-.03em}.eyebrow{font-size:10px;font-weight:800;letter-spacing:.16em;color:var(--accent)}
+.versionBadge{font-size:12px;vertical-align:middle;border:1px solid var(--line);border-radius:999px;padding:4px 7px;color:var(--muted);letter-spacing:0}
+.headerChips{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}.statusChip{font-size:11px;color:var(--muted);border:1px solid var(--line);background:var(--panel2);border-radius:999px;padding:6px 9px}
+.tabs{border-bottom:1px solid var(--line);padding-bottom:9px}.tab{display:flex;align-items:center;gap:7px}.navIcon{font-size:14px;line-height:1}
+.dashboardHero{display:flex;align-items:end;justify-content:space-between;gap:14px;margin-bottom:8px}.dashboardHero h2{font-size:26px;margin:2px 0 4px;letter-spacing:-.025em}.heroActions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.executiveSummary{grid-template-columns:repeat(4,minmax(0,1fr));margin:12px 0 14px}.executiveSummary .card{background:linear-gradient(180deg,#111722,#0e131b)}
+.decisionGrid{display:grid;grid-template-columns:1.15fr .85fr 1fr;gap:10px}.keyBox{min-height:116px}.boxLabel{font-weight:800;font-size:13px;margin-bottom:8px}.compactStatus{margin:6px 0}.compactButton{min-height:38px;padding:7px 10px}.compactHelp{margin-top:7px}
+.focusSection{margin-top:14px;background:linear-gradient(180deg,#121924,#0f141d);border:1px solid var(--line);border-radius:14px;padding:14px}.sectionHeading{display:flex;justify-content:space-between;align-items:end;gap:12px;margin-bottom:8px}.sectionHeading h3{font-size:18px;margin:2px 0 0}
+.focusGrid,.quickAccessGrid,.drawerGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.quickAccessGrid .analyticsBox{min-height:80px}
+.dashboardDrawer{margin-top:12px;border:1px solid var(--line);border-radius:13px;background:var(--panel2);overflow:hidden}.dashboardDrawer>summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px;font-weight:800}.dashboardDrawer>summary::-webkit-details-marker{display:none}.dashboardDrawer>summary:after{content:"＋";color:var(--muted);font-size:18px}.dashboardDrawer[open]>summary:after{content:"−"}.dashboardDrawer[open]>summary{border-bottom:1px solid var(--line)}.drawerHint{font-size:11px;font-weight:500;color:var(--muted);margin-left:auto}.drawerBody{padding:12px}.drawerBody>.analyticsBox+.analyticsBox,.drawerBody>.chartWrap+.analyticsBox{margin-top:10px}.settingsActions{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}.fileButton{display:inline-flex;align-items:center;justify-content:center;cursor:pointer}.compactRow{margin-top:8px}.miniSection{border-top:1px solid var(--line);margin-top:10px;padding-top:10px}
+.panel{box-shadow:0 18px 60px rgba(0,0,0,.14)}.analyticsBox{box-shadow:none}.primary{box-shadow:0 7px 20px rgba(125,211,252,.10)}
+#screen .filters{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px}#screen .row{align-items:center}
+#analysis>.row:first-of-type{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px}
+#risk>.row{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px}
+@media(max-width:900px){.decisionGrid{grid-template-columns:1fr 1fr}.decisionGrid .keyBox:last-child{grid-column:1/-1}.executiveSummary{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:720px){
+ .appHeader{align-items:flex-start}.headerChips{display:none}.appHeader h1{font-size:22px}
+ main{padding-top:12px;padding-bottom:94px}.panel{background:transparent;border:0;padding:4px 0;box-shadow:none}
+ .tabs{position:fixed;left:0;right:0;bottom:0;top:auto;z-index:80;margin:0;padding:7px 6px calc(7px + env(safe-area-inset-bottom));display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:3px;background:rgba(11,13,18,.96);border-top:1px solid var(--line);border-bottom:0;backdrop-filter:blur(14px)}
+ .tab{min-width:0;min-height:52px;padding:5px 2px;border:0;background:transparent;border-radius:10px;display:flex;flex-direction:column;justify-content:center;gap:2px;font-size:10px;color:var(--muted)}
+ .tab.active{background:var(--accentSoft);color:var(--accent);border:0}.navIcon{font-size:16px}
+ .dashboardHero{align-items:flex-start}.dashboardHero h2{font-size:22px}.heroActions{justify-content:flex-end}.heroActions .primary{padding:9px 11px;min-height:40px}.heroActions .pill{display:none}
+ .decisionGrid,.focusGrid,.quickAccessGrid,.drawerGrid{grid-template-columns:1fr}.decisionGrid .keyBox:last-child{grid-column:auto}
+ .executiveSummary{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.executiveSummary .card:nth-child(n+5){display:none}
+ .focusSection{padding:11px;margin-top:10px}.sectionHeading{align-items:flex-start;flex-direction:column;gap:2px}.sectionHeading .sub{font-size:11px}
+ .dashboardDrawer{margin-top:9px}.dashboardDrawer>summary{padding:12px}.drawerHint{display:none}.drawerBody{padding:9px}
+ .analyticsBox{border-radius:11px}.pickCard{padding:11px;min-height:0}.priorityRow,.approachCard{padding:9px}
+ #screen .filters{padding:8px}.screenToolbar{position:sticky;top:0}
+ #screen .scroll td:nth-child(3),#screen .scroll th:nth-child(3){position:sticky;left:0;z-index:2;background:var(--panel)}
+ #analysis>.row:first-of-type,#risk>.row{padding:8px}
+}
 </style>
 </head>
 <body><main>
-<h1>EdgeX 分析ターミナル <span class="muted">v15</span></h1>
-<div class="sub">通知Botとは完全に分離した分析専用ツールです。EdgeXの公開データだけを使います。</div>
-<div class="tabs">
-<button class="tab active" data-tab="dashboard">今日の状況</button>
-<button class="tab" data-tab="screen">銘柄スキャン</button>
-<button class="tab" data-tab="analysis">銘柄分析</button>
-<button class="tab" data-tab="compare">比較</button>
-<button class="tab" data-tab="journal">検証記録</button>
-<button class="tab" data-tab="risk">資金管理</button>
+<div class="appHeader">
+  <div>
+    <div class="eyebrow">EDGEX MARKET WORKSPACE</div>
+    <h1>分析ターミナル <span class="versionBadge">v16</span></h1>
+    <div class="sub">公開市場データを使う分析専用ツール。自動売買は行いません。</div>
+  </div>
+  <div class="headerChips"><span class="statusChip">分析専用</span><span class="statusChip">15分更新</span></div>
+</div>
+<div class="tabs" aria-label="主要ナビゲーション">
+<button class="tab active" data-tab="dashboard"><span class="navIcon">⌂</span><span>今日</span></button>
+<button class="tab" data-tab="screen"><span class="navIcon">⌕</span><span>スキャン</span></button>
+<button class="tab" data-tab="analysis"><span class="navIcon">◎</span><span>分析</span></button>
+<button class="tab" data-tab="compare"><span class="navIcon">⇄</span><span>比較</span></button>
+<button class="tab" data-tab="journal"><span class="navIcon">✓</span><span>検証</span></button>
+<button class="tab" data-tab="risk"><span class="navIcon">¥</span><span>資金</span></button>
 </div>
 
 <section id="dashboard" class="panel active">
-<h2>今日の状況</h2>
-<div class="sub">15分ごとの市場状態を自動保存します。過去30日まで確認できます。</div>
-<div class="row" style="margin-top:10px"><button class="primary" id="dashScan">最新スキャン</button><button class="ghost" id="backgroundPush">バックグラウンド通知 OFF</button><button class="ghost" id="candidateNotify">画面内通知 OFF</button><button class="ghost" id="installApp">ホーム画面に追加</button><button class="ghost" id="autoJournalReady">READY自動記録 ON</button><button class="ghost" id="exportAll">全データ保存</button><label class="ghost" style="cursor:pointer">保存データ読込<input id="importAll" type="file" accept="application/json" style="display:none"></label><span id="dashUpdated" class="pill">未更新</span></div>
-<div id="dashSummary" class="summary"></div>
-<div class="analyticsGrid">
-<div class="analyticsBox"><b>現在の市場レジーム</b><div id="marketRegime" class="regimeBox"><span class="muted">スキャン後に表示</span></div></div>
-<div class="analyticsBox"><b>次の15分足確定まで</b><div id="candleCountdown" class="countdown">--:--</div><div class="sub">確定後に条件が変わる可能性があります。</div></div>
-<div class="analyticsBox"><b>候補の変化</b><div id="candidateAlerts" class="alertList"><span class="muted">変化はまだありません</span></div></div>
-<div class="analyticsBox"><b>前回開いた時からの変化</b><div class="sub">前回終了時の全銘柄状態と比較します。</div><div id="sinceLastChanges" class="status">初回比較の準備中です。</div></div>
-<div class="analyticsBox"><b>サーバー候補履歴</b><div class="sub">アプリを閉じていた時間の変化も保存します。</div><div id="serverCandidateEvents" class="alertList"><span class="muted">履歴を読み込みます</span></div></div>
-<div class="analyticsBox"><b>今日まず確認する3銘柄（総合優先度）</b><div id="dailyPicks" class="pickList"><span class="muted">スキャン後に表示</span></div></div>
-<div class="analyticsBox"><b>今見るべき銘柄ランキング</b><div class="sub">優先度は「今確認する順番」であり、勝率や将来利益の予測ではありません。過去データはサンプル数に応じて最大10点だけ反映します。</div><div id="priorityRanking" class="priorityList"><span class="muted">スキャン後に表示</span></div></div>
-<div class="analyticsBox"><b>ランキング急上昇</b><div class="sub">15分ごとの順位変化から、TOP3新規入り・5順位以上の急上昇だけを記録します。</div><div id="priorityEvents" class="alertList"><span class="muted">変化を蓄積中です。</span></div></div>
-<div class="analyticsBox"><b>急接近候補</b><div class="sub">TOP3外で有力化している候補を早めに確認するための先行指標です。勝率や将来利益の予測ではありません。</div><div id="earlyWatch" class="priorityList"><span class="muted">スキャン後に表示</span></div></div>
-<div class="analyticsBox"><b>急接近度 70点クロス</b><div class="sub">前回70点未満 → 今回70点以上になった実質候補だけを記録します。</div><div id="approachEvents" class="alertList"><span class="muted">変化を蓄積中です。</span></div></div>
-<div class="analyticsBox"><b>急接近度の実績検証</b>
-<div class="sub">70点クロス時のEntry/SL/TPを固定し、その後48時間を仮想追跡します。勝率予測ではなく、先行指標が実際にREADYへつながるかを検証します。</div>
-<div id="approachValidationSummary" class="summary"></div>
-<div id="approachValidationStatus" class="status">検証データを蓄積中です。</div>
-<div id="approachValidationBands"></div>
-<div class="scroll"><table><thead><tr><th>日時</th><th>銘柄</th><th>急接近度</th><th>READY</th><th>時間</th><th>仮想結果</th><th>R</th><th>MFE</th><th>MAE</th></tr></thead><tbody id="approachValidationBody"></tbody></table></div>
+<div class="dashboardHero">
+  <div>
+    <div class="eyebrow">MARKET NOW</div>
+    <h2>今日の判断</h2>
+    <div class="sub">最初に見る情報だけを上に集約しています。</div>
+  </div>
+  <div class="heroActions"><button class="primary" id="dashScan">最新に更新</button><span id="dashUpdated" class="pill">未更新</span></div>
 </div>
-<div class="analyticsBox"><b>★ お気に入り</b><div id="dashWatch" class="status">まだありません</div>
-<div class="section"><b>端末間同期</b><div class="sub">同じ同期コードを別端末へ入力するとお気に入りを共有できます。</div>
-<div class="row" style="margin-top:8px"><input id="watchSyncKey" class="syncCode" placeholder="同期コード"><button class="ghost" id="copyWatchSync">コードをコピー</button><button class="ghost" id="loadWatchSync">このコードで同期</button></div>
-<div id="watchSyncStatus" class="sub" style="margin-top:6px"></div></div></div>
-<div class="analyticsBox"><b>最近見た銘柄</b><div id="recentTickers" class="status">まだありません</div></div>
-<div class="analyticsBox"><b>24時間の変化</b><div id="dashChange" class="summary"></div></div>
-<div class="analyticsBox"><b>市場の方向感</b><div id="dashBreadth" class="summary"></div></div>
-<div class="analyticsBox"><b>注目候補</b><div id="dashTop" class="status"></div></div>
-<div class="analyticsBox"><b>データ状態</b><div id="dashHealth" class="status"></div></div>
-<div class="analyticsBox"><b>通知状態</b><div id="pushStatus" class="status">確認中…</div><div id="pushGuide" class="sub" style="margin-top:8px"></div></div>
-<div class="analyticsBox"><b>通知センター</b>
-<div class="row" style="margin-top:8px">
-<label class="pill"><input id="pushCandidatePref" type="checkbox"> 候補変化</label>
-<label class="pill"><input id="pushDailyPref" type="checkbox"> 毎朝サマリー</label>
+
+<div id="dashSummary" class="summary executiveSummary"></div>
+
+<div class="decisionGrid">
+  <div class="analyticsBox keyBox">
+    <div class="boxLabel">市場レジーム</div>
+    <div id="marketRegime" class="regimeBox"><span class="muted">スキャン後に表示</span></div>
+  </div>
+  <div class="analyticsBox keyBox">
+    <div class="boxLabel">次の15分足確定まで</div>
+    <div id="candleCountdown" class="countdown">--:--</div>
+    <div class="sub">確定後に条件が変わる可能性があります。</div>
+  </div>
+  <div class="analyticsBox keyBox">
+    <div class="boxLabel">バックグラウンド通知</div>
+    <div id="pushStatus" class="status compactStatus">確認中…</div>
+    <button class="ghost compactButton" id="backgroundPush">バックグラウンド通知 OFF</button>
+    <div id="pushGuide" class="sub compactHelp"></div>
+  </div>
 </div>
-<div class="row" style="margin-top:8px"><button class="ghost" id="pushTest">テスト通知</button><button class="ghost" id="refreshPushEvents">履歴更新</button></div>
-<div class="section"><b>候補通知を一時停止</b>
-<div class="row" style="margin-top:8px"><button class="ghost" id="snooze30">30分</button><button class="ghost" id="snooze60">1時間</button><button class="ghost" id="snoozeMorning">朝8時まで</button><button class="ghost" id="clearSnooze">解除</button></div>
-<div id="snoozeStatus" class="sub" style="margin-top:6px"></div>
+
+<div class="focusSection">
+  <div class="sectionHeading"><div><div class="eyebrow">FIRST LOOK</div><h3>まず見る3銘柄</h3></div><div class="sub">総合優先度順。勝率予測ではありません。</div></div>
+  <div id="dailyPicks" class="pickList"><span class="muted">スキャン後に表示</span></div>
 </div>
-<div class="section"><b>毎日の静音時間</b>
-<div class="row" style="margin-top:8px"><div class="field small"><label>開始</label><input id="quietStart" type="time" value="23:00"></div><div class="field small"><label>終了</label><input id="quietEnd" type="time" value="07:00"></div><button class="ghost" id="saveQuiet">静音時間を保存</button></div>
-<div class="sub">候補Pushだけを止めます。朝サマリーは設定どおり送信します。</div>
+
+<div class="focusGrid">
+  <div class="analyticsBox">
+    <div class="boxLabel">前回からの変化</div>
+    <div id="sinceLastChanges" class="status">初回比較の準備中です。</div>
+  </div>
+  <div class="analyticsBox">
+    <div class="boxLabel">候補の変化</div>
+    <div id="candidateAlerts" class="alertList"><span class="muted">変化はまだありません</span></div>
+  </div>
 </div>
-<div id="pushPrefStatus" class="sub" style="margin-top:8px"></div>
-<div id="pushEvents" class="alertList"><span class="muted">配信履歴を読み込みます</span></div>
+
+<div class="focusSection">
+  <div class="sectionHeading"><div><div class="eyebrow">EARLY WATCH</div><h3>急接近候補</h3></div><div class="sub">TOP3外で有力化している候補。</div></div>
+  <div id="earlyWatch" class="priorityList"><span class="muted">スキャン後に表示</span></div>
 </div>
-<div class="analyticsBox"><b>条件アラート</b><div class="sub">価格・Entry接近・RRの条件を1回だけPush通知します。</div><div id="customAlerts" class="status">通知ON後に設定できます。</div></div>
-<div class="analyticsBox"><b>日次レポート</b><div class="sub">前日分を自動生成して最大45日保存します。</div><div id="dailyReports" class="status">読み込み中…</div></div>
+
+<div class="quickAccessGrid">
+  <div class="analyticsBox"><div class="boxLabel">★ お気に入り</div><div id="dashWatch" class="status">まだありません</div></div>
+  <div class="analyticsBox"><div class="boxLabel">最近見た銘柄</div><div id="recentTickers" class="status">まだありません</div></div>
 </div>
-<div class="section"><h2>15分足確認ボトルネック</h2>
-<div class="sub">確認条件を「ローソク足の方向」と「ロール水準を終値で越えたか」に分解します。条件自体は自動変更しません。</div>
-<div id="confirmationDiagSummary" class="summary"></div>
-<div id="confirmationDiagStatus" class="status">診断データを読み込み中です。</div>
-<div id="confirmationDiagHistory"></div>
-<div class="scroll"><table><thead><tr><th>銘柄</th><th>方向</th><th>スコア</th><th>RR</th><th>足方向</th><th>水準</th><th>Body/ATR</th><th>水準余白/ATR</th></tr></thead><tbody id="confirmationDiagBody"></tbody></table></div>
-</div>
-<div class="section"><h2>確認待ちの効果</h2>
-<div class="sub">直前候補（NEAR）発生時の Entry / SL / TP を固定して、その後を仮想追跡します。正式な売買シグナルではなく、15分足確認ルールの効果を検証するためのデータです。</div>
-<div id="opportunitySummary" class="summary"></div>
-<div id="opportunityStatus" class="status">候補データを蓄積中です。</div>
-<div class="scroll"><table><thead><tr><th>日時</th><th>銘柄</th><th>候補</th><th>READY昇格</th><th>仮想結果</th><th>R</th><th>MFE</th><th>MAE</th><th>RR</th><th>スコア</th></tr></thead><tbody id="opportunityBody"></tbody></table></div>
-</div>
-<div class="section"><h2>市場の推移</h2><div class="chartWrap"><div class="chartTitle"><b>エントリー候補 / 直前候補 / 平均スコア</b><span class="muted">直近48時間</span></div><canvas id="marketHistoryChart" class="chart"></canvas></div></div>
-<div class="section"><h2>戦略の改善候補</h2><div class="sub">検証記録の実績から改善候補を抽出します。戦略条件は自動変更しません。</div><div id="strategyHypotheses" class="status"></div></div><details class="help"><summary>表示の見方</summary><div><b>エントリー可能</b>＝現在の戦略条件をすべて満たした候補。<br><b>有力な直前候補</b>＝リテストまたは15分足確認待ちで、RRが2以上ある候補。<br><b>RR</b>＝損失1に対して狙える利益の比率です。RR 2なら「1の損失リスクに対して2の利益余地」です。</div></details>
+
+<details class="dashboardDrawer" open>
+  <summary><span>順位と市場変化</span><span class="drawerHint">ランキング・急上昇・履歴</span></summary>
+  <div class="drawerBody">
+    <div class="analyticsBox"><div class="boxLabel">今見るべき銘柄ランキング</div><div class="sub">優先度は「今確認する順番」であり、勝率や将来利益の予測ではありません。</div><div id="priorityRanking" class="priorityList"><span class="muted">スキャン後に表示</span></div></div>
+    <div class="drawerGrid">
+      <div class="analyticsBox"><div class="boxLabel">ランキング急上昇</div><div class="sub">TOP3新規入り・5順位以上の急上昇。</div><div id="priorityEvents" class="alertList"><span class="muted">変化を蓄積中です。</span></div></div>
+      <div class="analyticsBox"><div class="boxLabel">急接近度 70点クロス</div><div class="sub">前回70点未満 → 今回70点以上。</div><div id="approachEvents" class="alertList"><span class="muted">変化を蓄積中です。</span></div></div>
+    </div>
+    <div class="analyticsBox"><div class="boxLabel">サーバー候補履歴</div><div class="sub">アプリを閉じていた時間の変化も保存します。</div><div id="serverCandidateEvents" class="alertList"><span class="muted">履歴を読み込みます</span></div></div>
+  </div>
+</details>
+
+<details class="dashboardDrawer">
+  <summary><span>検証と改善</span><span class="drawerHint">確認条件・機会損失・急接近度</span></summary>
+  <div class="drawerBody">
+    <div class="analyticsBox">
+      <div class="boxLabel">15分足確認ボトルネック</div>
+      <div class="sub">「ローソク足の方向」と「ロール水準」を分解。条件は自動変更しません。</div>
+      <div id="confirmationDiagSummary" class="summary"></div>
+      <div id="confirmationDiagStatus" class="status">診断データを読み込み中です。</div>
+      <div id="confirmationDiagHistory"></div>
+      <div class="scroll"><table><thead><tr><th>銘柄</th><th>方向</th><th>スコア</th><th>RR</th><th>足方向</th><th>水準</th><th>Body/ATR</th><th>水準余白/ATR</th></tr></thead><tbody id="confirmationDiagBody"></tbody></table></div>
+    </div>
+    <div class="analyticsBox">
+      <div class="boxLabel">確認待ちの効果</div>
+      <div class="sub">NEAR時点のEntry / SL / TPを固定して仮想追跡します。</div>
+      <div id="opportunitySummary" class="summary"></div>
+      <div id="opportunityStatus" class="status">候補データを蓄積中です。</div>
+      <div class="scroll"><table><thead><tr><th>日時</th><th>銘柄</th><th>候補</th><th>READY昇格</th><th>仮想結果</th><th>R</th><th>MFE</th><th>MAE</th><th>RR</th><th>スコア</th></tr></thead><tbody id="opportunityBody"></tbody></table></div>
+    </div>
+    <div class="analyticsBox">
+      <div class="boxLabel">急接近度の実績検証</div>
+      <div class="sub">70点クロス後48時間を仮想追跡します。</div>
+      <div id="approachValidationSummary" class="summary"></div>
+      <div id="approachValidationStatus" class="status">検証データを蓄積中です。</div>
+      <div id="approachValidationBands"></div>
+      <div class="scroll"><table><thead><tr><th>日時</th><th>銘柄</th><th>急接近度</th><th>READY</th><th>時間</th><th>仮想結果</th><th>R</th><th>MFE</th><th>MAE</th></tr></thead><tbody id="approachValidationBody"></tbody></table></div>
+    </div>
+    <div class="chartWrap"><div class="chartTitle"><b>市場の推移</b><span class="muted">直近48時間</span></div><canvas id="marketHistoryChart" class="chart"></canvas></div>
+    <div class="analyticsBox"><div class="boxLabel">戦略の改善候補</div><div class="sub">検証実績から抽出。戦略条件は自動変更しません。</div><div id="strategyHypotheses" class="status"></div></div>
+  </div>
+</details>
+
+<details class="dashboardDrawer">
+  <summary><span>市場データとレポート</span><span class="drawerHint">24h・方向感・日次・データ状態</span></summary>
+  <div class="drawerBody">
+    <div class="drawerGrid">
+      <div class="analyticsBox"><div class="boxLabel">24時間の変化</div><div id="dashChange" class="summary"></div></div>
+      <div class="analyticsBox"><div class="boxLabel">市場の方向感</div><div id="dashBreadth" class="summary"></div></div>
+      <div class="analyticsBox"><div class="boxLabel">注目候補</div><div id="dashTop" class="status"></div></div>
+      <div class="analyticsBox"><div class="boxLabel">データ状態</div><div id="dashHealth" class="status"></div></div>
+    </div>
+    <div class="analyticsBox"><div class="boxLabel">日次レポート</div><div class="sub">前日分を自動生成して最大45日保存します。</div><div id="dailyReports" class="status">読み込み中…</div></div>
+  </div>
+</details>
+
+<details class="dashboardDrawer">
+  <summary><span>通知とアプリ設定</span><span class="drawerHint">Push・静音・同期・バックアップ</span></summary>
+  <div class="drawerBody">
+    <div class="settingsActions">
+      <button class="ghost" id="candidateNotify">画面内通知 OFF</button>
+      <button class="ghost" id="installApp">ホーム画面に追加</button>
+      <button class="ghost" id="autoJournalReady">READY自動記録 ON</button>
+      <button class="ghost" id="exportAll">全データ保存</button>
+      <label class="ghost fileButton">保存データ読込<input id="importAll" type="file" accept="application/json" hidden></label>
+    </div>
+    <div class="drawerGrid">
+      <div class="analyticsBox">
+        <div class="boxLabel">通知センター</div>
+        <div class="row compactRow">
+          <label class="pill"><input id="pushCandidatePref" type="checkbox"> 候補変化</label>
+          <label class="pill"><input id="pushDailyPref" type="checkbox"> 毎朝サマリー</label>
+        </div>
+        <div class="row compactRow"><button class="ghost" id="pushTest">テスト通知</button><button class="ghost" id="refreshPushEvents">履歴更新</button></div>
+        <div class="miniSection"><b>一時停止</b><div class="row compactRow"><button class="ghost" id="snooze30">30分</button><button class="ghost" id="snooze60">1時間</button><button class="ghost" id="snoozeMorning">朝8時まで</button><button class="ghost" id="clearSnooze">解除</button></div><div id="snoozeStatus" class="sub"></div></div>
+        <div class="miniSection"><b>毎日の静音時間</b><div class="row compactRow"><div class="field small"><label>開始</label><input id="quietStart" type="time" value="23:00"></div><div class="field small"><label>終了</label><input id="quietEnd" type="time" value="07:00"></div><button class="ghost" id="saveQuiet">保存</button></div></div>
+        <div id="pushPrefStatus" class="sub"></div>
+        <div id="pushEvents" class="alertList"><span class="muted">配信履歴を読み込みます</span></div>
+      </div>
+      <div class="analyticsBox"><div class="boxLabel">条件アラート</div><div class="sub">価格・Entry接近・RRの条件を1回だけPush通知します。</div><div id="customAlerts" class="status">通知ON後に設定できます。</div></div>
+    </div>
+    <div class="analyticsBox">
+      <div class="boxLabel">お気に入りの端末間同期</div>
+      <div class="sub">同じ同期コードを別端末へ入力するとお気に入りを共有できます。</div>
+      <div class="row compactRow"><input id="watchSyncKey" class="syncCode" placeholder="同期コード"><button class="ghost" id="copyWatchSync">コードをコピー</button><button class="ghost" id="loadWatchSync">このコードで同期</button></div>
+      <div id="watchSyncStatus" class="sub"></div>
+    </div>
+  </div>
+</details>
 </section>
 
 <section id="screen" class="panel">
