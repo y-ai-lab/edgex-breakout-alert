@@ -2668,6 +2668,7 @@ async def _background_collector() -> None:
             try:
                 contracts, rows = await _scan_market_rows(force=True)
                 _persist_scan_result(contracts, rows)
+                await _process_priority_changes(rows, bucket)
                 await _maybe_push_candidate_changes(rows)
                 await _evaluate_custom_alerts(rows)
                 await _refresh_paper_signal_results(contracts)
@@ -3041,6 +3042,15 @@ async def screener_api(
         if str(row.get("ticker") or "").upper() in watch_names
     ]
 
+    now_ms = int(time.time() * 1000)
+    current_bucket = (
+        now_ms // scanner.INTERVAL_MS[SETTINGS.entry_interval]
+    ) * scanner.INTERVAL_MS[SETTINGS.entry_interval]
+    priority_ranking = _priority_rank_changes(
+        _priority_ranking(all_rows, limit=10),
+        current_bucket,
+    )
+
     return {
         "universe": len(contracts),
         "scanned": len(all_rows),
@@ -3053,12 +3063,23 @@ async def screener_api(
         ),
         "summary": _market_summary(all_rows),
         "market_regime": _market_regime(all_rows),
-        "daily_picks": _daily_picks(all_rows),
-        "priority_ranking": _priority_ranking(all_rows, limit=10),
+        "daily_picks": priority_ranking[:3],
+        "priority_ranking": priority_ranking,
         "ready_candidates": ready_candidates,
         "qualified_near_candidates": qualified_near_candidates,
         "watch_status": watch_status,
         "results": rows[:limit],
+    }
+
+
+@app.get("/api/priority-events")
+async def priority_events_api(
+    limit: int = Query(default=50, ge=1, le=500),
+):
+    events = _load_priority_events(limit=limit)
+    return {
+        "count": len(events),
+        "events": events,
     }
 
 
