@@ -27,3 +27,22 @@ self.addEventListener("notificationclick",event=>{
     if(clients.openWindow)return clients.openWindow(target);
   }));
 });
+
+self.addEventListener("push",event=>{
+  let data={title:"EdgeX 分析ターミナル",body:"市場データが更新されました。",url:"/?tab=dashboard",tag:"edgex-update"};
+  try{
+    if(event.data){
+      const parsed=event.data.json();
+      data={...data,...parsed};
+    }
+  }catch(_e){
+    if(event.data)data.body=event.data.text();
+  }
+  event.waitUntil(self.registration.showNotification(data.title,{
+    body:data.body,
+    tag:data.tag||"edgex-update",
+    icon:"/app-icon.svg",
+    badge:"/app-icon.svg",
+    data:{url:data.url||"/?tab=dashboard"}
+  }));
+});
