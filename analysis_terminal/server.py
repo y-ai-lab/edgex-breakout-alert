@@ -9,7 +9,7 @@ import sys
 import time
 from collections import Counter
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from statistics import mean
 from typing import Any
@@ -152,6 +152,39 @@ def _init_db() -> None:
                 payload TEXT NOT NULL,
                 updated_ms INTEGER NOT NULL,
                 FOREIGN KEY(event_id) REFERENCES candidate_events(id)
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS synced_watchlists (
+                sync_key TEXT PRIMARY KEY,
+                payload TEXT NOT NULL,
+                updated_ms INTEGER NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS custom_alerts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                endpoint TEXT NOT NULL,
+                ticker TEXT NOT NULL,
+                condition TEXT NOT NULL,
+                threshold REAL NOT NULL,
+                active INTEGER NOT NULL DEFAULT 1,
+                created_ms INTEGER NOT NULL,
+                updated_ms INTEGER NOT NULL,
+                triggered_ms INTEGER
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS daily_reports (
+                report_date TEXT PRIMARY KEY,
+                payload TEXT NOT NULL,
+                created_ms INTEGER NOT NULL
             )
             """
         )
@@ -1566,6 +1599,23 @@ class PushPreferenceRequest(BaseModel):
 
 class PushTestRequest(BaseModel):
     endpoint: str = Field(min_length=10, max_length=4096)
+
+
+class WatchlistSyncRequest(BaseModel):
+    sync_key: str = Field(min_length=24, max_length=128)
+    tickers: list[str] = Field(default_factory=list, max_length=200)
+
+
+class CustomAlertCreateRequest(BaseModel):
+    endpoint: str = Field(min_length=10, max_length=4096)
+    ticker: str = Field(min_length=2, max_length=64)
+    condition: str = Field(max_length=32)
+    threshold: float = Field(gt=0)
+
+
+class CustomAlertDeleteRequest(BaseModel):
+    endpoint: str = Field(min_length=10, max_length=4096)
+    alert_id: int = Field(gt=0)
 
 
 class RiskRequest(BaseModel):
