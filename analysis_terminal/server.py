@@ -182,6 +182,268 @@ def _load_paper_signals(limit: int = 200) -> list[dict[str, Any]]:
     return [json.loads(row["payload"]) for row in rows]
 
 
+def _state_get(key: str) -> str | None:
+    with _db_connect() as conn:
+        row = conn.execute(
+            "SELECT value FROM app_state WHERE key = ?",
+            (key,),
+        ).fetchone()
+    return str(row["value"]) if row else None
+
+
+def _state_set(key: str, value: str) -> None:
+    now_ms = int(time.time() * 1000)
+    with _db_connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO app_state(key, value, updated_ms)
+            VALUES (?, ?, ?)
+            ON CONFLICT(key) DO UPDATE SET
+                value=excluded.value,
+                updated_ms=excluded.updated_ms
+            """,
+            (key, value, now_ms),
+        )
+        conn.commit()
+
+
+def _push_enabled() -> bool:
+    return bool(VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY and VAPID_KEY_PATH.exists())
+
+
+def _subscription_count() -> int:
+    with _db_connect() as conn:
+        row = conn.execute("SELECT COUNT(*) AS n FROM push_subscriptions").fetchone()
+    return int(row["n"]) if row else 0
+
+
+def _save_push_subscription(req: PushSubscriptionRequest) -> str:
+    endpoint = str(req.subscription.get("endpoint") or "").strip()
+    keys = req.subscription.get("keys") or {}
+    if not endpoint or not keys.get("p256dh") or not keys.get("auth"):
+        raise HTTPException(400, "Invalid PushSubscription payload")
+    now_ms = int(time.time() * 1000)
+    payload = json.dumps(req.subscription, separators=(",", ":"))
+    with _db_connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO push_subscriptions(
+                endpoint, payload, candidate_alerts, daily_summary,
+                timezone, created_ms, updated_ms
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(endpoint) DO UPDATE SET
+                payload=excluded.payload,
+                candidate_alerts=excluded.candidate_alerts,
+                daily_summary=excluded.daily_summary,
+                timezone=excluded.timezone,
+                updated_ms=excluded.updated_ms
+            """,
+            (
+                endpoint,
+                payload,
+                int(req.candidate_alerts),
+                int(req.daily_summary),
+                req.timezone,
+                now_ms,
+                now_ms,
+            ),
+        )
+        conn.commit()
+    return endpoint
+
+
+def _delete_push_subscription(endpoint: str) -> None:
+    with _db_connect() as conn:
+        conn.execute("DELETE FROM push_subscriptions WHERE endpoint = ?", (endpoint,))
+        conn.commit()
+
+
+def _load_push_subscriptions(kind: str | None = None) -> list[sqlite3.Row]:
+    where = ""
+    if kind == "candidate":
+        where = "WHERE candidate_alerts = 1"
+    elif kind == "daily":
+        where = "WHERE daily_summary = 1"
+    with _db_connect() as conn:
+        rows = conn.execute(
+            f"SELECT * FROM push_subscriptions {where} ORDER BY created_ms"
+        ).fetchall()
+    return list(rows)
+
+
+def _send_push_sync(subscription: sqlite3.Row, payload: dict[str, Any]) -> bool:
+    if not _push_enabled():
+        return False
+    endpoint = str(subscription["endpoint"])
+    try:
+        webpush(
+            subscription_info=json.loads(subscription["payload"]),
+            data=json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+            vapid_private_key=str(VAPID_KEY_PATH),
+            vapid_claims={"sub": VAPID_SUBJECT},
+            ttl=900,
+            timeout=12,
+        )
+        now_ms = int(time.time() * 1000)
+        with _db_connect() as conn:
+            conn.execute(
+                """
+                UPDATE push_subscriptions
+                SET last_success_ms = ?, updated_ms = ?
+                WHERE endpoint = ?
+                """,
+                (now_ms, now_ms, endpoint),
+            )
+            conn.commit()
+        return True
+    except WebPushException as exc:
+        response = getattr(exc, "response", None)
+        status = getattr(response, "status_code", None)
+        if status in {404, 410}:
+            _delete_push_subscription(endpoint)
+        print(f"Web Push error status={status}: {exc}", flush=True)
+        return False
+    except Exception as exc:
+        print(f"Web Push error: {exc}", flush=True)
+        return False
+
+
+async def _broadcast_push(
+    payload: dict[str, Any],
+    *,
+    kind: str,
+) -> tuple[int, int]:
+    subscriptions = _load_push_subscriptions(kind)
+    if not subscriptions:
+        return 0, 0
+    results = await asyncio.gather(
+        *(
+            asyncio.to_thread(_send_push_sync, subscription, payload)
+            for subscription in subscriptions
+        )
+    )
+    return sum(1 for result in results if result), len(results)
+
+
+def _push_row_summary(row: dict[str, Any]) -> str:
+    direction = "ロング" if row.get("direction") == "LONG" else "ショート"
+    rr = row.get("rr")
+    score = row.get("score")
+    parts = [str(row.get("ticker") or ""), direction]
+    if score is not None:
+        parts.append(f"{float(score):.1f}点")
+    if rr is not None:
+        parts.append(f"RR {float(rr):.2f}")
+    return " / ".join(parts)
+
+
+async def _maybe_push_candidate_changes(rows: list[dict[str, Any]]) -> None:
+    ready = [
+        row for row in _sort_rows(rows)
+        if row.get("stage") == "READY"
+    ]
+    near = [
+        row for row in _sort_rows(rows)
+        if row.get("stage") in {"CONFIRMATION_WAIT", "RETEST_WAIT"}
+        and row.get("rr") is not None
+        and float(row["rr"]) >= SETTINGS.min_rr
+    ]
+
+    current = {
+        "ready": [str(row["ticker"]) for row in ready],
+        "near": [str(row["ticker"]) for row in near],
+    }
+    previous_raw = _state_get("server_candidate_state")
+    _state_set(
+        "server_candidate_state",
+        json.dumps(current, separators=(",", ":")),
+    )
+    if not previous_raw:
+        return
+
+    try:
+        previous = json.loads(previous_raw)
+    except json.JSONDecodeError:
+        return
+
+    prev_ready = set(previous.get("ready") or [])
+    prev_near = set(previous.get("near") or [])
+    for row in ready:
+        ticker = str(row["ticker"])
+        if ticker in prev_ready:
+            continue
+        label = (
+            "直前候補からエントリー可能へ昇格"
+            if ticker in prev_near
+            else "新しくエントリー可能"
+        )
+        await _broadcast_push(
+            {
+                "title": "EdgeX エントリー候補",
+                "body": f"{label}\n{_push_row_summary(row)}",
+                "url": f"/?tab=analysis&ticker={ticker}",
+                "tag": f"edgex-ready-{ticker}",
+            },
+            kind="candidate",
+        )
+
+    for row in near:
+        ticker = str(row["ticker"])
+        if ticker in prev_near or ticker in prev_ready:
+            continue
+        await _broadcast_push(
+            {
+                "title": "EdgeX 有力な直前候補",
+                "body": f"15分足の条件に接近\n{_push_row_summary(row)}",
+                "url": f"/?tab=analysis&ticker={ticker}",
+                "tag": f"edgex-near-{ticker}",
+            },
+            kind="candidate",
+        )
+
+
+async def _maybe_push_daily_summary(rows: list[dict[str, Any]]) -> None:
+    if not _load_push_subscriptions("daily"):
+        return
+    now = datetime.now(JST)
+    if now.hour < DAILY_SUMMARY_HOUR_JST:
+        return
+    today = now.date().isoformat()
+    if _state_get("daily_summary_date") == today:
+        return
+
+    summary = _market_summary(rows)
+    regime = _market_regime(rows)
+    picks = _daily_picks(rows)
+    bias_ja = {
+        "LONG_BIASED": "ロング優勢",
+        "SHORT_BIASED": "ショート優勢",
+        "BALANCED": "ほぼ均衡",
+    }.get(regime["bias"], "方向不明")
+    activity_ja = {
+        "SIGNAL_ACTIVE": "シグナルあり",
+        "SETUP_BUILDING": "セットアップ形成中",
+        "QUIET": "静観相場",
+        "SELECTIVE": "選別相場",
+    }.get(regime["activity"], "状態不明")
+    pick_text = "、".join(str(item["ticker"]) for item in picks) or "候補なし"
+    payload = {
+        "title": "EdgeX 朝の市場サマリー",
+        "body": (
+            f"{bias_ja} / {activity_ja}\n"
+            f"エントリー可能 {summary['ready_count']}件 / "
+            f"有力直前 {summary['qualified_near_count']}件\n"
+            f"まず確認: {pick_text}"
+        ),
+        "url": "/?tab=dashboard",
+        "tag": f"edgex-daily-{today}",
+    }
+    _sent, attempted = await _broadcast_push(payload, kind="daily")
+    if attempted:
+        _state_set("daily_summary_date", today)
+
+
 async def fetch_snapshots(
     contract_ids: list[str],
     intervals: tuple[str, ...] = ("HOUR_4", "MINUTE_15"),
@@ -734,6 +996,17 @@ async def market_snapshots(force: bool = False):
 
         _snapshot_cache = (time.time(), data)
         return data
+
+
+class PushSubscriptionRequest(BaseModel):
+    subscription: dict[str, Any]
+    candidate_alerts: bool = True
+    daily_summary: bool = True
+    timezone: str = Field(default="Asia/Tokyo", max_length=64)
+
+
+class PushUnsubscribeRequest(BaseModel):
+    endpoint: str = Field(min_length=10, max_length=4096)
 
 
 class RiskRequest(BaseModel):
