@@ -145,6 +145,20 @@ def _init_db() -> None:
             )
             """
         )
+        candidate_columns = {
+            str(row["name"])
+            for row in conn.execute("PRAGMA table_info(candidate_events)").fetchall()
+        }
+        for column_name, column_type in (
+            ("confirmation_color_ok", "INTEGER"),
+            ("confirmation_level_ok", "INTEGER"),
+            ("confirmation_body_atr", "REAL"),
+            ("confirmation_roll_margin_atr", "REAL"),
+        ):
+            if column_name not in candidate_columns:
+                conn.execute(
+                    f"ALTER TABLE candidate_events ADD COLUMN {column_name} {column_type}"
+                )
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS candidate_event_results (
@@ -643,9 +657,11 @@ def _log_candidate_event(
             """
             INSERT INTO candidate_events(
                 ticker, kind, label, stage, direction, score, rr,
-                entry, stop, target, created_ms
+                entry, stop, target, confirmation_color_ok,
+                confirmation_level_ok, confirmation_body_atr,
+                confirmation_roll_margin_atr, created_ms
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 str(row.get("ticker") or ""),
@@ -658,6 +674,14 @@ def _log_candidate_event(
                 row.get("entry_reference"),
                 row.get("stop_loss"),
                 row.get("take_profit"),
+                int(bool(row.get("confirmation_color_ok")))
+                if row.get("confirmation_color_ok") is not None
+                else None,
+                int(bool(row.get("confirmation_level_ok")))
+                if row.get("confirmation_level_ok") is not None
+                else None,
+                row.get("confirmation_body_atr"),
+                row.get("confirmation_roll_margin_atr"),
                 now_ms,
             ),
         )
@@ -671,7 +695,9 @@ def _load_candidate_events(limit: int = 100) -> list[dict[str, Any]]:
         rows = conn.execute(
             """
             SELECT id, ticker, kind, label, stage, direction, score, rr,
-                   entry, stop, target, created_ms
+                   entry, stop, target, confirmation_color_ok,
+                   confirmation_level_ok, confirmation_body_atr,
+                   confirmation_roll_margin_atr, created_ms
             FROM candidate_events
             ORDER BY id DESC
             LIMIT ?
@@ -712,8 +738,11 @@ def _load_candidate_events_with_results(
             """
             SELECT
                 e.id, e.ticker, e.kind, e.label, e.stage, e.direction,
-                e.score, e.rr, e.entry, e.stop, e.target, e.created_ms,
-                r.payload AS result_payload, r.updated_ms AS result_updated_ms
+                e.score, e.rr, e.entry, e.stop, e.target,
+                e.confirmation_color_ok, e.confirmation_level_ok,
+                e.confirmation_body_atr, e.confirmation_roll_margin_atr,
+                e.created_ms, r.payload AS result_payload,
+                r.updated_ms AS result_updated_ms
             FROM candidate_events e
             LEFT JOIN candidate_event_results r ON r.event_id = e.id
             ORDER BY e.id DESC
