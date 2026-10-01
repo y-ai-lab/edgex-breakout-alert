@@ -9,15 +9,18 @@ import sys
 import time
 from collections import Counter
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
 from statistics import mean
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import uvicorn
 import websockets
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel, Field
+from pywebpush import WebPushException, webpush
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -30,6 +33,15 @@ DETECTOR = scanner.RollReversalDetector(SETTINGS)
 _snapshot_cache: tuple[float, dict[tuple[str, str], list[scanner.Candle]]] | None = None
 _cache_lock = asyncio.Lock()
 DB_PATH = Path(os.getenv("ANALYSIS_DB_PATH", "/data/analysis_terminal.db"))
+VAPID_PRIVATE_KEY = os.getenv("WEBPUSH_VAPID_PRIVATE_KEY", "").strip()
+VAPID_PUBLIC_KEY = os.getenv("WEBPUSH_VAPID_PUBLIC_KEY", "").strip()
+VAPID_SUBJECT = os.getenv(
+    "WEBPUSH_VAPID_SUBJECT",
+    "https://edgex-analysis-terminal-production.up.railway.app",
+).strip()
+DAILY_SUMMARY_HOUR_JST = int(os.getenv("DAILY_SUMMARY_HOUR_JST", "8"))
+VAPID_KEY_PATH = DB_PATH.parent / "webpush_vapid_private.pem"
+JST = ZoneInfo("Asia/Tokyo")
 _background_task: asyncio.Task | None = None
 
 
@@ -61,7 +73,37 @@ def _init_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS push_subscriptions (
+                endpoint TEXT PRIMARY KEY,
+                payload TEXT NOT NULL,
+                candidate_alerts INTEGER NOT NULL DEFAULT 1,
+                daily_summary INTEGER NOT NULL DEFAULT 1,
+                timezone TEXT NOT NULL DEFAULT 'Asia/Tokyo',
+                created_ms INTEGER NOT NULL,
+                updated_ms INTEGER NOT NULL,
+                last_success_ms INTEGER
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS app_state (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                updated_ms INTEGER NOT NULL
+            )
+            """
+        )
         conn.commit()
+
+    if VAPID_PRIVATE_KEY:
+        VAPID_KEY_PATH.write_text(VAPID_PRIVATE_KEY + "\n", encoding="utf-8")
+        try:
+            VAPID_KEY_PATH.chmod(0o600)
+        except OSError:
+            pass
 
 
 def _save_market_snapshot(payload: dict[str, Any]) -> None:
