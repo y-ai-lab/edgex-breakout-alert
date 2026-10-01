@@ -2226,8 +2226,10 @@ async def _background_collector() -> None:
                 contracts, rows = await _scan_market_rows(force=True)
                 _persist_scan_result(contracts, rows)
                 await _maybe_push_candidate_changes(rows)
+                await _evaluate_custom_alerts(rows)
                 await _refresh_paper_signal_results(contracts)
                 await _refresh_candidate_event_results(contracts)
+                _maybe_generate_daily_report()
                 await _maybe_push_daily_summary(rows)
                 last_bucket = bucket
             except Exception as exc:
@@ -2254,7 +2256,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="EdgeX Analysis Terminal",
-    version="9.0.0",
+    version="10.0.0",
     lifespan=lifespan,
 )
 
@@ -2266,7 +2268,7 @@ async def health():
     return {
         "ok": True,
         "service": "edgex-analysis-terminal",
-        "version": "9.0.0",
+        "version": "10.0.0",
         "time_ms": int(time.time() * 1000),
         "storage": {
             "market_snapshots_48h": len(history),
@@ -2611,6 +2613,57 @@ async def screener_api(
         "qualified_near_candidates": qualified_near_candidates,
         "watch_status": watch_status,
         "results": rows[:limit],
+    }
+
+
+@app.get("/api/watchlist")
+async def synced_watchlist_get_api(
+    sync_key: str = Query(min_length=24, max_length=128),
+):
+    return {
+        "tickers": _load_synced_watchlist(sync_key),
+    }
+
+
+@app.post("/api/watchlist")
+async def synced_watchlist_save_api(req: WatchlistSyncRequest):
+    return {
+        "ok": True,
+        "tickers": _save_synced_watchlist(req),
+    }
+
+
+@app.get("/api/custom-alerts")
+async def custom_alerts_get_api(
+    endpoint: str = Query(min_length=10, max_length=4096),
+):
+    return {
+        "alerts": _load_custom_alerts(endpoint=endpoint),
+    }
+
+
+@app.post("/api/custom-alerts")
+async def custom_alerts_create_api(req: CustomAlertCreateRequest):
+    return {
+        "ok": True,
+        "alert": _create_custom_alert(req),
+    }
+
+
+@app.post("/api/custom-alerts/delete")
+async def custom_alerts_delete_api(req: CustomAlertDeleteRequest):
+    return {
+        "ok": _delete_custom_alert(req),
+    }
+
+
+@app.get("/api/daily-reports")
+async def daily_reports_api(
+    limit: int = Query(default=30, ge=1, le=90),
+):
+    _maybe_generate_daily_report()
+    return {
+        "reports": _load_daily_reports(limit=limit),
     }
 
 
