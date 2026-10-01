@@ -705,13 +705,39 @@ async def _background_collector() -> None:
 app = FastAPI(title="EdgeX Analysis Terminal", version="6.2.0")
 
 
+@app.on_event("startup")
+async def startup_event():
+    global _background_task
+    _init_db()
+    _background_task = asyncio.create_task(_background_collector())
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    global _background_task
+    if _background_task is not None:
+        _background_task.cancel()
+        try:
+            await _background_task
+        except asyncio.CancelledError:
+            pass
+        _background_task = None
+
+
 @app.get("/health")
 async def health():
+    history = _load_market_history(hours=48)
+    paper = _load_paper_signals(limit=1000)
     return {
         "ok": True,
         "service": "edgex-analysis-terminal",
         "version": "6.2.0",
         "time_ms": int(time.time() * 1000),
+        "storage": {
+            "market_snapshots_48h": len(history),
+            "paper_signals": len(paper),
+            "db_exists": DB_PATH.exists(),
+        },
     }
 
 
@@ -1024,6 +1050,27 @@ async def screener_api(
         "summary": _market_summary(all_rows),
         "ready_candidates": ready_candidates,
         "results": rows[:limit],
+    }
+
+
+@app.get("/api/server-history")
+async def server_history_api(
+    hours: int = Query(default=48, ge=1, le=720),
+):
+    return {
+        "hours": hours,
+        "snapshots": _load_market_history(hours=hours),
+    }
+
+
+@app.get("/api/server-paper-signals")
+async def server_paper_signals_api(
+    limit: int = Query(default=200, ge=1, le=1000),
+):
+    signals = _load_paper_signals(limit=limit)
+    return {
+        "count": len(signals),
+        "signals": signals,
     }
 
 
