@@ -4,7 +4,7 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b0d12"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="EdgeX分析">
 <link rel="manifest" href="/manifest.webmanifest"><link rel="icon" href="/app-icon.svg" type="image/svg+xml">
-<title>EdgeX 分析ターミナル v8</title>
+<title>EdgeX 分析ターミナル v8.1</title>
 <style>
 :root{color-scheme:dark;--bg:#0b0d12;--panel:#131720;--muted:#8d96a8;--line:#252c38;--text:#f3f5f8;--good:#4ade80;--warn:#facc15;--bad:#fb7185;--accent:#7dd3fc}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif}main{max-width:1260px;margin:auto;padding:26px 16px 60px}h1{margin:0 0 5px;font-size:28px}h2{font-size:20px}.sub,.status,label,.k{color:var(--muted)}.tabs,.row,.filters{display:flex;gap:9px;flex-wrap:wrap}.tabs{margin:20px 0}.tab,.primary,.ghost{border-radius:9px;padding:10px 13px;cursor:pointer;font:inherit}.tab,.ghost{border:1px solid var(--line);background:#0f131b;color:var(--text)}.tab.active{border-color:var(--accent);color:var(--accent)}.primary{border:0;background:#e6f6ff;color:#071018;font-weight:700}.panel{display:none;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:17px}.panel.active{display:block}.field{display:flex;flex-direction:column;gap:5px;min-width:130px;flex:1}.field.small{max-width:170px}input,select{background:#0c1017;color:var(--text);border:1px solid var(--line);border-radius:9px;padding:10px}.status{margin:13px 0}.scroll{overflow:auto}table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}th{color:var(--muted)}.badge{padding:3px 7px;border:1px solid var(--line);border-radius:999px;font-size:11px}.READY{color:var(--good)}.CONFIRMATION_WAIT,.RETEST_WAIT{color:var(--warn)}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:10px;margin-top:12px}.card{background:#0e1219;border:1px solid var(--line);border-radius:10px;padding:12px}.v{font-size:17px;margin-top:4px}.error{color:var(--bad)}.section{border-top:1px solid var(--line);margin-top:17px;padding-top:12px}.star{font-size:18px;cursor:pointer}.muted{color:var(--muted)}.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:9px;margin:12px 0}.check{transform:scale(1.15)}.pill{padding:6px 9px;border:1px solid var(--line);border-radius:999px}.right{margin-left:auto}.good{color:var(--good)}.warn{color:var(--warn)}.bad{color:var(--bad)}.resultTP{color:var(--good);font-weight:700}.resultSL{color:var(--bad);font-weight:700}.resultTP1{color:var(--warn);font-weight:700}.resultAMBIGUOUS{color:#f0abfc;font-weight:700}.analyticsGrid{display:grid;grid-template-columns:1fr;gap:12px;margin-top:14px}@media(min-width:980px){.analyticsGrid{grid-template-columns:1fr 1fr}}.analyticsBox{background:#0e1219;border:1px solid var(--line);border-radius:12px;padding:12px}.metricTable td,.metricTable th{font-size:12px}.lowSample{color:var(--warn)}.enoughSample{color:var(--good)}.chartWrap{margin-top:12px;background:#0e1219;border:1px solid var(--line);border-radius:12px;padding:10px}.chartTitle{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}.chart{width:100%;height:310px;display:block}.actionBox{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:12px 0;padding:12px;border:1px solid var(--line);border-radius:10px;background:#0e1219}.actionMain{font-size:18px;font-weight:700}.legend{display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--muted)}.legend span:before{content:"";display:inline-block;width:10px;height:3px;margin-right:5px;vertical-align:middle;background:currentColor}.chartGrid{display:grid;grid-template-columns:1fr;gap:12px}@media(min-width:980px){.chartGrid{grid-template-columns:1fr 1fr}}
@@ -39,7 +39,7 @@ button{-webkit-tap-highlight-color:transparent}
 </style>
 </head>
 <body><main>
-<h1>EdgeX 分析ターミナル <span class="muted">v8</span></h1>
+<h1>EdgeX 分析ターミナル <span class="muted">v8.1</span></h1>
 <div class="sub">通知Botとは完全に分離した分析専用ツールです。EdgeXの公開データだけを使います。</div>
 <div class="tabs">
 <button class="tab active" data-tab="dashboard">今日の状況</button>
@@ -66,7 +66,7 @@ button{-webkit-tap-highlight-color:transparent}
 <div class="analyticsBox"><b>市場の方向感</b><div id="dashBreadth" class="summary"></div></div>
 <div class="analyticsBox"><b>注目候補</b><div id="dashTop" class="status"></div></div>
 <div class="analyticsBox"><b>データ状態</b><div id="dashHealth" class="status"></div></div>
-<div class="analyticsBox"><b>通知状態</b><div id="pushStatus" class="status">確認中…</div></div>
+<div class="analyticsBox"><b>通知状態</b><div id="pushStatus" class="status">確認中…</div><div id="pushGuide" class="sub" style="margin-top:8px"></div></div>
 </div>
 <div class="section"><h2>市場の推移</h2><div class="chartWrap"><div class="chartTitle"><b>エントリー候補 / 直前候補 / 平均スコア</b><span class="muted">直近48時間</span></div><canvas id="marketHistoryChart" class="chart"></canvas></div></div>
 <div class="section"><h2>戦略の改善候補</h2><div class="sub">検証記録の実績から改善候補を抽出します。戦略条件は自動変更しません。</div><div id="strategyHypotheses" class="status"></div></div><details class="help"><summary>表示の見方</summary><div><b>エントリー可能</b>＝現在の戦略条件をすべて満たした候補。<br><b>有力な直前候補</b>＝リテストまたは15分足確認待ちで、RRが2以上ある候補。<br><b>RR</b>＝損失1に対して狙える利益の比率です。RR 2なら「1の損失リスクに対して2の利益余地」です。</div></details>
@@ -152,9 +152,21 @@ function processCandidateTransitions(j){
 function syncCandidateNotifyButton(){var b=document.getElementById("candidateNotify");if(!b)return;b.textContent="画面内通知 "+(candidateNotifyEnabled?"ON":"OFF");b.classList.toggle("good",candidateNotifyEnabled)}
 function urlBase64ToUint8Array(base64String){var padding="=".repeat((4-base64String.length%4)%4),base64=(base64String+padding).replace(/-/g,"+").replace(/_/g,"/"),raw=atob(base64),out=new Uint8Array(raw.length);for(var i=0;i<raw.length;i++)out[i]=raw.charCodeAt(i);return out}
 function isStandalone(){return window.matchMedia("(display-mode: standalone)").matches||window.navigator.standalone===true}
+function pushCompatibility(){
+ var ua=navigator.userAgent||"",ios=/iphone|ipad|ipod/i.test(ua),standalone=isStandalone(),sw=("serviceWorker" in navigator),pm=("PushManager" in window),nt=("Notification" in window);
+ return {ios:ios,standalone:standalone,serviceWorker:sw,pushManager:pm,notification:nt,supported:sw&&pm&&nt};
+}
+function renderPushGuide(){
+ var g=document.getElementById("pushGuide"),b=document.getElementById("backgroundPush");if(!g||!b)return;var x=pushCompatibility();
+ if(x.ios&&!x.standalone){g.innerHTML='iPhoneではSafariでこのページを開き、<b>共有 → ホーム画面に追加 →「ウェブアプリとして開く」をON</b>にして、追加されたEdgeX分析アプリから開いてください。';b.textContent="iPhone: ホーム画面追加後にON";b.classList.remove("good");return}
+ if(!x.supported){g.innerHTML='この開き方ではWeb Pushを利用できません。iPhoneはホーム画面のWebアプリ、Android/PCはPush対応ブラウザで開いてください。';return}
+ g.textContent='この端末はバックグラウンド通知に対応しています。';
+}
 async function currentPushSubscription(){if(!("serviceWorker" in navigator)||!("PushManager" in window))return null;try{var reg=await navigator.serviceWorker.ready;return await reg.pushManager.getSubscription()}catch(e){return null}}
 async function syncBackgroundPushButton(){
- var b=document.getElementById("backgroundPush"),s=document.getElementById("pushStatus");if(!b||!s)return;
+ var b=document.getElementById("backgroundPush"),s=document.getElementById("pushStatus");if(!b||!s)return;renderPushGuide();var compat=pushCompatibility();
+ if(compat.ios&&!compat.standalone){b.textContent="iPhone: ホーム画面追加後にON";s.innerHTML='<span class="warn">Safariの通常タブではバックグラウンドPushを有効化できません。</span>';return}
+ if(!compat.supported){b.textContent="バックグラウンド通知 未対応";s.innerHTML='<span class="warn">現在のブラウザ/開き方ではWeb Pushを利用できません。</span>';return}
  try{
   var cfg=await jf("/api/push/config"),sub=await currentPushSubscription(),on=!!sub;
   b.textContent="バックグラウンド通知 "+(on?"ON":"OFF");b.classList.toggle("good",on);
@@ -163,9 +175,9 @@ async function syncBackgroundPushButton(){
  }catch(e){s.innerHTML='<span class="error">通知状態を確認できません: '+e.message+'</span>'}
 }
 async function toggleBackgroundPush(){
- var b=document.getElementById("backgroundPush"),s=document.getElementById("pushStatus");
- if(!("serviceWorker" in navigator)||!("PushManager" in window)||!("Notification" in window)){alert("このブラウザはバックグラウンド通知に対応していません。");return}
- var ios=/iphone|ipad|ipod/i.test(navigator.userAgent);if(ios&&!isStandalone()){alert("iPhoneでは先にSafariの共有ボタン →「ホーム画面に追加」を行い、追加したEdgeX分析アプリから開いてください。");return}
+ var b=document.getElementById("backgroundPush"),s=document.getElementById("pushStatus"),compat=pushCompatibility();
+ if(compat.ios&&!compat.standalone){alert("iPhoneではSafariでこのページを開き、共有 →「ホーム画面に追加」→「ウェブアプリとして開く」をONにしてください。その後、ホーム画面のEdgeX分析アイコンから開いて「バックグラウンド通知 ON」を押してください。");return}
+ if(!compat.supported){alert("現在のブラウザ/開き方ではWeb Pushを利用できません。iPhoneはホーム画面のWebアプリ、Android/PCはPush対応ブラウザで開いてください。");return}
  try{
   var reg=await navigator.serviceWorker.ready,existing=await reg.pushManager.getSubscription();
   if(existing){
@@ -408,12 +420,12 @@ function loadRiskProfile(){try{var p=JSON.parse(localStorage.getItem("edgexRiskP
 function saveRiskProfile(){localStorage.setItem("edgexRiskProfile",JSON.stringify({equity:Number(document.getElementById("equity").value)||0,riskPct:Number(document.getElementById("riskPct").value)||0}))}
 document.getElementById("equity").addEventListener("change",saveRiskProfile);document.getElementById("riskPct").addEventListener("change",saveRiskProfile);
 function applyDeepLink(){var u=new URL(location.href),tabName=u.searchParams.get("tab"),ticker=u.searchParams.get("ticker");if(ticker)document.getElementById("ticker").value=ticker.toUpperCase();if(tabName&&document.getElementById(tabName))tab(tabName);if((tabName==="analysis"||ticker)&&ticker)analyze()}
-loadRiskProfile();renderQuickAccess();renderCandidateAlerts();syncCandidateNotifyButton();syncBackgroundPushButton();updateCandleCountdown();setInterval(updateCandleCountdown,1000);
+loadRiskProfile();renderQuickAccess();renderCandidateAlerts();syncCandidateNotifyButton();renderPushGuide();syncBackgroundPushButton();updateCandleCountdown();setInterval(updateCandleCountdown,1000);
 syncAutoJournalButton();renderJournal();renderDashboard();
 window.addEventListener("beforeinstallprompt",function(e){e.preventDefault();deferredInstallPrompt=e;document.getElementById("installApp").classList.add("good")});
 document.getElementById("backgroundPush").onclick=toggleBackgroundPush;
 document.getElementById("candidateNotify").onclick=toggleCandidateNotify;
-document.getElementById("installApp").onclick=async function(){if(deferredInstallPrompt){deferredInstallPrompt.prompt();await deferredInstallPrompt.userChoice;deferredInstallPrompt=null;this.textContent="ホーム画面追加済み/確認"}else{var ios=/iphone|ipad|ipod/i.test(navigator.userAgent);alert(ios?"Safariの共有ボタン →「ホーム画面に追加」を選んでください。":"ブラウザのメニューから「アプリをインストール」または「ホーム画面に追加」を選んでください。")}};
+document.getElementById("installApp").onclick=async function(){if(deferredInstallPrompt){deferredInstallPrompt.prompt();await deferredInstallPrompt.userChoice;deferredInstallPrompt=null;this.textContent="ホーム画面追加済み/確認"}else{var ios=/iphone|ipad|ipod/i.test(navigator.userAgent);alert(ios?"Safariで開く → 共有 →「ホーム画面に追加」→「ウェブアプリとして開く」をON → 追加。ホーム画面のEdgeX分析アイコンから起動してください。":"ブラウザのメニューから「アプリをインストール」または「ホーム画面に追加」を選んでください。")}};
 if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("/sw.js").then(function(){syncBackgroundPushButton()}).catch(function(){syncBackgroundPushButton()})})}else{syncBackgroundPushButton()}
 hydrateServerState().finally(function(){applyDeepLink();setTimeout(function(){scan(false)},80)});
 
