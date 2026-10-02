@@ -2342,12 +2342,17 @@ def analyze_contract(
         "rr": rr,
         "current_structural_target": target,
         "stop_valid": stop_valid,
+        "shadow_stop_loss": stop if stop_valid else None,
         "shadow_fixed_2r_target": fixed_2r_target,
         "shadow_fixed_2r_rr": fixed_2r_rr,
         "shadow_fixed_2r_ready": shadow_fixed_2r_ready,
         "shadow_measured_target": measured_target,
         "shadow_measured_rr": measured_rr,
         "shadow_measured_ready": shadow_measured_ready,
+        "shadow_v2_ready": shadow_measured_ready,
+        "shadow_v2_target": fixed_2r_target if shadow_measured_ready else None,
+        "shadow_v2_extension_target": measured_target if shadow_measured_ready else None,
+        "shadow_v2_room_rr": measured_rr if shadow_measured_ready else None,
     })
     return base
 
@@ -2578,17 +2583,9 @@ def _readiness_review(
                 "direction": row.get("direction"),
                 "score": row.get("score"),
                 "entry": row.get("entry_reference"),
-                "stop": row.get("stop_loss")
-                if row.get("stop_loss") is not None
-                else (
-                    row.get("entry_reference")
-                    - abs(
-                        float(row.get("entry_reference") or 0)
-                        - float(row.get("shadow_fixed_2r_target") or row.get("entry_reference") or 0)
-                    ) / 2.0
-                    if row.get("direction") == "LONG"
-                    else None
-                ),
+                "stop": row.get("shadow_stop_loss")
+                if rr_key.startswith("shadow_")
+                else row.get("stop_loss"),
                 "target": row.get(target_key),
                 "rr": row.get(rr_key),
                 "current_stage": row.get("stage"),
@@ -2629,6 +2626,25 @@ def _readiness_review(
                 "shadow_fixed_2r_rr",
                 "shadow_fixed_2r_target",
             ),
+        },
+        "proposed_v2": {
+            "rule": "measured-move room >= 2R; first target = 2R",
+            "ready_count": len(measured_ready),
+            "items": [
+                {
+                    "ticker": row.get("ticker"),
+                    "direction": row.get("direction"),
+                    "score": row.get("score"),
+                    "entry": row.get("entry_reference"),
+                    "stop": row.get("shadow_stop_loss"),
+                    "target_2r": row.get("shadow_v2_target"),
+                    "extension_target": row.get("shadow_v2_extension_target"),
+                    "room_rr": row.get("shadow_v2_room_rr"),
+                    "current_stage": row.get("stage"),
+                    "current_rr": row.get("rr"),
+                }
+                for row in measured_ready
+            ],
         },
     }
 
