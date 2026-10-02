@@ -1668,6 +1668,64 @@ async def _refresh_paper_signal_results(
         _update_paper_signal(signal)
 
 
+async def _refresh_shadow_v2_results(
+    contracts: dict[str, scanner.Contract],
+) -> None:
+    signals = _load_shadow_v2_signals(limit=2000)
+    pending = [
+        signal
+        for signal in signals
+        if str((signal.get("result") or {}).get("status") or "")
+        not in {"TP", "SL", "AMBIGUOUS"}
+    ]
+    if not pending:
+        return
+
+    by_name = {
+        contract.contract_name.upper(): contract
+        for contract in contracts.values()
+    }
+    contract_ids: list[str] = []
+    signal_contract: dict[str, scanner.Contract] = {}
+    for signal in pending:
+        contract = by_name.get(str(signal.get("ticker") or "").upper())
+        if contract is None:
+            continue
+        signal_contract[str(signal["key"])] = contract
+        if contract.contract_id not in contract_ids:
+            contract_ids.append(contract.contract_id)
+
+    if not contract_ids:
+        return
+
+    snapshots: dict[tuple[str, str], list[scanner.Candle]] = {}
+    for start in range(0, len(contract_ids), 50):
+        chunk = contract_ids[start : start + 50]
+        try:
+            part = await fetch_snapshots(
+                chunk,
+                intervals=(SETTINGS.entry_interval,),
+                timeout=25.0,
+            )
+            snapshots.update(part)
+        except Exception as exc:
+            print(f"Shadow v2 refresh chunk error: {exc}", flush=True)
+
+    for signal in pending:
+        contract = signal_contract.get(str(signal["key"]))
+        if contract is None:
+            continue
+        candles = snapshots.get(
+            (contract.contract_id, SETTINGS.entry_interval),
+            [],
+        )
+        if not candles:
+            continue
+        result = _evaluate_paper_signal(signal, candles)
+        signal["result"] = result
+        _update_shadow_v2_signal(signal)
+
+
 async def _refresh_candidate_event_results(
     contracts: dict[str, scanner.Contract],
 ) -> None:
@@ -3795,10 +3853,12 @@ async def _background_collector() -> None:
             try:
                 contracts, rows = await _scan_market_rows(force=True)
                 _persist_scan_result(contracts, rows)
+                _persist_shadow_v2_signals(rows)
                 await _process_priority_changes(rows, bucket)
                 await _maybe_push_candidate_changes(rows)
                 await _evaluate_custom_alerts(rows)
                 await _refresh_paper_signal_results(contracts)
+                await _refresh_shadow_v2_results(contracts)
                 await _refresh_candidate_event_results(contracts)
                 await _refresh_approach_event_results(contracts)
                 _maybe_generate_daily_report()
@@ -4202,6 +4262,32 @@ async def screener_api(
         "qualified_near_candidates": qualified_near_candidates,
         "watch_status": watch_status,
         "results": rows[:limit],
+    }
+
+
+@app.get("/api/shadow-v2")
+async def shadow_v2_api(
+    limit: int = Query(default=500, ge=1, le=2000),
+):
+    signals = _load_shadow_v2_signals(limit=limit)
+    try:
+        _contracts, rows = await _scan_market_rows(force=False)
+        current = _readiness_review(rows)["proposed_v2"]
+    except Exception:
+        current = {
+            "rule": "measured-move room >= 2R; first target = 2R",
+            "ready_count": 0,
+            "items": [],
+        }
+    return {
+        "model": "measured_room_fixed_2r",
+        "rule": (
+            "4H structural stop; measured-move room must support >=2R; "
+            "first target fixed at 2R"
+        ),
+        "current": current,
+        "metrics": _shadow_v2_metrics(signals),
+        "latest": signals[:50],
     }
 
 
