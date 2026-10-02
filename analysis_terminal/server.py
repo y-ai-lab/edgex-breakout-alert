@@ -2142,6 +2142,59 @@ def analyze_contract(
         "resistance_4h": max(c.high for c in monitor[-20:]),
     })
 
+    pre_breakout = monitor[
+        max(0, breakout_index - SETTINGS.roll_lookback) : breakout_index
+    ]
+    stop_valid = (
+        stop < latest15.close
+        if direction == "LONG"
+        else stop > latest15.close
+    )
+    stop_distance_shadow = (
+        abs(latest15.close - stop)
+        if stop_valid
+        else None
+    )
+    fixed_2r_target = None
+    fixed_2r_rr = None
+    measured_target = None
+    measured_rr = None
+    if stop_distance_shadow is not None:
+        fixed_2r_target = latest15.close + (
+            2.0 * stop_distance_shadow
+            if direction == "LONG"
+            else -2.0 * stop_distance_shadow
+        )
+        fixed_2r_rr = 2.0
+        if pre_breakout:
+            if direction == "LONG":
+                range_floor = min(c.low for c in pre_breakout)
+                range_height = max(0.0, roll_level - range_floor)
+                measured_target = roll_level + range_height
+                if measured_target > latest15.close:
+                    measured_rr = (
+                        measured_target - latest15.close
+                    ) / stop_distance_shadow
+            else:
+                range_ceiling = max(c.high for c in pre_breakout)
+                range_height = max(0.0, range_ceiling - roll_level)
+                measured_target = roll_level - range_height
+                if measured_target < latest15.close:
+                    measured_rr = (
+                        latest15.close - measured_target
+                    ) / stop_distance_shadow
+
+    shadow_base_ok = bool(touched and confirmed and stop_valid)
+    shadow_fixed_2r_ready = bool(
+        shadow_base_ok
+        and fixed_2r_target is not None
+    )
+    shadow_measured_ready = bool(
+        shadow_base_ok
+        and measured_rr is not None
+        and measured_rr >= SETTINGS.min_rr
+    )
+
     breakdown = _score_breakdown(
         volume_ratio=volume_ratio,
         trend=direction is not None,
@@ -2287,6 +2340,14 @@ def analyze_contract(
         "take_profit": target if structure_ok else None,
         "tp1_2r": tp1,
         "rr": rr,
+        "current_structural_target": target,
+        "stop_valid": stop_valid,
+        "shadow_fixed_2r_target": fixed_2r_target,
+        "shadow_fixed_2r_rr": fixed_2r_rr,
+        "shadow_fixed_2r_ready": shadow_fixed_2r_ready,
+        "shadow_measured_target": measured_target,
+        "shadow_measured_rr": measured_rr,
+        "shadow_measured_ready": shadow_measured_ready,
     })
     return base
 
