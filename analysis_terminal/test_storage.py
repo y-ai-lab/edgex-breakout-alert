@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
 
 from httpx import ASGITransport, AsyncClient
+from analysis_terminal.setups import setup_identity
 
 # No network delivery is allowed from these tests, even with VAPID configured.
 transport = types.ModuleType("pywebpush")
@@ -62,18 +63,96 @@ class StorageTests(unittest.IsolatedAsyncioTestCase):
         source = self.now_ms // 900_000 * 900_000 - 900_000
         row = dict(
             ticker="TESTUSDC", direction="LONG", shadow_v2_ready=True,
+            breakout_time_ms=source - 14400000, breakout_level=99,
             entry_reference=100, shadow_stop_loss=90, shadow_v2_target=120,
             latest_15m_time_ms=source, shadow_v2_extension_target=140,
             shadow_v2_room_rr=4,
         )
         self.assertEqual(server._persist_shadow_v2_signals([row]), 1)
         self.assertEqual(server._persist_shadow_v2_signals([row]), 0)
+        self.assertEqual(server._persist_shadow_v2_signals([dict(row, latest_15m_time_ms=source+900_000, entry_reference=101)]), 0)
         saved = server._load_shadow_v2_signals()[0]
         self.assertEqual(saved["created_ms"], source + 900_000 + 1)
         self.assertEqual(saved["model"], "measured_room_fixed_2r")
         self.assertEqual(saved["extension_target"], 140)
+        self.assertEqual(saved["setup_id"], setup_identity(row))
+        self.assertEqual(server._persist_shadow_v2_signals([dict(row, breakout_time_ms=source)]), 1)
         self.assertEqual(server._load_paper_signals(), [])
         self.assertEqual(server._load_push_events(), [])
+
+    def test_current_ready_is_saved_once_per_setup_with_first_entry(self):
+        row = dict(ticker="TESTUSDC", direction="LONG", stage="READY", score=90,
+                   latest_15m_time_ms=self.now_ms // 900000 * 900000 - 900000,
+                   breakout_time_ms=self.now_ms - 14400000, breakout_level=99,
+                   entry_reference=100, stop_loss=90, take_profit=125, rr=2.5)
+        server._persist_scan_result({}, [row])
+        server._persist_scan_result({}, [dict(row, latest_15m_time_ms=row["latest_15m_time_ms"]+900000, entry_reference=101)])
+        signals = server._load_paper_signals()
+        self.assertEqual(len(signals), 1)
+        self.assertEqual(signals[0]["entry"], 100)
+        self.assertEqual(signals[0]["created_ms"], row["latest_15m_time_ms"]+900000+1)
+        self.assertEqual(signals[0]["setup_id"], setup_identity(row))
+
+    def test_migration_retains_legacy_events_results_and_leaves_identity_unknown(self):
+        row = dict(ticker="TESTUSDC", direction="LONG", entry_reference=100, stop_loss=90, take_profit=120)
+        server._log_candidate_event(row, kind="NEAR", label="legacy")
+        event = server._load_candidate_events()[0]
+        server._upsert_candidate_event_result(event["id"], dict(status="TP", final_r=2))
+        with server._db_connect() as conn:
+            conn.execute("ALTER TABLE candidate_events DROP COLUMN setup_id")
+            conn.execute("ALTER TABLE approach_events DROP COLUMN setup_id")
+        server._init_db()
+        server._init_db()
+        saved = server._load_candidate_events_with_results()[0]
+        self.assertIsNone(saved["setup_id"])
+        self.assertEqual(saved["result"]["final_r"], 2)
+        self.assertEqual(server._subscription_count(), 1)
+
+    async def test_push_identity_migration_baselines_and_new_setup_is_new_event(self):
+        near = dict(ticker="TESTUSDC", direction="LONG", stage="CONFIRMATION_WAIT", rr=3, score=85, setup_id="first")
+        server._state_set("server_candidate_state", '{"near":["TESTUSDC"],"ready":[]}')
+        with patch.object(server, "_broadcast_push", AsyncMock()) as broadcast:
+            await server._maybe_push_candidate_changes([near])
+            broadcast.assert_not_called()
+            await server._maybe_push_candidate_changes([dict(near, stage="READY")])
+            self.assertEqual(broadcast.await_count, 1)
+            self.assertEqual(server._load_candidate_events()[0]["setup_id"], "first")
+            self.assertIn("昇格", server._load_candidate_events()[0]["label"])
+            await server._maybe_push_candidate_changes([dict(near, stage="READY")])
+            self.assertEqual(broadcast.await_count, 1)
+            await server._maybe_push_candidate_changes([dict(near, setup_id="second", stage="READY")])
+            self.assertEqual(broadcast.await_count, 2)
+            self.assertEqual(server._load_candidate_events()[0]["label"], "新しくエントリー可能")
+        self.assertEqual(server._subscription_count(), 1)
+
+    def test_opportunity_excludes_unknown_identity_from_no_ready_claim(self):
+        base = dict(id=1, ticker="TESTUSDC", kind="NEAR", label="test", stage="CONFIRMATION_WAIT", direction="LONG", score=80, rr=2,
+                    entry=100, stop=90, target=120, created_ms=self.now_ms-60000,
+                    result=dict(status="TP", final_r=2, outcome_time_ms=self.now_ms))
+        events = [dict(base, setup_id="first"), dict(base, id=2), dict(base, id=3, kind="READY", setup_id="second", created_ms=self.now_ms-30000)]
+        with patch.object(server, "_load_candidate_events_with_results", return_value=events):
+            result = server._opportunity_analysis()
+        self.assertEqual(result["confirmation_effect"]["near_became_ready"], 0)
+        self.assertEqual(result["confirmation_effect"]["near_tp_without_ready"], 1)
+        self.assertEqual(result["confirmation_effect"]["identity_unavailable"], 1)
+        self.assertIsNone(next(item for item in result["latest"] if item["id"] == 2)["became_ready"])
+
+    def test_approach_ready_association_uses_setup_not_ticker(self):
+        row = dict(ticker="TESTUSDC", direction="LONG", setup_id="second")
+        server._log_candidate_event(row, kind="READY", label="test")
+        base = dict(ticker="TESTUSDC", current_score=75, created_ms=self.now_ms-60000, entry=100, stop=90, target=120, result=None)
+        with patch.object(server, "_load_approach_events_with_results", return_value=[dict(base, setup_id="first"), dict(base, setup_id="second"), base]):
+            result = server._approach_validation()
+        self.assertEqual(result["overall"]["became_ready"], 1)
+        self.assertEqual(result["overall"]["identity_unavailable"], 1)
+
+    def test_approach_identity_round_trips_through_sql_and_result_join(self):
+        server._log_approach_event(bucket_ms=self.now_ms, ticker="TESTUSDC", previous_score=60, current_score=75, current_rank=4,
+                                   stage="CONFIRMATION_WAIT", direction="LONG", rr=2, priority_score=70, entry=100, stop=90, target=120, setup_id="first")
+        event = server._load_approach_events()[0]
+        self.assertEqual(event["setup_id"], "first")
+        server._upsert_approach_event_result(event["id"], dict(status="OPEN"))
+        self.assertEqual(server._load_approach_events_with_results()[0]["setup_id"], "first")
 
     async def test_local_api_smoke_and_push_read_routes(self):
         contract = server.scanner.Contract("1", "TESTUSDC", "USDC", True, True)

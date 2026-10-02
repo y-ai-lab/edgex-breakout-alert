@@ -188,7 +188,8 @@ class ShadowPromotionTests(unittest.TestCase):
         # Load the actual metrics function without starting FastAPI or push clients.
         tree = ast.parse((ROOT / "server.py").read_text())
         function = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "_shadow_v2_metrics")
-        namespace = dict(Any=object, mean=mean, verified_result=verified_result)
+        from analysis_terminal.setups import first_per_setup
+        namespace = dict(Any=object, mean=mean, verified_result=verified_result, first_per_setup=first_per_setup)
         exec(compile(ast.Module(body=[function], type_ignores=[]), "server.py", "exec"), namespace)
         cls.metrics = staticmethod(namespace["_shadow_v2_metrics"])
 
@@ -203,11 +204,33 @@ class ShadowPromotionTests(unittest.TestCase):
     def test_sample_and_profit_gates_remain_unchanged(self):
         win = dict(result=evaluate(signal(), [candle(2, 120, 95)]))
         loss = dict(result=evaluate(signal(), [candle(2, 105, 90)]))
-        self.assertFalse(self.metrics([win] * 19)["promotion_pass"])
-        self.assertFalse(self.metrics([loss] * 20)["promotion_pass"])
-        self.assertTrue(self.metrics([win] * 10 + [loss] * 10)["promotion_pass"])
+        def identified(values):
+            return [dict(value, setup_id=f"setup-{i}") for i, value in enumerate(values)]
+        self.assertFalse(self.metrics(identified([win] * 19))["promotion_pass"])
+        self.assertFalse(self.metrics(identified([loss] * 20))["promotion_pass"])
+        self.assertTrue(self.metrics(identified([win] * 10 + [loss] * 10))["promotion_pass"])
         incomplete = dict(result=dict(win["result"], coverage_complete=False))
-        self.assertEqual(self.metrics([win] * 19 + [incomplete])["resolved"], 19)
+        self.assertEqual(self.metrics(identified([win] * 19 + [incomplete]))["resolved"], 19)
+
+    def test_twenty_confirmations_of_one_setup_cannot_pass_promotion(self):
+        win = dict(setup_id="same", result=evaluate(signal(), [candle(2, 120, 95)]))
+        metrics = self.metrics([win] * 20)
+        self.assertEqual(metrics["resolved"], 1)
+        self.assertEqual(metrics["duplicate_setup_signals"], 19)
+        self.assertFalse(metrics["promotion_pass"])
+
+    def test_verified_legacy_results_are_archived_not_promotion_samples(self):
+        win = dict(result=evaluate(signal(), [candle(2, 120, 95)]))
+        metrics = self.metrics([win] * 20)
+        self.assertEqual(metrics["tracked"], 20)
+        self.assertEqual(metrics["legacy_unidentified_signals"], 20)
+        self.assertEqual(metrics["resolved"], 0)
+        self.assertFalse(metrics["decision_ready"])
+
+    def test_first_entry_is_used_even_if_later_duplicate_is_profitable(self):
+        values = [dict(setup_id="same", created_ms=2, result=evaluate(signal(), [candle(2, 120, 95)])),
+                  dict(setup_id="same", created_ms=1, result=dict(status="OPEN"))]
+        self.assertEqual(self.metrics(values)["resolved"], 0)
 
 
 if __name__ == "__main__":

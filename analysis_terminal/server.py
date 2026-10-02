@@ -26,6 +26,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 import app as scanner
 from analysis_terminal.outcomes import evaluate_paper_signal, verified_result
+from analysis_terminal.setups import first_per_setup, later_ready_time, ready_times_by_setup, setup_identity
 
 SETTINGS = scanner.Settings.from_env(dry_run_override=True)
 CLIENT = scanner.EdgeXClient(SETTINGS)
@@ -151,6 +152,7 @@ def _init_db() -> None:
             for row in conn.execute("PRAGMA table_info(candidate_events)").fetchall()
         }
         for column_name, column_type in (
+            ("setup_id", "TEXT"),
             ("confirmation_color_ok", "INTEGER"),
             ("confirmation_level_ok", "INTEGER"),
             ("confirmation_body_atr", "REAL"),
@@ -257,6 +259,7 @@ def _init_db() -> None:
             for row in conn.execute("PRAGMA table_info(approach_events)").fetchall()
         }
         for column_name, column_type in (
+            ("setup_id", "TEXT"),
             ("priority_score", "REAL"),
             ("entry", "REAL"),
             ("stop", "REAL"),
@@ -438,12 +441,15 @@ def _persist_shadow_v2_signals(rows: list[dict[str, Any]]) -> int:
         candle_ms = row.get("latest_15m_time_ms")
         if None in {entry, stop, target, candle_ms}:
             continue
+        setup_id = setup_identity(row)
+        if setup_id is None:
+            continue
         signal_close_ms = int(candle_ms) + interval_ms
         signal = {
-            "key": (
-                f"v2:{row.get('ticker')}:{row.get('direction')}:"
-                f"{signal_close_ms}"
-            ),
+            "key": f"v2:{setup_id}",
+            "setup_id": setup_id,
+            "breakout_time_ms": row["breakout_time_ms"],
+            "breakout_level": row["breakout_level"],
             "model": "measured_room_fixed_2r",
             "ticker": row.get("ticker"),
             "side": row.get("direction"),
@@ -466,8 +472,9 @@ def _persist_shadow_v2_signals(rows: list[dict[str, Any]]) -> int:
 def _shadow_v2_metrics(
     signals: list[dict[str, Any]],
 ) -> dict[str, Any]:
+    cohort = first_per_setup(signals)
     resolved = [
-        signal for signal in signals
+        signal for signal in cohort
         if str((signal.get("result") or {}).get("status") or "")
         in {"TP", "SL"}
         and verified_result(signal.get("result"))
@@ -503,13 +510,17 @@ def _shadow_v2_metrics(
     )
     return {
         "tracked": len(signals),
+        "setup_tracked": len(cohort),
+        "legacy_unidentified_signals": sum(1 for signal in signals if not signal.get("setup_id")),
+        "duplicate_setup_signals": sum(1 for signal in signals if signal.get("setup_id")) - len(cohort),
+        "sample_basis": "unique_setup_first_entry",
         "unverified_results": sum(
             1 for signal in signals
             if signal.get("result") and not verified_result(signal.get("result"))
         ),
         "sample_status": "SUFFICIENT SAMPLE" if decision_ready else "INSUFFICIENT SAMPLE",
         "open": sum(
-            1 for signal in signals
+            1 for signal in cohort
             if str((signal.get("result") or {}).get("status") or "OPEN")
             not in {"TP", "SL", "AMBIGUOUS"}
         ),
@@ -831,9 +842,9 @@ def _log_candidate_event(
                 ticker, kind, label, stage, direction, score, rr,
                 entry, stop, target, confirmation_color_ok,
                 confirmation_level_ok, confirmation_body_atr,
-                confirmation_roll_margin_atr, created_ms
+                confirmation_roll_margin_atr, created_ms, setup_id
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 str(row.get("ticker") or ""),
@@ -855,6 +866,7 @@ def _log_candidate_event(
                 row.get("confirmation_body_atr"),
                 row.get("confirmation_roll_margin_atr"),
                 now_ms,
+                row.get("setup_id"),
             ),
         )
         cutoff = now_ms - 30 * 24 * 60 * 60 * 1000
@@ -869,7 +881,7 @@ def _load_candidate_events(limit: int = 100) -> list[dict[str, Any]]:
             SELECT id, ticker, kind, label, stage, direction, score, rr,
                    entry, stop, target, confirmation_color_ok,
                    confirmation_level_ok, confirmation_body_atr,
-                   confirmation_roll_margin_atr, created_ms
+                   confirmation_roll_margin_atr, created_ms, setup_id
             FROM candidate_events
             ORDER BY id DESC
             LIMIT ?
@@ -913,7 +925,7 @@ def _load_candidate_events_with_results(
                 e.score, e.rr, e.entry, e.stop, e.target,
                 e.confirmation_color_ok, e.confirmation_level_ok,
                 e.confirmation_body_atr, e.confirmation_roll_margin_atr,
-                e.created_ms, r.payload AS result_payload,
+                e.created_ms, e.setup_id, r.payload AS result_payload,
                 r.updated_ms AS result_updated_ms
             FROM candidate_events e
             LEFT JOIN candidate_event_results r ON r.event_id = e.id
@@ -1296,8 +1308,9 @@ async def _maybe_push_candidate_changes(rows: list[dict[str, Any]]) -> None:
     ]
 
     current = {
-        "ready": [str(row["ticker"]) for row in ready],
-        "near": [str(row["ticker"]) for row in near],
+        "identity_version": 1,
+        "ready": [str(row["setup_id"]) for row in ready if row.get("setup_id")],
+        "near": [str(row["setup_id"]) for row in near if row.get("setup_id")],
     }
     previous_raw = _state_get("server_candidate_state")
     _state_set(
@@ -1311,16 +1324,20 @@ async def _maybe_push_candidate_changes(rows: list[dict[str, Any]]) -> None:
         previous = json.loads(previous_raw)
     except json.JSONDecodeError:
         return
+    # Baseline the new identity format once; migration must not replay alerts.
+    if previous.get("identity_version") != 1:
+        return
 
     prev_ready = set(previous.get("ready") or [])
     prev_near = set(previous.get("near") or [])
     for row in ready:
         ticker = str(row["ticker"])
-        if ticker in prev_ready:
+        setup_id = row.get("setup_id")
+        if not setup_id or setup_id in prev_ready:
             continue
         label = (
             "直前候補からエントリー可能へ昇格"
-            if ticker in prev_near
+            if setup_id in prev_near
             else "新しくエントリー可能"
         )
         _log_candidate_event(
@@ -1343,7 +1360,8 @@ async def _maybe_push_candidate_changes(rows: list[dict[str, Any]]) -> None:
 
     for row in near:
         ticker = str(row["ticker"])
-        if ticker in prev_near or ticker in prev_ready:
+        setup_id = row.get("setup_id")
+        if not setup_id or setup_id in prev_near or setup_id in prev_ready:
             continue
         _log_candidate_event(
             row,
@@ -1806,9 +1824,10 @@ def _approach_validation_metrics(
         for item in ready_items
         if item.get("minutes_to_ready") is not None
     ]
-    matured = [item for item in items if item.get("matured")]
+    matured = [item for item in items if item.get("matured") and item.get("setup_id")]
     return {
         "tracked": len(items),
+        "identity_unavailable": sum(1 for item in items if not item.get("setup_id")),
         "matured": len(matured),
         "became_ready": len(ready_items),
         "ready_rate": (
@@ -1843,18 +1862,14 @@ def _approach_validation(limit: int = 500) -> dict[str, Any]:
     with _db_connect() as conn:
         ready_rows = conn.execute(
             """
-            SELECT ticker, created_ms
+            SELECT setup_id, kind, created_ms
             FROM candidate_events
             WHERE kind = 'READY'
             ORDER BY created_ms
             """
         ).fetchall()
 
-    ready_by_ticker: dict[str, list[int]] = {}
-    for row in ready_rows:
-        ready_by_ticker.setdefault(str(row["ticker"]), []).append(
-            int(row["created_ms"])
-        )
+    ready_by_setup = ready_times_by_setup([dict(row) for row in ready_rows])
 
     enriched: list[dict[str, Any]] = []
     for event in events:
@@ -1871,26 +1886,19 @@ def _approach_validation(limit: int = 500) -> dict[str, Any]:
             created_ms + horizon_ms,
             int(outcome_time) if outcome_time else now_ms,
         )
-        ready_time = next(
-            (
-                ready_ms
-                for ready_ms in ready_by_ticker.get(str(event["ticker"]), [])
-                if created_ms < ready_ms <= observation_end
-            ),
-            None,
-        )
+        ready_time = later_ready_time(event, ready_by_setup, observation_end)
         terminal = str(result.get("status") or "") in {
             "TP",
             "SL",
             "AMBIGUOUS",
         }
-        matured = (
+        matured = bool(event.get("setup_id")) and (
             ready_time is not None
             or terminal
             or now_ms >= created_ms + horizon_ms
         )
         enriched_event = dict(event)
-        enriched_event["became_ready"] = ready_time is not None
+        enriched_event["became_ready"] = (ready_time is not None) if event.get("setup_id") else None
         enriched_event["ready_time_ms"] = ready_time
         enriched_event["minutes_to_ready"] = (
             round((ready_time - created_ms) / 60000.0, 1)
@@ -2029,28 +2037,19 @@ def _opportunity_analysis(limit: int = 500) -> dict[str, Any]:
     events = _load_candidate_events_with_results(limit=limit)
     ordered = sorted(events, key=lambda item: int(item["created_ms"]))
 
-    ready_by_ticker: dict[str, list[int]] = {}
-    for event in ordered:
-        if event.get("kind") == "READY":
-            ready_by_ticker.setdefault(str(event["ticker"]), []).append(
-                int(event["created_ms"])
-            )
+    ready_by_setup = ready_times_by_setup(ordered)
 
     def later_ready_before(
         event: dict[str, Any],
         end_ms: int | None,
     ) -> bool:
-        ticker = str(event["ticker"])
         start_ms = int(event["created_ms"])
         horizon = (
             int(end_ms)
             if end_ms
             else start_ms + 48 * 60 * 60 * 1000
         )
-        return any(
-            start_ms < ready_ms <= horizon
-            for ready_ms in ready_by_ticker.get(ticker, [])
-        )
+        return later_ready_time(event, ready_by_setup, horizon) is not None
 
     trackable = [
         event
@@ -2082,7 +2081,7 @@ def _opportunity_analysis(limit: int = 500) -> dict[str, Any]:
             near_became_ready += 1
 
         status = str(result.get("status") or "OPEN")
-        if event.get("kind") == "NEAR" and not became_ready:
+        if event.get("setup_id") and event.get("kind") == "NEAR" and not became_ready:
             if status == "TP":
                 near_tp_without_ready += 1
             elif status == "SL":
@@ -2093,6 +2092,7 @@ def _opportunity_analysis(limit: int = 500) -> dict[str, Any]:
         latest.append({
             "id": event["id"],
             "ticker": event["ticker"],
+            "setup_id": event.get("setup_id"),
             "kind": event["kind"],
             "label": event["label"],
             "stage": event["stage"],
@@ -2103,7 +2103,7 @@ def _opportunity_analysis(limit: int = 500) -> dict[str, Any]:
             "stop": event["stop"],
             "target": event["target"],
             "created_ms": event["created_ms"],
-            "became_ready": became_ready,
+            "became_ready": became_ready if event.get("setup_id") else None,
             "result": result,
         })
         if len(latest) >= 50:
@@ -2119,7 +2119,8 @@ def _opportunity_analysis(limit: int = 500) -> dict[str, Any]:
             "near_sl_without_ready": near_sl_without_ready,
             "near_became_ready": near_became_ready,
             "near_mfe_2r_without_ready": near_mfe_2r_without_ready,
-            "sample_size": len(near),
+            "sample_size": sum(1 for event in near if event.get("setup_id")),
+            "identity_unavailable": sum(1 for event in near if not event.get("setup_id")),
             "decision_sample": (
                 near_tp_without_ready
                 + near_sl_without_ready
@@ -2459,6 +2460,7 @@ def analyze_contract(
         "shadow_v2_extension_target": measured_target if shadow_measured_ready else None,
         "shadow_v2_room_rr": measured_rr if shadow_measured_ready else None,
     })
+    base["setup_id"] = setup_identity(base)
     return base
 
 
@@ -2742,6 +2744,7 @@ def _readiness_review(
                     "score": row.get("score"),
                     "entry": row.get("entry_reference"),
                     "stop": row.get("shadow_stop_loss"),
+                    "setup_id": row.get("setup_id"),
                     "target_2r": row.get("shadow_v2_target"),
                     "extension_target": row.get("shadow_v2_extension_target"),
                     "room_rr": row.get("shadow_v2_room_rr"),
@@ -3017,6 +3020,7 @@ def _priority_ranking(
             + evidence_points
         )
         ranked.append({
+            "setup_id": row.get("setup_id"),
             "ticker": row.get("ticker"),
             "stage": stage,
             "direction": row.get("direction"),
@@ -3061,6 +3065,7 @@ def _save_priority_snapshot(
     payload = [
         {
             "ticker": item.get("ticker"),
+            "setup_id": item.get("setup_id"),
             "rank": index + 1,
             "priority_score": item.get("priority_score"),
             "approach_score": item.get("approach_score"),
@@ -3278,6 +3283,7 @@ def _log_approach_event(
     entry: float | None,
     stop: float | None,
     target: float | None,
+    setup_id: str | None = None,
 ) -> None:
     now_ms = int(time.time() * 1000)
     with _db_connect() as conn:
@@ -3286,9 +3292,9 @@ def _log_approach_event(
             INSERT OR IGNORE INTO approach_events(
                 bucket_ms, ticker, previous_score, current_score,
                 current_rank, stage, direction, rr, priority_score,
-                entry, stop, target, created_ms
+                entry, stop, target, created_ms, setup_id
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 int(bucket_ms),
@@ -3304,6 +3310,7 @@ def _log_approach_event(
                 stop,
                 target,
                 now_ms,
+                setup_id,
             ),
         )
         cutoff = now_ms - 30 * 24 * 60 * 60 * 1000
@@ -3320,7 +3327,7 @@ def _load_approach_events(limit: int = 100) -> list[dict[str, Any]]:
             """
             SELECT id, bucket_ms, ticker, previous_score, current_score,
                    current_rank, stage, direction, rr, priority_score,
-                   entry, stop, target, created_ms
+                   entry, stop, target, created_ms, setup_id
             FROM approach_events
             ORDER BY id DESC
             LIMIT ?
@@ -3363,7 +3370,7 @@ def _load_approach_events_with_results(
                 e.id, e.bucket_ms, e.ticker, e.previous_score,
                 e.current_score, e.current_rank, e.stage, e.direction,
                 e.rr, e.priority_score, e.entry, e.stop, e.target,
-                e.created_ms, r.payload AS result_payload,
+                e.created_ms, e.setup_id, r.payload AS result_payload,
                 r.updated_ms AS result_updated_ms
             FROM approach_events e
             LEFT JOIN approach_event_results r ON r.event_id = e.id
@@ -3428,6 +3435,8 @@ async def _process_priority_changes(
             else None
         )
         previous_approach = previous_item.get("approach_score")
+        if not item.get("setup_id") or previous_item.get("setup_id") != item.get("setup_id"):
+            previous_approach = None
         if previous_approach is not None:
             previous_approach = float(previous_approach)
 
@@ -3524,6 +3533,7 @@ async def _process_priority_changes(
                 entry=item.get("entry_reference"),
                 stop=item.get("stop_loss"),
                 target=item.get("take_profit"),
+                setup_id=item.get("setup_id"),
             )
             await _broadcast_push(
                 {
@@ -3701,8 +3711,14 @@ def _persist_scan_result(
         direction = str(row.get("direction") or "")
         if not source_ms or direction not in {"LONG", "SHORT"}:
             continue
+        setup_id = setup_identity(row)
+        if setup_id is None:
+            continue
         signal = {
-            "key": f"{row['ticker']}|{source_ms}|{direction}",
+            "key": f"current:{setup_id}",
+            "setup_id": setup_id,
+            "breakout_time_ms": row["breakout_time_ms"],
+            "breakout_level": row["breakout_level"],
             "ticker": row["ticker"],
             "side": direction,
             "action": "AUTO ENTER",
@@ -3769,7 +3785,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="EdgeX Analysis Terminal",
-    version="19.0.1",
+    version="19.0.2",
     lifespan=lifespan,
 )
 
@@ -3781,7 +3797,7 @@ async def health():
     return {
         "ok": True,
         "service": "edgex-analysis-terminal",
-        "version": "19.0.1",
+        "version": "19.0.2",
         "time_ms": int(time.time() * 1000),
         "storage": {
             "market_snapshots_48h": len(history),
