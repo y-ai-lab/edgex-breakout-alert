@@ -275,6 +275,16 @@ def _init_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS shadow_v2_signals (
+                signal_key TEXT PRIMARY KEY,
+                payload TEXT NOT NULL,
+                created_ms INTEGER NOT NULL,
+                updated_ms INTEGER NOT NULL
+            )
+            """
+        )
         conn.commit()
 
     if VAPID_PRIVATE_KEY:
@@ -359,6 +369,162 @@ def _load_paper_signals(limit: int = 200) -> list[dict[str, Any]]:
             (max(1, min(limit, 1000)),),
         ).fetchall()
     return [json.loads(row["payload"]) for row in rows]
+
+
+def _insert_shadow_v2_signal(signal: dict[str, Any]) -> bool:
+    now_ms = int(time.time() * 1000)
+    with _db_connect() as conn:
+        cur = conn.execute(
+            """
+            INSERT OR IGNORE INTO shadow_v2_signals(
+                signal_key, payload, created_ms, updated_ms
+            )
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                str(signal["key"]),
+                json.dumps(signal, separators=(",", ":")),
+                int(signal["created_ms"]),
+                now_ms,
+            ),
+        )
+        conn.commit()
+        return cur.rowcount > 0
+
+
+def _update_shadow_v2_signal(signal: dict[str, Any]) -> None:
+    now_ms = int(time.time() * 1000)
+    signal["updated_ms"] = now_ms
+    with _db_connect() as conn:
+        conn.execute(
+            """
+            UPDATE shadow_v2_signals
+            SET payload = ?, updated_ms = ?
+            WHERE signal_key = ?
+            """,
+            (
+                json.dumps(signal, separators=(",", ":")),
+                now_ms,
+                str(signal["key"]),
+            ),
+        )
+        conn.commit()
+
+
+def _load_shadow_v2_signals(limit: int = 500) -> list[dict[str, Any]]:
+    with _db_connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT payload
+            FROM shadow_v2_signals
+            ORDER BY created_ms DESC
+            LIMIT ?
+            """,
+            (max(1, min(limit, 2000)),),
+        ).fetchall()
+    return [json.loads(row["payload"]) for row in rows]
+
+
+def _persist_shadow_v2_signals(rows: list[dict[str, Any]]) -> int:
+    inserted = 0
+    interval_ms = scanner.INTERVAL_MS[SETTINGS.entry_interval]
+    for row in rows:
+        if row.get("shadow_v2_ready") is not True:
+            continue
+        entry = row.get("entry_reference")
+        stop = row.get("shadow_stop_loss")
+        target = row.get("shadow_v2_target")
+        candle_ms = row.get("latest_15m_time_ms")
+        if None in {entry, stop, target, candle_ms}:
+            continue
+        signal_close_ms = int(candle_ms) + interval_ms
+        signal = {
+            "key": (
+                f"v2:{row.get('ticker')}:{row.get('direction')}:"
+                f"{signal_close_ms}"
+            ),
+            "model": "measured_room_fixed_2r",
+            "ticker": row.get("ticker"),
+            "side": row.get("direction"),
+            "entry": float(entry),
+            "stop": float(stop),
+            "target": float(target),
+            "extension_target": row.get("shadow_v2_extension_target"),
+            "room_rr": row.get("shadow_v2_room_rr"),
+            "score": row.get("score"),
+            "signal_candle_ms": int(candle_ms),
+            # +1ms guarantees the signal candle itself cannot decide TP/SL.
+            "created_ms": signal_close_ms + 1,
+            "result": None,
+        }
+        if _insert_shadow_v2_signal(signal):
+            inserted += 1
+    return inserted
+
+
+def _shadow_v2_metrics(
+    signals: list[dict[str, Any]],
+) -> dict[str, Any]:
+    resolved = [
+        signal for signal in signals
+        if str((signal.get("result") or {}).get("status") or "")
+        in {"TP", "SL"}
+        and (signal.get("result") or {}).get("coverage_complete") is not False
+    ]
+    tp = [
+        signal for signal in resolved
+        if (signal.get("result") or {}).get("status") == "TP"
+    ]
+    sl = [
+        signal for signal in resolved
+        if (signal.get("result") or {}).get("status") == "SL"
+    ]
+    rs = [
+        float((signal.get("result") or {}).get("final_r"))
+        for signal in resolved
+        if (signal.get("result") or {}).get("final_r") is not None
+    ]
+    gross_win = sum(max(0.0, r) for r in rs)
+    gross_loss = abs(sum(min(0.0, r) for r in rs))
+    pf = (
+        gross_win / gross_loss
+        if gross_loss > 0
+        else (float("inf") if gross_win > 0 else None)
+    )
+    avg_r = mean(rs) if rs else None
+    decision_ready = len(resolved) >= 20
+    promotion_pass = bool(
+        decision_ready
+        and avg_r is not None
+        and avg_r > 0
+        and pf is not None
+        and pf > 1.0
+    )
+    return {
+        "tracked": len(signals),
+        "open": sum(
+            1 for signal in signals
+            if str((signal.get("result") or {}).get("status") or "OPEN")
+            not in {"TP", "SL", "AMBIGUOUS"}
+        ),
+        "resolved": len(resolved),
+        "tp": len(tp),
+        "sl": len(sl),
+        "win_rate": (
+            round(len(tp) / len(resolved) * 100.0, 1)
+            if resolved
+            else None
+        ),
+        "avg_r": round(avg_r, 3) if avg_r is not None else None,
+        "profit_factor": (
+            "INF" if pf == float("inf")
+            else round(pf, 3) if pf is not None
+            else None
+        ),
+        "decision_ready": decision_ready,
+        "promotion_pass": promotion_pass,
+        "minimum_resolved": 20,
+    }
 
 
 def _state_get(key: str) -> str | None:
