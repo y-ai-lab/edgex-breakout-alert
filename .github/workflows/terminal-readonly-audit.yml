@@ -1,0 +1,145 @@
+name: Terminal v19.0.2 read-only audit
+on:
+  push:
+    branches: ["audit/terminal-v19-0-2"]
+    paths: [".github/workflows/terminal-readonly-audit.yml"]
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install test dependencies
+        run: python -m pip install -r analysis_terminal/test-requirements.txt
+      - name: Terminal and existing regression tests
+        run: |
+          python -m unittest analysis_terminal.test_outcomes analysis_terminal.test_storage analysis_terminal.test_setups -v
+          python -m unittest discover -s tests -v
+      - name: Read production APIs and validate retained data
+        run: |
+          python - <<'PY'
+          import concurrent.futures, json, urllib.request, time
+          from analysis_terminal.setups import setup_identity
+          from datetime import datetime, timezone
+          from pathlib import Path
+          base = "https://edgex-analysis-terminal-production.up.railway.app"
+          paths = {
+              "index": "/", "health": "/health",
+              "screener": "/api/screener?limit=200",
+              "analyze": "/api/analyze?ticker=BTCUSDC",
+              "review": "/api/readiness-review",
+              "shadow": "/api/shadow-v2?limit=2000",
+              "push_config": "/api/push/config",
+              "push_events": "/api/push/events?limit=1",
+              "history": "/api/server-history?hours=720",
+              "candidate_events": "/api/candidate-events?limit=500",
+              "approach_events": "/api/approach-events?limit=500",
+              "approach_validation": "/api/approach-validation?limit=500",
+              "opportunity": "/api/opportunity-analysis?limit=500",
+              "paper": "/api/server-paper-signals?limit=1000",
+          }
+          output = Path("audit-output")
+          output.mkdir()
+          def fetch(item):
+              name, path = item
+              with urllib.request.urlopen(base + path, timeout=65) as response:
+                  raw = response.read().decode()
+                  assert response.status == 200, (name, response.status)
+                  data = raw if name == "index" else json.loads(raw)
+                  if name == "push_config":
+                      data.pop("public_key", None)
+                  if name == "push_events":
+                      data = {"event_count": len(data.get("events") or [])}
+                  (output / (name + (".html" if name == "index" else ".json"))).write_text(
+                      raw if name == "index" else json.dumps(data, ensure_ascii=False)
+                  )
+                  return name, data
+          with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+              results = dict(pool.map(fetch, paths.items()))
+          health = results["health"]
+          assert health["version"] == "19.0.2", health
+          assert health["storage"]["db_exists"]
+          assert health["storage"]["market_snapshots_48h"] >= 175
+          assert health["push"]["enabled"] and health["push"]["subscribers"] >= 1
+          assert results["push_config"]["enabled"]
+          history = results["history"]["snapshots"]
+          assert len(history) >= 175
+          assert min(s["time_ms"] for s in history) < 1790943622718
+          shadow = results["shadow"]
+          for s in shadow["latest"]:
+              assert s["created_ms"] == s["signal_candle_ms"] + 900000 + 1
+              r = s.get("result") or {}
+              if r.get("evaluation_version") == 2 and r.get("history_start_ms") is not None:
+                  assert r["history_start_ms"] >= s["created_ms"] - 1
+                  if r.get("status") in {"TP", "SL", "AMBIGUOUS"}:
+                      assert r["outcome_time_ms"] >= s["created_ms"] - 1
+                      assert r["history_end_ms"] == r["outcome_time_ms"]
+          metrics = shadow["metrics"]
+          assert metrics["sample_basis"] == "unique_setup_first_entry"
+          assert metrics["legacy_unidentified_signals"] >= 234
+          assert metrics["duplicate_setup_signals"] == 0
+          if metrics["resolved"] < 20:
+              assert not metrics["decision_ready"] and not metrics["promotion_pass"]
+              assert metrics["sample_status"] == "INSUFFICIENT SAMPLE"
+          setup_signals = [s for s in shadow["latest"] if s.get("setup_id")]
+          assert len(set(s["setup_id"] for s in setup_signals)) == len(setup_signals)
+          for s in setup_signals:
+              assert s["setup_id"] == setup_identity(dict(s, direction=s["side"]))
+              assert s["key"] == "v2:" + s["setup_id"]
+          for row in results["screener"]["results"]:
+              if row.get("breakout_time_ms"):
+                  assert row["setup_id"] == setup_identity(row)
+          # Confirm the collector/API do not rewrite the original entry for a setup.
+          time.sleep(15)
+          _, again = fetch(("shadow_repeat", paths["shadow"]))
+          indexed = {s["key"]: s for s in again["latest"]}
+          for s in setup_signals:
+              if s["key"] in indexed:
+                  for field in ("created_ms", "signal_candle_ms", "entry", "stop", "target"):
+                      assert s[field] == indexed[s["key"]][field], (s["key"], field)
+          results["shadow_repeat"] = again
+          review = results["review"]["review"]
+          screener = results["screener"]
+          stages = screener["summary"]["stage_counts"]
+          funnel = {
+              "scanned": screener["scanned"],
+              "stages": stages,
+              "confirmed_after_retest": review["confirmed_after_retest"],
+              "current_ready": review["current"]["ready_count"],
+              "shadow_v2_ready": review["proposed_v2"]["ready_count"],
+              "shadow_metrics": shadow["metrics"],
+          }
+          blocked = [
+              {k: r.get(k) for k in ("ticker", "stage", "rr", "reason", "shadow_v2_ready", "shadow_v2_room_rr")}
+              for r in screener["results"]
+              if r.get("retest_touched") and r.get("confirmed")
+          ]
+          report = {"checked_at_utc": datetime.now(timezone.utc).isoformat(),
+                    "http_200": list(paths), "health": health, "funnel": funnel,
+                    "confirmed_candidates": blocked,
+                    "setup_signals": [{k: s.get(k) for k in ("key", "setup_id", "ticker", "side", "entry", "created_ms")} for s in setup_signals],
+                    "repeat_shadow_metrics": again["metrics"]}
+          (output / "report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2))
+          print("LIVE_AUDIT_REPORT=" + json.dumps(report, ensure_ascii=False))
+          PY
+      - name: JavaScript syntax on the actual production HTML
+        run: |
+          node - <<'JS'
+          const fs = require('fs');
+          const html = fs.readFileSync('audit-output/index.html', 'utf8');
+          const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)];
+          if (!scripts.length) throw new Error('Missing script');
+          for (const script of scripts) new Function(script[1]);
+          console.log('Production JavaScript syntax: OK');
+          JS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: edgex-terminal-v19-0-2-audit
+          path: audit-output/
+          retention-days: 7
