@@ -25,6 +25,7 @@ from pywebpush import WebPushException, webpush
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 import app as scanner
+from analysis_terminal.outcomes import evaluate_paper_signal, verified_result
 
 SETTINGS = scanner.Settings.from_env(dry_run_override=True)
 CLIENT = scanner.EdgeXClient(SETTINGS)
@@ -469,7 +470,7 @@ def _shadow_v2_metrics(
         signal for signal in signals
         if str((signal.get("result") or {}).get("status") or "")
         in {"TP", "SL"}
-        and (signal.get("result") or {}).get("coverage_complete") is not False
+        and verified_result(signal.get("result"))
     ]
     tp = [
         signal for signal in resolved
@@ -502,6 +503,11 @@ def _shadow_v2_metrics(
     )
     return {
         "tracked": len(signals),
+        "unverified_results": sum(
+            1 for signal in signals
+            if signal.get("result") and not verified_result(signal.get("result"))
+        ),
+        "sample_status": "SUFFICIENT SAMPLE" if decision_ready else "INSUFFICIENT SAMPLE",
         "open": sum(
             1 for signal in signals
             if str((signal.get("result") or {}).get("status") or "OPEN")
@@ -1484,137 +1490,12 @@ def _evaluate_paper_signal(
     signal: dict[str, Any],
     candles: list[scanner.Candle],
 ) -> dict[str, Any]:
-    entries = closed(candles, SETTINGS.entry_interval)
-    prior = signal.get("result") or {}
-    if prior.get("status") in {"TP", "SL", "AMBIGUOUS"}:
-        return prior
-
-    interval_ms = scanner.INTERVAL_MS[SETTINGS.entry_interval]
-    created_ms = int(signal["created_ms"])
-    prior_end = prior.get("history_end_ms")
-
-    if prior_end is None:
-        relevant = [
-            candle
-            for candle in entries
-            if candle.time_ms + interval_ms >= created_ms
-        ]
-        coverage_now = bool(entries) and entries[0].time_ms <= created_ms
-    else:
-        prior_end = int(prior_end)
-        relevant = [
-            candle
-            for candle in entries
-            if candle.time_ms > prior_end
-        ]
-        coverage_now = bool(entries) and entries[0].time_ms <= prior_end + interval_ms
-
-    if not relevant:
-        return prior or {
-            "status": "OPEN",
-            "coverage_complete": coverage_now,
-            "history_start_ms": entries[0].time_ms if entries else None,
-            "history_end_ms": entries[-1].time_ms if entries else None,
-        }
-
-    side = str(signal["side"]).upper()
-    entry = float(signal["entry"])
-    stop = float(signal["stop"])
-    target = float(signal["target"])
-    tp1 = signal.get("tp1")
-    tp1 = float(tp1) if tp1 is not None else None
-    risk = abs(entry - stop)
-    if risk <= 0:
-        return {
-            "status": "ERROR",
-            "error": "invalid risk distance",
-            "coverage_complete": False,
-        }
-
-    prior_mfe = float(prior.get("mfe_r") or 0.0)
-    prior_mae = float(prior.get("mae_r") or 0.0)
-    prior_tp1 = prior.get("tp1_time_ms")
-
-    max_high = max(c.high for c in relevant)
-    min_low = min(c.low for c in relevant)
-    if side == "LONG":
-        current_mfe = max(0.0, (max_high - entry) / risk)
-        current_mae = max(0.0, (entry - min_low) / risk)
-    else:
-        current_mfe = max(0.0, (entry - min_low) / risk)
-        current_mae = max(0.0, (max_high - entry) / risk)
-
-    mfe_r = max(prior_mfe, current_mfe)
-    mae_r = max(prior_mae, current_mae)
-    status = str(prior.get("status") or "OPEN")
-    final_r = prior.get("final_r")
-    outcome_time_ms = prior.get("outcome_time_ms")
-    tp1_time_ms = prior_tp1
-    ambiguous_reason = prior.get("ambiguous_reason")
-
-    for candle in relevant:
-        if side == "LONG":
-            stop_hit = candle.low <= stop
-            target_hit = candle.high >= target
-            tp1_hit = tp1 is not None and candle.high >= tp1
-        else:
-            stop_hit = candle.high >= stop
-            target_hit = candle.low <= target
-            tp1_hit = tp1 is not None and candle.low <= tp1
-
-        if tp1_hit and tp1_time_ms is None:
-            tp1_time_ms = candle.time_ms
-
-        if stop_hit and target_hit:
-            status = "AMBIGUOUS"
-            outcome_time_ms = candle.time_ms
-            ambiguous_reason = "SL and final TP touched in the same 15M candle"
-            final_r = None
-            break
-
-        if stop_hit:
-            if tp1_hit and tp1_time_ms == candle.time_ms:
-                status = "AMBIGUOUS"
-                outcome_time_ms = candle.time_ms
-                ambiguous_reason = "SL and TP1 touched in the same 15M candle"
-                final_r = None
-                break
-            status = "SL"
-            outcome_time_ms = candle.time_ms
-            final_r = -1.0
-            break
-
-        if target_hit:
-            status = "TP"
-            outcome_time_ms = candle.time_ms
-            final_r = abs(target - entry) / risk
-            break
-
-    if status == "OPEN" and tp1_time_ms is not None:
-        status = "TP1"
-
-    prior_coverage = prior.get("coverage_complete")
-    if prior_end is None:
-        coverage_complete = coverage_now
-    elif prior_coverage is False:
-        coverage_complete = False
-    else:
-        coverage_complete = bool(coverage_now)
-
-    return {
-        "status": status,
-        "final_r": round(float(final_r), 4) if final_r is not None else None,
-        "mfe_r": round(mfe_r, 4),
-        "mae_r": round(mae_r, 4),
-        "tp1_time_ms": tp1_time_ms,
-        "outcome_time_ms": outcome_time_ms,
-        "ambiguous_reason": ambiguous_reason,
-        "last_price": relevant[-1].close,
-        "coverage_complete": coverage_complete,
-        "history_start_ms": entries[0].time_ms if entries else None,
-        "history_end_ms": relevant[-1].time_ms,
-        "candles_checked": int(prior.get("candles_checked") or 0) + len(relevant),
-    }
+    return evaluate_paper_signal(
+        signal,
+        candles,
+        interval_ms=scanner.INTERVAL_MS[SETTINGS.entry_interval],
+        now_ms=int(time.time() * 1000),
+    )
 
 
 async def _refresh_paper_signal_results(
@@ -3888,7 +3769,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="EdgeX Analysis Terminal",
-    version="19.0.0",
+    version="19.0.1",
     lifespan=lifespan,
 )
 
@@ -3900,7 +3781,7 @@ async def health():
     return {
         "ok": True,
         "service": "edgex-analysis-terminal",
-        "version": "19.0.0",
+        "version": "19.0.1",
         "time_ms": int(time.time() * 1000),
         "storage": {
             "market_snapshots_48h": len(history),

@@ -4,7 +4,7 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b0d12"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="EdgeX分析">
 <link rel="manifest" href="/manifest.webmanifest"><link rel="icon" href="/app-icon.svg" type="image/svg+xml">
-<title>EdgeX 分析ターミナル v19</title>
+<title>EdgeX 分析ターミナル v19.0.1</title>
 <style>
 :root{color-scheme:dark;--bg:#0b0d12;--panel:#131720;--muted:#8d96a8;--line:#252c38;--text:#f3f5f8;--good:#4ade80;--warn:#facc15;--bad:#fb7185;--accent:#7dd3fc}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif}main{max-width:1260px;margin:auto;padding:26px 16px 60px}h1{margin:0 0 5px;font-size:28px}h2{font-size:20px}.sub,.status,label,.k{color:var(--muted)}.tabs,.row,.filters{display:flex;gap:9px;flex-wrap:wrap}.tabs{margin:20px 0}.tab,.primary,.ghost{border-radius:9px;padding:10px 13px;cursor:pointer;font:inherit}.tab,.ghost{border:1px solid var(--line);background:#0f131b;color:var(--text)}.tab.active{border-color:var(--accent);color:var(--accent)}.primary{border:0;background:#e6f6ff;color:#071018;font-weight:700}.panel{display:none;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:17px}.panel.active{display:block}.field{display:flex;flex-direction:column;gap:5px;min-width:130px;flex:1}.field.small{max-width:170px}input,select{background:#0c1017;color:var(--text);border:1px solid var(--line);border-radius:9px;padding:10px}.status{margin:13px 0}.scroll{overflow:auto}table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}th{color:var(--muted)}.badge{padding:3px 7px;border:1px solid var(--line);border-radius:999px;font-size:11px}.READY{color:var(--good)}.CONFIRMATION_WAIT,.RETEST_WAIT{color:var(--warn)}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:10px;margin-top:12px}.card{background:#0e1219;border:1px solid var(--line);border-radius:10px;padding:12px}.v{font-size:17px;margin-top:4px}.error{color:var(--bad)}.section{border-top:1px solid var(--line);margin-top:17px;padding-top:12px}.star{font-size:18px;cursor:pointer}.muted{color:var(--muted)}.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:9px;margin:12px 0}.check{transform:scale(1.15)}.pill{padding:6px 9px;border:1px solid var(--line);border-radius:999px}.right{margin-left:auto}.good{color:var(--good)}.warn{color:var(--warn)}.bad{color:var(--bad)}.resultTP{color:var(--good);font-weight:700}.resultSL{color:var(--bad);font-weight:700}.resultTP1{color:var(--warn);font-weight:700}.resultAMBIGUOUS{color:#f0abfc;font-weight:700}.analyticsGrid{display:grid;grid-template-columns:1fr;gap:12px;margin-top:14px}@media(min-width:980px){.analyticsGrid{grid-template-columns:1fr 1fr}}.analyticsBox{background:#0e1219;border:1px solid var(--line);border-radius:12px;padding:12px}.metricTable td,.metricTable th{font-size:12px}.lowSample{color:var(--warn)}.enoughSample{color:var(--good)}.chartWrap{margin-top:12px;background:#0e1219;border:1px solid var(--line);border-radius:12px;padding:10px}.chartTitle{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}.chart{width:100%;height:310px;display:block}.actionBox{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:12px 0;padding:12px;border:1px solid var(--line);border-radius:10px;background:#0e1219}.actionMain{font-size:18px;font-weight:700}.legend{display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--muted)}.legend span:before{content:"";display:inline-block;width:10px;height:3px;margin-right:5px;vertical-align:middle;background:currentColor}.chartGrid{display:grid;grid-template-columns:1fr;gap:12px}@media(min-width:980px){.chartGrid{grid-template-columns:1fr 1fr}}
@@ -103,7 +103,7 @@ button{-webkit-tap-highlight-color:transparent}
 <div class="appHeader">
   <div>
     <div class="eyebrow">EDGEX MARKET WORKSPACE</div>
-    <h1>分析ターミナル <span class="versionBadge">v19</span></h1>
+    <h1>分析ターミナル <span class="versionBadge">v19.0.1</span></h1>
     <div class="sub">公開市場データを使う分析専用ツール。自動売買は行いません。</div>
   </div>
   <div class="headerChips"><span class="statusChip">分析専用</span><span class="statusChip">15分更新</span></div>
@@ -386,7 +386,7 @@ function renderShadowV2(j){
  var sum=document.getElementById("shadowV2Summary"),st=document.getElementById("shadowV2Status"),cur=document.getElementById("shadowV2Current"),body=document.getElementById("shadowV2Body");if(!sum||!st||!cur||!body)return;
  var m=j.metrics||{},now=j.current||{};
  sum.innerHTML=card("現在のv2候補",now.ready_count||0)+card("追跡",m.tracked||0)+card("確定",m.resolved||0)+card("TP / SL",(m.tp||0)+" / "+(m.sl||0))+card("勝率",m.win_rate==null?"—":fmt(m.win_rate,1)+"%")+card("平均R",m.avg_r==null?"—":fmt(m.avg_r,2)+"R")+card("PF",m.profit_factor==null?"—":m.profit_factor);
- if(!m.decision_ready)st.innerHTML='<span class="warn">まだ採用しません。確定 '+(m.resolved||0)+' / '+(m.minimum_resolved||20)+'件。最低20件 + 平均R&gt;0 + PF&gt;1 が採用ゲートです。</span>';
+ if(!m.decision_ready)st.innerHTML='<span class="warn">INSUFFICIENT SAMPLE — まだ採用しません。検証済み確定 '+(m.resolved||0)+' / '+(m.minimum_resolved||20)+'件。未検証・履歴不足 '+(m.unverified_results||0)+'件は除外。最低20件 + 平均R&gt;0 + PF&gt;1 が採用ゲートです。</span>';
  else if(m.promotion_pass)st.innerHTML='<span class="good">採用ゲートを通過しています。ただし現行Telegram戦略への切替は別判断で行います。</span>';
  else st.innerHTML='<span class="warn">20件以上確定しましたが採用条件未達です。現行戦略は維持します。</span>';
  cur.innerHTML=(now.items||[]).length?(now.items||[]).map(function(x){return '<div class="priorityRow shadowV2Ticker" data-ticker="'+x.ticker+'"><div class="priorityTop"><b>'+x.ticker+'</b><span class="badge READY">v2 READY</span><span class="pill">'+directionJa(x.direction)+'</span><span class="pill">余地RR '+fmt(x.room_rr,2)+'</span></div><div class="priorityBreakdown"><span class="pill">Entry '+fmt(x.entry,8)+'</span><span class="pill">SL '+fmt(x.stop,8)+'</span><span class="pill">2R TP '+fmt(x.target_2r,8)+'</span></div></div>'}).join(""):'<span class="muted">現在のv2候補なし</span>';
@@ -799,12 +799,12 @@ document.getElementById("importAll").onchange=function(e){var file=e.target.file
 function saveJournalStore(){localStorage.setItem("edgexJournal",JSON.stringify(journal));renderDashboard()}
 function journalResultClass(s){return s==="TP"?"resultTP":s==="SL"?"resultSL":s==="TP1"?"resultTP1":s==="AMBIGUOUS"?"resultAMBIGUOUS":"muted"}
 function journalStats(){
- var signals=journal.filter(x=>x.eligible===true),resolved=signals.filter(x=>x.result&&(x.result.status==="TP"||x.result.status==="SL"));
+ var signals=journal.filter(x=>x.eligible===true),resolved=signals.filter(x=>verifiedResult(x.result)&&(x.result.status==="TP"||x.result.status==="SL"));
  var wins=resolved.filter(x=>x.result.status==="TP").length,totalR=resolved.reduce((a,x)=>a+(Number(x.result.final_r)||0),0);
  return {total:journal.length,signals:signals.length,resolved:resolved.length,wins:wins,losses:resolved.length-wins,winRate:resolved.length?wins/resolved.length*100:null,totalR:totalR,avgR:resolved.length?totalR/resolved.length:null,open:journal.filter(x=>!x.result||x.result.status==="OPEN"||x.result.status==="TP1").length};
 }
 
-function resolvedSignals(){return journal.filter(x=>x.eligible===true&&x.result&&(x.result.status==="TP"||x.result.status==="SL")&&x.result.coverage_complete!==false)}
+function resolvedSignals(){return journal.filter(x=>x.eligible===true&&verifiedResult(x.result)&&(x.result.status==="TP"||x.result.status==="SL"))}
 function metricFor(items){
  var n=items.length,wins=items.filter(x=>x.result.status==="TP"),losses=items.filter(x=>x.result.status==="SL"),sumR=items.reduce((a,x)=>a+(Number(x.result.final_r)||0),0),grossWin=wins.reduce((a,x)=>a+Math.max(0,Number(x.result.final_r)||0),0),grossLoss=Math.abs(losses.reduce((a,x)=>a+Math.min(0,Number(x.result.final_r)||0),0));
  return {n:n,wins:wins.length,losses:losses.length,winRate:n?wins.length/n*100:null,avgR:n?sumR/n:null,totalR:sumR,pf:grossLoss>0?grossWin/grossLoss:(grossWin>0?Infinity:null),avgMfe:n?items.reduce((a,x)=>a+(Number(x.result.mfe_r)||0),0)/n:null,avgMae:n?items.reduce((a,x)=>a+(Number(x.result.mae_r)||0),0)/n:null};
@@ -845,34 +845,46 @@ function renderJournal(){
  if(!body)return;body.innerHTML="";var st=journalStats();
  sum.innerHTML=card("保存件数",st.total)+card("正式シグナル",st.signals)+card("結果確定",st.resolved)+card("勝率",st.winRate==null?"—":fmt(st.winRate,1)+"%")+card("累積R",fmt(st.totalR,2))+card("平均R",st.avgR==null?"—":fmt(st.avgR,2))+card("継続中 / TP1",st.open);
  status.textContent=journal.length?journal.length+"件保存。結果更新はEdgeXの15M履歴で再判定します。期待値集計は履歴完全なENTERシグナルのみ対象です。":"保存したシナリオはまだありません。";renderAnalytics();
- journal.slice().reverse().forEach(function(p,revIndex){var idx=journal.length-1-revIndex,r=p.result||{},tr=document.createElement("tr"),hist=r.coverage_complete===false?"PARTIAL":"OK";tr.innerHTML="<td>"+new Date(p.created_ms).toLocaleString("ja-JP")+"</td><td><b>"+p.ticker+"</b></td><td>"+directionJa(p.side)+"</td><td>"+actionJa(p.action)+"</td><td>"+fmt(p.entry,8)+"</td><td>"+fmt(p.stop,8)+"</td><td>"+fmt(p.target,8)+"</td><td>"+fmt(p.rr,2)+"</td><td>"+fmt(p.score,1)+"</td><td class='"+journalResultClass(r.status)+"'>"+resultJa(r.status)+"</td><td>"+(r.mfe_r==null?"—":fmt(r.mfe_r,2)+"R")+"</td><td>"+(r.mae_r==null?"—":fmt(r.mae_r,2)+"R")+"</td><td>"+(r.final_r==null?"—":fmt(r.final_r,2)+"R")+"</td><td>"+(hist==="OK"?"完全":"一部不足")+"</td><td><button class='ghost jAnalyze'>分析</button> <button class='ghost jDelete'>削除</button></td>";
+ journal.slice().reverse().forEach(function(p,revIndex){var idx=journal.length-1-revIndex,r=p.result||{},tr=document.createElement("tr"),hist=verifiedResult(r)?"OK":r.evaluation_version===2?"PARTIAL":"LEGACY";tr.innerHTML="<td>"+new Date(p.created_ms).toLocaleString("ja-JP")+"</td><td><b>"+p.ticker+"</b></td><td>"+directionJa(p.side)+"</td><td>"+actionJa(p.action)+"</td><td>"+fmt(p.entry,8)+"</td><td>"+fmt(p.stop,8)+"</td><td>"+fmt(p.target,8)+"</td><td>"+fmt(p.rr,2)+"</td><td>"+fmt(p.score,1)+"</td><td class='"+journalResultClass(r.status)+"'>"+resultJa(r.status)+"</td><td>"+(r.mfe_r==null?"—":fmt(r.mfe_r,2)+"R")+"</td><td>"+(r.mae_r==null?"—":fmt(r.mae_r,2)+"R")+"</td><td>"+(r.final_r==null?"—":fmt(r.final_r,2)+"R")+"</td><td>"+(hist==="OK"?"完全":hist==="LEGACY"?"旧判定・未検証":"一部不足")+"</td><td><button class='ghost jAnalyze'>分析</button> <button class='ghost jDelete'>削除</button></td>";
  tr.querySelector(".jAnalyze").onclick=function(){document.getElementById("ticker").value=p.ticker;tab("analysis");analyze()};
  tr.querySelector(".jDelete").onclick=function(){journal.splice(idx,1);saveJournalStore();renderJournal()};
  body.appendChild(tr)});
 }
+function verifiedResult(r){return !!r&&r.evaluation_version===2&&r.coverage_complete===true}
 function evaluateCandles(p,series){
- var interval=15*60*1000,relevant=(series||[]).filter(c=>c.time_ms+interval>=p.created_ms);
- if(!relevant.length&&series&&series.length)relevant=[series[series.length-1]];
- if(!relevant.length)return {status:"NO_DATA",coverage_complete:false};
- var risk=Math.abs(p.entry-p.stop),maxHigh=Math.max.apply(null,relevant.map(c=>c.high)),minLow=Math.min.apply(null,relevant.map(c=>c.low));
- var mfe=p.side==="LONG"?Math.max(0,(maxHigh-p.entry)/risk):Math.max(0,(p.entry-minLow)/risk);
- var mae=p.side==="LONG"?Math.max(0,(p.entry-minLow)/risk):Math.max(0,(maxHigh-p.entry)/risk);
- var status="OPEN",finalR=null,tp1Time=null,outcomeTime=null,ambiguous=null;
- for(var i=0;i<relevant.length;i++){var c=relevant[i],stopHit=p.side==="LONG"?c.low<=p.stop:c.high>=p.stop,targetHit=p.side==="LONG"?c.high>=p.target:c.low<=p.target,tp1Hit=p.tp1!=null&&(p.side==="LONG"?c.high>=p.tp1:c.low<=p.tp1);
-  if(tp1Hit&&tp1Time==null)tp1Time=c.time_ms;
-  if(stopHit&&targetHit){status="AMBIGUOUS";outcomeTime=c.time_ms;ambiguous="SLと最終TPが同じ15M足で到達";break}
-  if(stopHit){if(tp1Hit&&tp1Time===c.time_ms){status="AMBIGUOUS";outcomeTime=c.time_ms;ambiguous="SLとTP1が同じ15M足で到達";break}status="SL";outcomeTime=c.time_ms;finalR=-1;break}
-  if(targetHit){status="TP";outcomeTime=c.time_ms;finalR=Math.abs(p.target-p.entry)/risk;break}
+ var prior=p.result||{};if(["TP","SL","AMBIGUOUS"].includes(prior.status))return prior;
+ var legacy=prior.legacy_result;if(Object.keys(prior).length&&prior.evaluation_version!==2){legacy=prior;prior={}}
+ var interval=15*60*1000,created=Number(p.created_ms),source=p.signal_candle_ms!=null?p.signal_candle_ms:p.source_candle_ms,sourceClose=source!=null?Number(source)+interval:null;
+ var start,partial;
+ if(sourceClose!=null&&created===sourceClose+1){start=sourceClose;partial=false}else{start=Math.ceil(created/interval)*interval;if(sourceClose!=null)start=Math.max(start,sourceClose);partial=start!==created}
+ var entries=Array.from(new Map((series||[]).filter(c=>c.time_ms+interval<=Date.now()).map(c=>[c.time_ms,c])).values()).sort((a,b)=>a.time_ms-b.time_ms);
+ var priorEnd=prior.history_end_ms,expected=priorEnd!=null?Math.max(start,Number(priorEnd)+interval):start,relevant=entries.filter(c=>c.time_ms>=expected),coverage=!partial&&(priorEnd!=null?prior.coverage_complete===true:true);
+ var r={status:prior.status||"OPEN",final_r:prior.final_r==null?null:prior.final_r,mfe_r:Number(prior.mfe_r)||0,mae_r:Number(prior.mae_r)||0,tp1_time_ms:prior.tp1_time_ms==null?null:prior.tp1_time_ms,outcome_time_ms:prior.outcome_time_ms==null?null:prior.outcome_time_ms,ambiguous_reason:prior.ambiguous_reason||null,last_price:prior.last_price==null?null:prior.last_price,coverage_complete:coverage,history_start_ms:prior.history_start_ms==null?null:prior.history_start_ms,history_end_ms:priorEnd==null?null:priorEnd,candles_checked:Number(prior.candles_checked)||0,evaluation_version:2,observation_start_ms:start,partial_entry_candle_excluded:partial};
+ if(legacy)r.legacy_result=legacy;
+ if(!relevant.length){r.coverage_complete=priorEnd!=null?coverage:false;return r}
+ var side=String(p.side).toUpperCase(),entry=Number(p.entry),stop=Number(p.stop),target=Number(p.target),risk=Math.abs(entry-stop),valid=side==="LONG"?stop<entry&&entry<target:side==="SHORT"?target<entry&&entry<stop:false;
+ if(!valid||![entry,stop,target,risk].every(Number.isFinite)||risk<=0){r.status="ERROR";r.error="invalid trade levels";r.coverage_complete=false;return r}
+ var tp1=p.tp1!=null?Number(p.tp1):null;
+ for(var c of relevant){
+  if(c.time_ms!==expected)coverage=false;expected=c.time_ms+interval;
+  if(r.history_start_ms==null)r.history_start_ms=c.time_ms;r.history_end_ms=c.time_ms;r.candles_checked++;r.last_price=c.close;
+  var favorable=side==="LONG"?(c.high-entry)/risk:(entry-c.low)/risk,adverse=side==="LONG"?(entry-c.low)/risk:(c.high-entry)/risk;
+  var stopHit=side==="LONG"?c.low<=stop:c.high>=stop,targetHit=side==="LONG"?c.high>=target:c.low<=target,tp1Hit=tp1!=null&&(side==="LONG"?c.high>=tp1:c.low<=tp1);
+  r.mfe_r=Math.max(r.mfe_r,favorable,0);r.mae_r=Math.max(r.mae_r,adverse,0);
+  if(tp1Hit&&r.tp1_time_ms==null)r.tp1_time_ms=c.time_ms;
+  if(stopHit&&(targetHit||(tp1Hit&&r.tp1_time_ms===c.time_ms))){r.status="AMBIGUOUS";r.final_r=null;r.outcome_time_ms=c.time_ms;r.ambiguous_reason="SL and TP touched in the same 15M candle";break}
+  if(stopHit||targetHit){r.status=stopHit?"SL":"TP";r.final_r=stopHit?-1:Math.abs(target-entry)/risk;r.outcome_time_ms=c.time_ms;break}
  }
- if(status==="OPEN"&&tp1Time!=null)status="TP1";
- return {status:status,final_r:finalR,mfe_r:mfe,mae_r:mae,tp1_time_ms:tp1Time,outcome_time_ms:outcomeTime,ambiguous_reason:ambiguous,last_price:relevant[relevant.length-1].close,coverage_complete:series&&series.length?series[0].time_ms<=p.created_ms:false,history_start_ms:series&&series.length?series[0].time_ms:null,history_end_ms:relevant[relevant.length-1].time_ms};
+ if(r.status==="OPEN"&&r.tp1_time_ms!=null)r.status="TP1";r.coverage_complete=coverage;
+ ["final_r","mfe_r","mae_r"].forEach(k=>{if(r[k]!=null)r[k]=Number(r[k].toFixed(4))});
+ return r;
 }
 async function updateJournalOne(index){
- var p=journal[index],pack=await jf("/api/chart?ticker="+encodeURIComponent(p.ticker)+"&limit_4h=30&limit_15m=240");p.result=evaluateCandles(p,pack.series.MINUTE_15);p.updated_ms=Date.now();journal[index]=p;saveJournalStore();
+ var p=journal[index];if(p.result&&["TP","SL","AMBIGUOUS"].includes(p.result.status))return;var pack=await jf("/api/chart?ticker="+encodeURIComponent(p.ticker)+"&limit_4h=30&limit_15m=240");p.result=evaluateCandles(p,pack.series.MINUTE_15);p.updated_ms=Date.now();journal[index]=p;saveJournalStore();
 }
 async function refreshJournal(){
  var s=document.getElementById("journalStatus");if(!journal.length){renderJournal();return}s.textContent="結果を更新中…";
- for(var i=0;i<journal.length;i++){try{await updateJournalOne(i)}catch(e){journal[i].result={status:"ERROR",error:e.message};saveJournalStore()}}
+ for(var i=0;i<journal.length;i++){try{await updateJournalOne(i)}catch(e){journal[i].refresh_error=e.message;saveJournalStore()}}
  renderJournal();s.textContent="更新完了。";
 }
 document.getElementById("savePlan").onclick=function(){
