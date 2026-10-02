@@ -2550,6 +2550,89 @@ def _confirmation_failure_type(row: dict[str, Any]) -> str | None:
     return "UNKNOWN"
 
 
+def _readiness_review(
+    rows: list[dict[str, Any]],
+) -> dict[str, Any]:
+    touched_confirmed = [
+        row for row in rows
+        if row.get("retest_touched") is True
+        and row.get("confirmed") is True
+    ]
+    current_ready = [
+        row for row in rows
+        if row.get("stage") == "READY"
+    ]
+    measured_ready = [
+        row for row in rows
+        if row.get("shadow_measured_ready") is True
+    ]
+    fixed_ready = [
+        row for row in rows
+        if row.get("shadow_fixed_2r_ready") is True
+    ]
+
+    def pack(items: list[dict[str, Any]], rr_key: str, target_key: str):
+        return [
+            {
+                "ticker": row.get("ticker"),
+                "direction": row.get("direction"),
+                "score": row.get("score"),
+                "entry": row.get("entry_reference"),
+                "stop": row.get("stop_loss")
+                if row.get("stop_loss") is not None
+                else (
+                    row.get("entry_reference")
+                    - abs(
+                        float(row.get("entry_reference") or 0)
+                        - float(row.get("shadow_fixed_2r_target") or row.get("entry_reference") or 0)
+                    ) / 2.0
+                    if row.get("direction") == "LONG"
+                    else None
+                ),
+                "target": row.get(target_key),
+                "rr": row.get(rr_key),
+                "current_stage": row.get("stage"),
+                "current_rr": row.get("rr"),
+                "reason": row.get("reason"),
+            }
+            for row in sorted(
+                items,
+                key=lambda x: (
+                    -float(x.get(rr_key) or 0),
+                    -float(x.get("score") or 0),
+                ),
+            )
+        ]
+
+    return {
+        "confirmed_after_retest": len(touched_confirmed),
+        "current": {
+            "ready_count": len(current_ready),
+            "items": pack(
+                current_ready,
+                "rr",
+                "current_structural_target",
+            ),
+        },
+        "measured_move": {
+            "ready_count": len(measured_ready),
+            "items": pack(
+                measured_ready,
+                "shadow_measured_rr",
+                "shadow_measured_target",
+            ),
+        },
+        "fixed_2r": {
+            "ready_count": len(fixed_ready),
+            "items": pack(
+                fixed_ready,
+                "shadow_fixed_2r_rr",
+                "shadow_fixed_2r_target",
+            ),
+        },
+    }
+
+
 def _confirmation_diagnostics(
     rows: list[dict[str, Any]],
 ) -> dict[str, Any]:
@@ -3928,6 +4011,7 @@ async def screener_api(
         ),
         "summary": _market_summary(all_rows),
         "confirmation_diagnostics": _confirmation_diagnostics(all_rows),
+        "readiness_review": _readiness_review(all_rows),
         "market_regime": _market_regime(all_rows),
         "daily_picks": priority_ranking[:3],
         "priority_ranking": priority_ranking,
@@ -3936,6 +4020,24 @@ async def screener_api(
         "qualified_near_candidates": qualified_near_candidates,
         "watch_status": watch_status,
         "results": rows[:limit],
+    }
+
+
+@app.get("/api/readiness-review")
+async def readiness_review_api(
+    force: bool = False,
+):
+    try:
+        contracts, rows = await _scan_market_rows(force=force)
+    except Exception as exc:
+        raise HTTPException(
+            502,
+            f"EdgeX market scan failed: {exc}",
+        ) from exc
+    return {
+        "universe": len(contracts),
+        "scanned": len(rows),
+        "review": _readiness_review(rows),
     }
 
 
