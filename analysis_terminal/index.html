@@ -335,7 +335,7 @@ button{-webkit-tap-highlight-color:transparent}
 </section>
 </main>
 <script>
-var rows=[], watch=new Set(JSON.parse(localStorage.getItem("edgexWatch")||"[]")), showWatch=false, lastAnalysis=null, journal=JSON.parse(localStorage.getItem("edgexJournal")||"[]"), marketHistory=JSON.parse(localStorage.getItem("edgexMarketHistory")||"[]"), autoScanTimer=null, lastMarketPayload=null, autoJournalReady=localStorage.getItem("edgexAutoJournalReady")!=="false", serverSync={history:0,paper:0,ok:false}, deferredInstallPrompt=null, recentTickers=JSON.parse(localStorage.getItem("edgexRecentTickers")||"[]"), candidateState=JSON.parse(localStorage.getItem("edgexCandidateState")||"null"), candidateAlerts=JSON.parse(localStorage.getItem("edgexCandidateAlerts")||"[]"), candidateNotifyEnabled=localStorage.getItem("edgexCandidateNotify")==="true", visitBaseline=JSON.parse(localStorage.getItem("edgexVisitBaseline")||"null"), currentVisitSnapshot=null, pushPreferenceState={}, watchSyncKey=localStorage.getItem("edgexWatchSyncKey")||"", customAlerts=[], lastReadySignature=localStorage.getItem("edgexLastReadySignature")||"", globalEntrySnapshot=null;
+var rows=[], watch=new Set(JSON.parse(localStorage.getItem("edgexWatch")||"[]")), showWatch=false, lastAnalysis=null, journal=JSON.parse(localStorage.getItem("edgexJournal")||"[]"), marketHistory=JSON.parse(localStorage.getItem("edgexMarketHistory")||"[]"), autoScanTimer=null, lastMarketPayload=null, autoJournalReady=localStorage.getItem("edgexAutoJournalReady")!=="false", serverSync={history:0,paper:0,ok:false}, deferredInstallPrompt=null, recentTickers=JSON.parse(localStorage.getItem("edgexRecentTickers")||"[]"), candidateState=JSON.parse(localStorage.getItem("edgexCandidateState")||"null"), candidateAlerts=JSON.parse(localStorage.getItem("edgexCandidateAlerts")||"[]"), candidateNotifyEnabled=localStorage.getItem("edgexCandidateNotify")==="true", visitBaseline=JSON.parse(localStorage.getItem("edgexVisitBaseline")||"null"), currentVisitSnapshot=null, pushPreferenceState={}, watchSyncKey=localStorage.getItem("edgexWatchSyncKey")||"", customAlerts=[], lastReadySignature=localStorage.getItem("edgexLastReadySignature")||"", globalEntrySnapshot=null, entryHeartbeatBusy=false;
 function fmt(x,d){return x==null?"—":Number(x).toLocaleString("ja-JP",{maximumFractionDigits:d==null?4:d})}
 function pct(x){return x==null?"—":(x>=0?"+":"")+Number(x).toFixed(2)+"%"}
 function card(k,v){return '<div class="card"><div class="k">'+k+'</div><div class="v">'+v+'</div></div>'}
@@ -588,6 +588,14 @@ function renderGlobalEntryBar(j){
 function refreshGlobalEntryAge(){
  if(!globalEntrySnapshot)return;
  var j=Object.assign({},globalEntrySnapshot),base=Number(globalEntrySnapshot.snapshot_age_seconds)||0,stamp=Number(globalEntrySnapshot._client_rendered_ms)||Date.now();j.snapshot_age_seconds=base+Math.max(0,(Date.now()-stamp)/1000);renderGlobalEntryBar(j)
+}
+async function refreshEntryHeartbeat(){
+ if(entryHeartbeatBusy||document.visibilityState==="hidden")return;entryHeartbeatBusy=true;
+ try{
+  var j=await jf("/api/screener?limit=3");j._client_rendered_ms=Date.now();globalEntrySnapshot=j;renderGlobalEntryBar(j);renderEntryNow(j)
+ }catch(e){
+  refreshGlobalEntryAge()
+ }finally{entryHeartbeatBusy=false}
 }
 async function dashboardReadyRisk(r){
  var equity=Number(document.getElementById("equity").value)||0,riskPct=Number(document.getElementById("riskPct").value)||0;
@@ -859,7 +867,7 @@ function loadRiskProfile(){try{var p=JSON.parse(localStorage.getItem("edgexRiskP
 function saveRiskProfile(){localStorage.setItem("edgexRiskProfile",JSON.stringify({equity:Number(document.getElementById("equity").value)||0,riskPct:Number(document.getElementById("riskPct").value)||0}))}
 document.getElementById("equity").addEventListener("change",function(){saveRiskProfile();if(lastAnalysis)renderQuickRisk(lastAnalysis);if(lastMarketPayload)renderEntryNow(lastMarketPayload)});document.getElementById("riskPct").addEventListener("change",function(){saveRiskProfile();if(lastAnalysis)renderQuickRisk(lastAnalysis);if(lastMarketPayload)renderEntryNow(lastMarketPayload)});
 function applyDeepLink(){var u=new URL(location.href),tabName=u.searchParams.get("tab"),ticker=u.searchParams.get("ticker");if(ticker)document.getElementById("ticker").value=ticker.toUpperCase();if(tabName&&document.getElementById(tabName))tab(tabName);if((tabName==="analysis"||ticker)&&ticker)analyze()}
-loadRiskProfile();document.getElementById("globalEntryAction").onclick=function(){tab("dashboard")};renderQuickAccess();renderCandidateAlerts();loadServerCandidateEvents();loadConfirmationDiagnostics();loadOpportunityAnalysis();loadPriorityEvents();loadApproachEvents();loadApproachValidation();initWatchSync();loadDailyReports();syncCandidateNotifyButton();renderPushGuide();syncBackgroundPushButton();loadNotificationCenter();updateCandleCountdown();setInterval(updateCandleCountdown,1000);setInterval(refreshGlobalEntryAge,10000);
+loadRiskProfile();document.getElementById("globalEntryAction").onclick=function(){tab("dashboard")};renderQuickAccess();renderCandidateAlerts();loadServerCandidateEvents();loadConfirmationDiagnostics();loadOpportunityAnalysis();loadPriorityEvents();loadApproachEvents();loadApproachValidation();initWatchSync();loadDailyReports();syncCandidateNotifyButton();renderPushGuide();syncBackgroundPushButton();loadNotificationCenter();updateCandleCountdown();setInterval(updateCandleCountdown,1000);setInterval(refreshGlobalEntryAge,10000);setInterval(refreshEntryHeartbeat,60000);document.addEventListener("visibilitychange",function(){if(document.visibilityState==="visible")refreshEntryHeartbeat()});
 syncAutoJournalButton();renderJournal();renderDashboard();
 window.addEventListener("beforeinstallprompt",function(e){e.preventDefault();deferredInstallPrompt=e;document.getElementById("installApp").classList.add("good")});
 document.getElementById("copyWatchSync").onclick=async function(){var key=document.getElementById("watchSyncKey").value.trim();try{await navigator.clipboard.writeText(key);showWatchSyncStatus("同期コードをコピーしました","good")}catch(e){alert(key)}};
