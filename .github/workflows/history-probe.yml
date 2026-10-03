@@ -1,0 +1,61 @@
+name: Public historical candle probe
+on:
+  push:
+    branches: ["audit/history-probe-v19-0-6"]
+    paths: [".github/workflows/history-probe.yml"]
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -r analysis_terminal/test-requirements.txt
+      - name: Read public EdgeX history and production APIs
+        run: |
+          python - <<'PY'
+          import asyncio,json,time,urllib.request
+          from pathlib import Path
+          from analysis_terminal import server
+          output=Path("probe-output");output.mkdir()
+          async def main():
+              contracts=await server.CLIENT.get_contracts()
+              btc=next(c for c in contracts.values() if c.contract_name=="BTCUSDC")
+              now=int(time.time()*1000)
+              report={"universe":len(contracts),"checked_ms":now}
+              for interval,step in (("HOUR_4",14400000),("MINUTE_15",900000)):
+                  end=(now//step)*step
+                  params={"contractId":btc.contract_id,"klineType":interval,"priceType":"LAST_PRICE","size":"3","filterBeginKlineTimeInclusive":str(end-40*86400000),"filterEndKlineTimeExclusive":str(end-30*86400000)}
+                  page=await asyncio.to_thread(server.CLIENT._get_json_sync,"/api/v2/public/quote/getKline",params)
+                  (output/(interval+"-page1.json")).write_text(json.dumps(page))
+                  data=page["data"];items=data["dataList"]
+                  assert items
+                  token=data.get("nextPageOffsetData")
+                  detail={"first_page_count":len(items),"times":[i["klineTime"] for i in items],"has_next":bool(token),"first_record":items[0]}
+                  if token:
+                      params["offsetData"]=token
+                      page2=await asyncio.to_thread(server.CLIENT._get_json_sync,"/api/v2/public/quote/getKline",params)
+                      (output/(interval+"-page2.json")).write_text(json.dumps(page2))
+                      detail["next_times"]=[i["klineTime"] for i in page2["data"]["dataList"]]
+                  report[interval]=detail
+              snapshots=await server.fetch_snapshots([btc.contract_id],timeout=25)
+              report["ws_windows"]={interval:{"received":len(raw),"closed":len(server.closed(raw,interval))} for (cid,interval),raw in snapshots.items()}
+              for name,path in (("health","/health"),("shadow","/api/shadow-v2?limit=2000"),("comparison","/api/strategy-comparison?limit=500")):
+                  with urllib.request.urlopen("https://edgex-analysis-terminal-production.up.railway.app"+path,timeout=65) as response:
+                      data=json.load(response)
+                  (output/(name+".json")).write_text(json.dumps(data))
+                  if name=="health":report["health"]=data
+              (output/"report.json").write_text(json.dumps(report,indent=2))
+              print("HISTORY_PROBE="+json.dumps(report))
+          asyncio.run(main())
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: edgex-public-history-probe
+          path: probe-output/
+          retention-days: 7
