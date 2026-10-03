@@ -48,6 +48,18 @@ class StorageTests(unittest.IsolatedAsyncioTestCase):
             )
         server._init_db()
 
+    async def test_page_version_tracks_health_after_release(self):
+        for version in (server.app.version, "19.0.999"):
+            with patch.object(server.app, "version", version):
+                async with AsyncClient(transport=ASGITransport(app=server.app), base_url="http://test") as client:
+                    page = await client.get("/")
+                    health = (await client.get("/health")).json()
+                self.assertEqual(health["version"], version)
+                self.assertIn(f"<title>EdgeX 分析ターミナル v{version}</title>", page.text)
+                self.assertIn(f'class="versionBadge">v{version}</span>', page.text)
+                self.assertNotIn("__APP_VERSION__", page.text)
+                self.assertIn("no-store", page.headers["cache-control"])
+
     def test_repeated_migration_preserves_snapshots_subscribers_and_shadow(self):
         snapshot = dict(time_ms=self.now_ms, ready=0)
         server._save_market_snapshot(snapshot)

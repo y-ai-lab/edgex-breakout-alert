@@ -3812,7 +3812,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="EdgeX Analysis Terminal",
-    version="19.0.13",
+    version="19.0.14",
     lifespan=lifespan,
 )
 
@@ -3824,7 +3824,7 @@ async def health():
     return {
         "ok": True,
         "service": "edgex-analysis-terminal",
-        "version": "19.0.13",
+        "version": app.version,
         "time_ms": int(time.time() * 1000),
         "storage": {
             "market_snapshots_48h": len(history),
@@ -4622,7 +4622,9 @@ async def app_icon():
 @app.get("/", response_class=HTMLResponse)
 async def index():
     return HTMLResponse(
-        Path(__file__).with_name("index.html").read_text(encoding="utf-8"),
+        Path(__file__).with_name("index.html").read_text(encoding="utf-8").replace(
+            "__APP_VERSION__", app.version
+        ),
         headers={
             "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
             "Pragma": "no-cache",
