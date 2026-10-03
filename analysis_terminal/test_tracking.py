@@ -224,6 +224,7 @@ eval(html.slice(html.indexOf('function renderOutcomeTracking('),html.indexOf('fu
 const report={started_ms:1,finished_ms:2,status:'OK',selected:8,evaluated:8,advanced:8};
 const j={time_ms:3,interval_ms:900000,models:{current:{setup_cohort:{},all_records:{},last_refresh:report,refresh_age_seconds:1},shadow:{setup_cohort:{pending:8,overdue:0,incomplete_history:0},all_records:{pending:13,incomplete_history:5,quality_counts:{UNVERIFIED_TERMINAL:2}},last_refresh:report,refresh_age_seconds:1}}};
 renderOutcomeTracking(j);assert(!st.className.includes('warn'));assert(sum.innerHTML.includes('Shadow 未確定 / 遅延:8 / 0'));assert(st.textContent.includes('進行 8'));assert(st.textContent.includes('全記録の未確定 13'));
+j.models.shadow.last_refresh={...report,backfill_recovered:2,gap_deferred:1,backfill_errors:1,unverified_pending:1,status:'PARTIAL'};renderOutcomeTracking(j);assert(st.textContent.includes('履歴補完 2件'));assert(st.textContent.includes('欠損保留 1件'));assert(st.textContent.includes('補完エラー 1'));assert(st.className.includes('warn'));j.models.shadow.last_refresh=report;
 j.models.shadow.setup_cohort.overdue=1;renderOutcomeTracking(j);assert(st.className.includes('warn'));
 j.models.shadow.setup_cohort.overdue=0;j.models.shadow.setup_cohort.incomplete_history=1;renderOutcomeTracking(j);assert(st.className.includes('warn'));
 j.models.shadow.setup_cohort.incomplete_history=0;j.models.shadow.refresh_age_seconds=1800;renderOutcomeTracking(j);assert(st.className.includes('warn'));

@@ -29,11 +29,17 @@ Stages:
 
 ## 結果判定の検証
 
+v19.0.11では、setup ID付きの現行・Shadowの未確定結果に連続した確定足だけを渡します。欠損後の足だけでTP/SLを確定させず、公開LAST_PRICE履歴で不足分を補います。補完は各モデル・収集周期につき最大4リクエスト、1回256本（64時間）・1ページに限定します。正常に観測済みの足で決着する場合は追加取得しません。欠損が残れば、連続して取得できた部分だけを進めて保留し、次周期に再試行します。対象を周期ごとに回して取得不能なsetupによる他銘柄の停止を防ぎます。
+
+signal close+1ms・signal candle除外・同一足TP/SLのAMBIGUOUSは維持します。既存の確定結果は上書きせず、過去に履歴不足となったID付き未確定結果も完全履歴の別監査が必要な状態として保持します。IDのない旧記録は従来の追跡を維持し、昇格サンプルには加えません。DBテーブル・購読・戦略条件・READYのみの通知方針は変更しません。
+
+`/api/outcome-tracking`に補完方針と上限を追加し、収集記録の `backfill_requests` / `backfill_candles` / `backfill_recovered` / `backfill_errors` / `gap_deferred` / `unverified_pending` で補完・保留を確認できます。
+
 Python 3.12とNode.jsが必要です。
 
 ```bash
 python -m pip install -r analysis_terminal/test-requirements.txt
-python -m unittest analysis_terminal.test_outcomes analysis_terminal.test_storage analysis_terminal.test_setups analysis_terminal.test_entry_ui analysis_terminal.test_lifecycle analysis_terminal.test_comparison analysis_terminal.test_tracking analysis_terminal.test_replay analysis_terminal.test_replay_review analysis_terminal.test_entry_diagnostics analysis_terminal.test_chronology_replay analysis_terminal.test_chronology_review -v
+python -m unittest analysis_terminal.test_outcomes analysis_terminal.test_storage analysis_terminal.test_setups analysis_terminal.test_entry_ui analysis_terminal.test_lifecycle analysis_terminal.test_comparison analysis_terminal.test_tracking analysis_terminal.test_outcome_history analysis_terminal.test_replay analysis_terminal.test_replay_review analysis_terminal.test_entry_diagnostics analysis_terminal.test_chronology_replay analysis_terminal.test_chronology_review -v
 python -m unittest discover -s tests -v
 ```
 

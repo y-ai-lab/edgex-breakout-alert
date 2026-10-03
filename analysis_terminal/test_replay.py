@@ -165,6 +165,12 @@ class HistoryTests(unittest.IsolatedAsyncioTestCase):
         params=get.call_args_list[1].args[1]
         self.assertEqual((params['offsetData'],params['filterBeginKlineTimeInclusive'],params['priceType']),('next',str(START-STEP),'LAST_PRICE'))
 
+    async def test_live_backfill_page_budget_stops_extra_requests(self):
+        get=Mock(return_value=dict(code='SUCCESS',data=dict(dataList=[payload(c(START))],nextPageOffsetData='next')))
+        with self.assertRaisesRegex(ValueError,'safety bound'):
+            await fetch_history(get,CONTRACT,'MINUTE_15',START-STEP,START+STEP,max_pages=1)
+        self.assertEqual(get.call_count,1)
+
     async def test_bad_identity_price_type_grid_ohlc_and_nonfinite_are_rejected(self):
         for override in (dict(contractId='2'),dict(priceType='MARK_PRICE'),dict(klineTime=str(START+1)),
                          dict(high='99'),dict(open='nan'),dict(klineTime=str(START+2*STEP))):
