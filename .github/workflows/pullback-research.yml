@@ -1,0 +1,75 @@
+name: Frozen EMA20 pullback research
+on:
+  push:
+    branches: [research/pullback-v19-0-12]
+    paths: [.github/workflows/pullback-research.yml]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install terminal dependencies
+        run: pip install -r analysis_terminal/requirements.txt
+      - name: Fixed protocol regression checks
+        run: python -m unittest analysis_terminal.test_pullback -v
+      - name: Retrieve immutable public market archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PYTHON'
+          import os, urllib.request, urllib.parse, zipfile, io
+          from pathlib import Path
+          class Redirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, req, fp, code, msg, headers, newurl):
+                  result=super().redirect_request(req,fp,code,msg,headers,newurl)
+                  if result and urllib.parse.urlparse(req.full_url).netloc!=urllib.parse.urlparse(newurl).netloc:
+                      result.remove_header('Authorization')
+                  return result
+          url='https://api.github.com/repos/y-ai-lab/edgex-breakout-alert/actions/artifacts/11264952464/zip'
+          req=urllib.request.Request(url,headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json'})
+          with urllib.request.build_opener(Redirect()).open(req,timeout=60) as response:
+              raw=response.read(32*1024*1024+1)
+          assert len(raw)<=32*1024*1024
+          root=Path('research-source').resolve()
+          with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+              for name in archive.namelist():
+                  assert (root/name).resolve().is_relative_to(root)
+              archive.extractall(root)
+          print('Archived source restored; no production DB accessed.')
+          PYTHON
+      - name: Reused development period
+        run: python -m analysis_terminal.pullback_replay --source research-source/original --output research-results/development --role REUSED_DEVELOPMENT_HISTORY
+      - name: Public candles for previously uninspected validation period
+        run: python -m analysis_terminal.run_replay --end-ms 1789786800000 --days 7 --output research-results/validation-source --universe-manifest research-source/original/replay-report.json
+      - name: Independent validation period
+        run: python -m analysis_terminal.pullback_replay --source research-results/validation-source --output research-results/validation --role NEW_HISTORICAL_VALIDATION
+      - name: Fixed decision and provenance
+        run: |
+          python - <<'PYTHON'
+          import json, os, hashlib
+          from pathlib import Path
+          from analysis_terminal.pullback_replay import decision, PROTOCOL_PATH
+          periods=[json.loads(Path('research-results/'+p+'/pullback-summary.json').read_text()) for p in ('development','validation')]
+          assert len({p['rule_fingerprint'] for p in periods})==1
+          report=dict(dataset='RETROSPECTIVE',eligible_for_live_promotion=False,automatic_promotion=False,
+                      protocol=periods[0]['protocol'],model=periods[0]['model'],decision=decision(periods),periods=periods,
+                      protocol_sha256=hashlib.sha256(PROTOCOL_PATH.read_bytes()).hexdigest(),
+                      preregistered_commit='58230518c2ac26d351fb7ed01746b286de08830c',
+                      research_commit=os.environ['GITHUB_SHA'],workflow_run_id=int(os.environ['GITHUB_RUN_ID']),
+                      limitations=periods[0]['limitations'])
+          Path('research-results/pullback-latest.json').write_text(json.dumps(report,ensure_ascii=False,indent=2,allow_nan=False))
+          print('PULLBACK_DECISION='+report['decision'])
+          PYTHON
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: edgex-ema20-pullback-v19-0-12
+          path: research-results
+          retention-days: 14
