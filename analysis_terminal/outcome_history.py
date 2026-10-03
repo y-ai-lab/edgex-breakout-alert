@@ -10,13 +10,19 @@ BACKFILL_REQUESTS = 4
 
 
 def merge_candles(*groups: list[scanner.Candle]) -> list[scanner.Candle]:
+    def prices(candle):
+        # WS and REST may omit different auxiliary metadata. Outcomes depend on
+        # the same contract/interval/time and OHLC, never volume or trade counts.
+        return (candle.contract_id, candle.interval, candle.time_ms,
+                candle.open, candle.high, candle.low, candle.close)
     found = {}
     for group in groups:
         for candle in group:
             old = found.get(candle.time_ms)
-            if old is not None and old != candle:
+            if old is not None and prices(old) != prices(candle):
                 raise ValueError("Conflicting closed candle revisions")
-            found[candle.time_ms] = candle
+            if old is None:
+                found[candle.time_ms] = candle
     return sorted(found.values(), key=lambda candle: candle.time_ms)
 
 

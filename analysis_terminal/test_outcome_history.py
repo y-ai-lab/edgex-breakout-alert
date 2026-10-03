@@ -4,7 +4,7 @@ import unittest
 from unittest.mock import AsyncMock, patch
 
 from analysis_terminal import test_tracking as _tracking
-from analysis_terminal.outcome_history import BACKFILL_BARS, BACKFILL_REQUESTS, consecutive_window
+from analysis_terminal.outcome_history import BACKFILL_BARS, BACKFILL_REQUESTS, consecutive_window, merge_candles
 from analysis_terminal.outcomes import verified_result
 
 server = _tracking.server
@@ -18,6 +18,11 @@ def signal(key="modern", **values):
 
 
 class OutcomeWindowTests(unittest.TestCase):
+    def test_matching_prices_with_different_auxiliary_metadata_can_merge(self):
+        ws=candle()
+        rest=replace(ws, contract_name="1", volume=2, value=200, trades=1)
+        self.assertEqual(merge_candles([ws], [rest]), [ws])
+
     def test_only_closed_post_signal_consecutive_bars_are_selected(self):
         rows = [candle(1, 150, 50), candle(2), candle(4, 120), candle(10, 150, 50)]
         prefix, gap, end = consecutive_window(signal(), rows, CONTRACT, "MINUTE_15", now_ms=NOW)

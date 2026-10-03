@@ -41,6 +41,10 @@ jobs:
               start=end-12*step
               bars=await fetch_history(server.CLIENT._get_json_sync,contract,'MINUTE_15',start,end,max_pages=1)
               assert [c.time_ms for c in bars]==list(range(start,end,step))
+              snapshots=await server.fetch_snapshots([contract.contract_id],intervals=('MINUTE_15',),timeout=25.0)
+              ws=[c for c in snapshots[(contract.contract_id,'MINUTE_15')] if start<=c.time_ms<end]
+              assert [c.time_ms for c in ws]==[c.time_ms for c in bars]
+              assert all((a.open,a.high,a.low,a.close)==(b.open,b.high,b.low,b.close) for a,b in zip(ws,bars))
               price=bars[0].open
               signal=dict(key='public-backfill-test-fixture',ticker=contract.contract_name,side='LONG',
                           created_ms=start+1,signal_candle_ms=start-step,entry=price,stop=price*.5,target=price*2,
@@ -61,7 +65,7 @@ jobs:
                       modern=dict(signal,key='fixture-'+model)
                       insert(modern)
                       # The first post-entry bar is omitted only from the test snapshot.
-                      with patch.object(server,'fetch_snapshots',AsyncMock(return_value={(contract.contract_id,'MINUTE_15'):bars[1:]})),patch.object(server.time,'time',return_value=end/1000):
+                      with patch.object(server,'fetch_snapshots',AsyncMock(return_value={(contract.contract_id,'MINUTE_15'):ws[1:]})),patch.object(server.time,'time',return_value=end/1000):
                           await server._refresh_signal_results(model,{contract.contract_id:contract})
                       load=server._load_paper_signals if model=='current' else server._load_shadow_v2_signals
                       stored={s['key']:s for s in load()}
