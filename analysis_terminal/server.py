@@ -1639,8 +1639,8 @@ async def fetch_snapshots(
     }
 
 
-def closed(candles: list[scanner.Candle], interval: str) -> list[scanner.Candle]:
-    cutoff = int(time.time() * 1000)
+def closed(candles: list[scanner.Candle], interval: str, *, as_of_ms: int | None = None) -> list[scanner.Candle]:
+    cutoff = int(time.time() * 1000) if as_of_ms is None else as_of_ms
     interval_ms = scanner.INTERVAL_MS[interval]
     return [
         candle
@@ -2254,9 +2254,10 @@ def analyze_contract(
     contract: scanner.Contract,
     monitor_raw: list[scanner.Candle],
     entry_raw: list[scanner.Candle],
+    *, as_of_ms: int | None = None,
 ) -> dict[str, Any]:
-    monitor = closed(monitor_raw, SETTINGS.monitor_interval)
-    entries = closed(entry_raw, SETTINGS.entry_interval)
+    monitor = closed(monitor_raw, SETTINGS.monitor_interval, as_of_ms=as_of_ms)
+    entries = closed(entry_raw, SETTINGS.entry_interval, as_of_ms=as_of_ms)
     base: dict[str, Any] = {
         "ticker": contract.contract_name,
         "contract_id": contract.contract_id,
@@ -2289,7 +2290,7 @@ def analyze_contract(
 
     latest4 = monitor[-1]
     latest15 = entries[-1]
-    now_ms = int(time.time() * 1000)
+    now_ms = int(time.time() * 1000) if as_of_ms is None else as_of_ms
     base.update({
         "latest_4h_time_ms": latest4.time_ms,
         "latest_15m_time_ms": latest15.time_ms,

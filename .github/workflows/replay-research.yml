@@ -1,0 +1,56 @@
+name: Fixed seven-day public market replay
+on:
+  push:
+    branches: ["research/replay-7d-v19-0-7"]
+    paths: [".github/workflows/replay-research.yml"]
+permissions:
+  contents: read
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -r analysis_terminal/test-requirements.txt
+      - name: Replay and existing safety tests
+        run: |
+          python -m unittest analysis_terminal.test_outcomes analysis_terminal.test_storage analysis_terminal.test_setups analysis_terminal.test_entry_ui analysis_terminal.test_lifecycle analysis_terminal.test_comparison analysis_terminal.test_tracking analysis_terminal.test_replay -v
+          python -m unittest discover -s tests -v
+      - name: Fetch all current contracts and replay a predeclared seven-day window
+        run: |
+          python -m analysis_terminal.run_replay --end-ms 1790996400000 --days 7 --output replay-output
+          python - <<'PY'
+          import json,hashlib
+          from pathlib import Path
+          from analysis_terminal import server
+          from analysis_terminal.replay import rule_fingerprint
+          out=Path("replay-output");r=json.loads((out/"replay-report.json").read_text())
+          assert r["dataset"]=="RETROSPECTIVE" and r["eligible_for_live_promotion"] is False
+          assert r["manifest"]["rule_fingerprint"]==rule_fingerprint(server.analyze_contract,server.SETTINGS)
+          assert r["manifest"]["parameters"]["min_rr"]==2
+          assert r["coverage"]["requested_markets"]>=170
+          assert r["coverage"]["fetched_markets"]>=150,r["coverage"]
+          assert r["coverage"]["valid_points"]>0,r["coverage"]
+          for source in r["manifest"]["sources"]:
+              assert hashlib.sha256((out/source["file"]).read_bytes()).hexdigest()==source["sha256"]
+          for model,signals in r["signals"].items():
+              assert len(signals)==len({s["setup_id"] for s in signals})
+              for s in signals:
+                  assert s["created_ms"]==s["signal_candle_ms"]+900000+1
+                  assert r["start_ms"]<=s["created_ms"]<r["end_ms"]
+                  result=s["result"]
+                  if result["history_start_ms"] is not None:
+                      assert result["history_start_ms"]>=s["created_ms"]-1
+                  if result["status"] in {"TP","SL","AMBIGUOUS"}:
+                      assert result["history_end_ms"]==result["outcome_time_ms"]
+          print("Research source hashes, entry timestamps, unique setups and separation: OK")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: edgex-retrospective-7d-v19-0-7
+          path: replay-output/
+          retention-days: 14
