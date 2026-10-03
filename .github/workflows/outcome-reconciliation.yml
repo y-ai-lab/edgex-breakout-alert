@@ -1,0 +1,62 @@
+name: Independent live outcome reconciliation
+on:
+  push:
+    branches: [research/outcome-audit-v19-0-13]
+    paths: [.github/workflows/outcome-reconciliation.yml]
+permissions:
+  contents: read
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r analysis_terminal/test-requirements.txt
+      - run: python -m unittest analysis_terminal.test_outcome_audit -v
+      - name: Capture live market records without modifying the database
+        run: |
+          python - <<'PYTHON'
+          import json, time, urllib.request
+          from pathlib import Path
+          from analysis_terminal.comparison import cohort
+          base='https://edgex-analysis-terminal-production.up.railway.app'
+          def get(path):
+              with urllib.request.urlopen(base+path,timeout=65) as response:
+                  assert response.status==200
+                  return json.load(response)
+          for attempt in range(3):
+              shadow=get('/api/shadow-v2?limit=2000')
+              paper=get('/api/server-paper-signals?limit=1000')
+              comparison=get('/api/strategy-comparison?limit=500')
+              records={'current':paper['signals'],'shadow':shadow['latest']}
+              if all({s['setup_id'] for s in cohort(records[m])[0]}=={s['setup_id'] for s in comparison['latest'] if s.get(m)}
+                     and len(cohort(records[m])[0])==comparison[m]['signals'] for m in records):
+                  break
+              time.sleep(2)
+          else: raise AssertionError('No complete consistent bounded capture')
+          capture=dict(captured_ms=int(time.time()*1000),records=records,comparison=comparison,
+                       shadow_quality_before=shadow['metrics'],health=get('/health'))
+          Path('live-capture.json').write_text(json.dumps(capture,ensure_ascii=False,allow_nan=False))
+          print('Captured identified current/shadow records: '+str([comparison[m]['signals'] for m in records]))
+          PYTHON
+      - name: Recompute from the signal close through each saved cursor
+        run: python -m analysis_terminal.run_outcome_audit --source live-capture.json --output reconciliation-output
+      - name: Record code and workflow provenance
+        run: |
+          python - <<'PYTHON'
+          import json,os
+          from pathlib import Path
+          p=Path('reconciliation-output/outcome-audit-latest.json');r=json.loads(p.read_text())
+          r['provenance']=dict(code_commit='fd83148a2416bdb6ed875634e58f4d388cf9b5af',workflow_commit=os.environ['GITHUB_SHA'],workflow_run_id=int(os.environ['GITHUB_RUN_ID']))
+          p.write_text(json.dumps(r,ensure_ascii=False,indent=2,allow_nan=False))
+          print('Audit evidence saved; no production results, strategy or notifications changed.')
+          PYTHON
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: edgex-live-outcome-reconciliation-v19-0-13
+          path: reconciliation-output
+          retention-days: 14
