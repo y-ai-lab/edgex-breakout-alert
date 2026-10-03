@@ -3891,7 +3891,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="EdgeX Analysis Terminal",
-    version="19.0.7",
+    version="19.0.8",
     lifespan=lifespan,
 )
 
@@ -3903,7 +3903,7 @@ async def health():
     return {
         "ok": True,
         "service": "edgex-analysis-terminal",
-        "version": "19.0.7",
+        "version": "19.0.8",
         "time_ms": int(time.time() * 1000),
         "storage": {
             "market_snapshots_48h": len(history),
@@ -4331,7 +4331,16 @@ async def outcome_tracking_api(limit: int = Query(default=50, ge=1, le=500)):
 
 @app.get("/api/replay-review")
 async def replay_review_api():
-    path = Path(__file__).with_name("replay_latest.json")
+    return _retrospective_report("replay_latest.json")
+
+
+@app.get("/api/entry-diagnostics")
+async def entry_diagnostics_api():
+    return _retrospective_report("entry_diagnostics_latest.json")
+
+
+def _retrospective_report(filename: str):
+    path = Path(__file__).with_name(filename)
     if not path.exists():
         return {"dataset": "RETROSPECTIVE", "status": "NOT_RUN", "eligible_for_live_promotion": False}
     try:

@@ -25,7 +25,7 @@ Python 3.12とNode.jsが必要です。
 
 ```bash
 python -m pip install -r analysis_terminal/test-requirements.txt
-python -m unittest analysis_terminal.test_outcomes analysis_terminal.test_storage analysis_terminal.test_setups analysis_terminal.test_entry_ui analysis_terminal.test_lifecycle analysis_terminal.test_comparison analysis_terminal.test_tracking analysis_terminal.test_replay analysis_terminal.test_replay_review -v
+python -m unittest analysis_terminal.test_outcomes analysis_terminal.test_storage analysis_terminal.test_setups analysis_terminal.test_entry_ui analysis_terminal.test_lifecycle analysis_terminal.test_comparison analysis_terminal.test_tracking analysis_terminal.test_replay analysis_terminal.test_replay_review analysis_terminal.test_entry_diagnostics -v
 python -m unittest discover -s tests -v
 ```
 
@@ -134,3 +134,30 @@ LONG/SHORTとも平均Rは負。両戦略で確定した同一setupは0件で、
 過去検証の179確定はライブのresolved>=20条件へ加算しません。
 元コード・公開データ成果物: [research run 37093101900](https://github.com/y-ai-lab/edgex-breakout-alert/actions/runs/37093101900)。
 取得元SHAとrun/artifact IDは配布結果のprovenanceにも残しています。
+
+## Entry時点の損失要因（v19.0.8）
+
+`entry_diagnostics.py` は保存済みの公開元足とresearch reportから、全235 Shadow Entryを再構成します。
+全182元ファイルのSHA256とanalyze_contractのfingerprintを検証し、各EntryのID・価格・SL・TP・
+Measured Move余地が再現できなければ中断します。未来足をEntry判断へ渡さず、DBや通知にはアクセスしません。
+
+```bash
+python -m analysis_terminal.entry_diagnostics --source /path/to/research-artifact --output /tmp/edgex-entry-diagnostics
+```
+
+確認足実体・roll超過・EMA間隔・ストップ距離・Measured Move余地・出来高比を固定区分で比較します。
+方向、ブレイク確定後の経過、Entry日、retest時系列も表示します。最適化した閾値ではありません。
+API `/api/entry-diagnostics` は静的な `entry_diagnostics_latest.json` を読み、REPLAY内に表示します。
+OPENも分母に残し、平均R/PFは検証済み確定結果のみ。少数群はINSUFFICIENT SAMPLEと表示します。
+
+直近4本のretest判定には、4Hブレイク足が確定する前の15M足が含まれ得ます。
+235件中87件は、その4H足の確定後に始まるretest足がありませんでした（63確定、TP6/SL57、平均R -0.7143）。
+確定後・確認足のみは23件（17確定、平均R -0.2941）、確定後・確認足より前にretestがある群は125件
+（99確定、平均R -0.3030）。確定後のretestがある群も利益改善を示していません。
+固定した数値区分でも、20件以上確定した群はすべて平均Rが負でした。
+
+これは既に結果を見た同じ7日間の記述分析です。OHLC内の順序は不明で、4Hブレイク足内部の押し戻しと
+確定後のretestを区別する分類です。後者だけを採用する新戦略のバックテストではありません。
+最初のEntryを除外すると後のEntryが成立する可能性があるため、単なる部分集合の成績は新ルールの成績になりません。
+本番条件とライブShadowを変更せず、次は4Hブレイク確定後にretestが始まる条件を別Shadowとして
+時系列から再検証するのが優先です。手数料未反映・銘柄選択・相関・OPENの観測期間差にも注意が必要です。
