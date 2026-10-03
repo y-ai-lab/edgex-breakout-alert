@@ -16,7 +16,7 @@ from analysis_terminal.history import fetch_history
 from analysis_terminal.replay import replay_contract, replay_report, rule_fingerprint, strategy_parameters
 
 
-async def run(end_ms: int, days: int, output: Path) -> dict:
+async def run(end_ms: int, days: int, output: Path, *, universe: dict | None = None) -> dict:
     settings = server.SETTINGS
     if settings.monitor_interval != "HOUR_4" or settings.entry_interval != "MINUTE_15":
         raise ValueError("This research protocol requires the production 4H/15M intervals")
@@ -30,7 +30,7 @@ async def run(end_ms: int, days: int, output: Path) -> dict:
     output.mkdir(parents=True, exist_ok=True)
     data_dir = output/"candles"
     data_dir.mkdir(exist_ok=True)
-    contracts = await server.CLIENT.get_contracts()
+    contracts = await server.CLIENT.get_contracts() if universe is None else universe
     manifest = dict(protocol="public_last_price_7d_all_current_contracts_v1", fetched_ms=int(time.time()*1000),
                     source_endpoint="/api/v2/public/quote/getKline", parameters=strategy_parameters(settings),
                     rule_fingerprint=rule_fingerprint(server.analyze_contract, settings),
@@ -98,8 +98,18 @@ def main():
     parser.add_argument("--end-ms", type=int, required=True)
     parser.add_argument("--days", type=int, default=7)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--universe-manifest", type=Path, help="Reuse an archived research universe for a period comparison")
     args = parser.parse_args()
-    asyncio.run(run(args.end_ms, args.days, args.output))
+    universe = None
+    if args.universe_manifest:
+        report = json.loads(args.universe_manifest.read_text())
+        if report.get("dataset") != "RETROSPECTIVE" or report.get("eligible_for_live_promotion") is not False:
+            raise ValueError("Invalid archived research universe")
+        contracts = [server.scanner.Contract(**c) for c in report["manifest"]["universe"]]
+        universe = {c.contract_id: c for c in contracts}
+        if not universe or len(universe) != len(contracts):
+            raise ValueError("Invalid or duplicate archived contracts")
+    asyncio.run(run(args.end_ms, args.days, args.output, universe=universe))
 
 
 if __name__ == "__main__":

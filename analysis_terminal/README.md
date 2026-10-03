@@ -25,7 +25,7 @@ Python 3.12とNode.jsが必要です。
 
 ```bash
 python -m pip install -r analysis_terminal/test-requirements.txt
-python -m unittest analysis_terminal.test_outcomes analysis_terminal.test_storage analysis_terminal.test_setups analysis_terminal.test_entry_ui analysis_terminal.test_lifecycle analysis_terminal.test_comparison analysis_terminal.test_tracking analysis_terminal.test_replay analysis_terminal.test_replay_review analysis_terminal.test_entry_diagnostics -v
+python -m unittest analysis_terminal.test_outcomes analysis_terminal.test_storage analysis_terminal.test_setups analysis_terminal.test_entry_ui analysis_terminal.test_lifecycle analysis_terminal.test_comparison analysis_terminal.test_tracking analysis_terminal.test_replay analysis_terminal.test_replay_review analysis_terminal.test_entry_diagnostics analysis_terminal.test_chronology_replay analysis_terminal.test_chronology_review -v
 python -m unittest discover -s tests -v
 ```
 
@@ -161,3 +161,36 @@ OPENも分母に残し、平均R/PFは検証済み確定結果のみ。少数群
 最初のEntryを除外すると後のEntryが成立する可能性があるため、単なる部分集合の成績は新ルールの成績になりません。
 本番条件とライブShadowを変更せず、次は4Hブレイク確定後にretestが始まる条件を別Shadowとして
 時系列から再検証するのが優先です。手数料未反映・銘柄選択・相関・OPENの観測期間差にも注意が必要です。
+
+## 確定後retestの別Shadow REPLAY（v19.0.9）
+
+`measured_room_fixed_2r_post_breakout_retest`を研究専用に実装。
+既存条件に「同じ直近4本の中に、4Hブレイク確定後に始まるretest足があること」だけを追加します。
+確認足自身のretestは許容し、confirmation・tolerance・構造SL・min_rr・TPは緩めません。
+collectorには組み込まず、保存済み元足を時間順に再生し、各モデルの初回Entryを別々に決めます。
+除外した元Entryの後で成立したEntryについても、その時点の価格・SL・TPを計算します。
+
+条件と期間は`chronology_protocol.json`に固定しました。探索期間9/26〜10/3に加え、
+結果を未確認だった9/19〜9/26（いずれも03:00 UTC境界）を同じ182銘柄で取得・検証しています。
+現在の銘柄集合による過去検証であり、将来のライブ・forward testではありません。
+
+```bash
+python -m analysis_terminal.run_replay --end-ms 1790391600000 --days 7 --universe-manifest /path/to/original/replay-report.json --output /tmp/edgex-uninspected
+python -m analysis_terminal.chronology_replay --source /path/to/original --role EXPLORATORY --output /tmp/edgex-chronology-exploratory
+python -m analysis_terminal.chronology_replay --source /tmp/edgex-uninspected --role UNINSPECTED_RETROSPECTIVE --output /tmp/edgex-chronology-uninspected
+```
+
+| 期間 | 既存Shadow resolved / Avg R / PF | 確定後retest resolved / Avg R / PF |
+|---|---|---|
+| 探索9/26〜10/3 | 179 / -0.4469 / 0.4521 | 167 / -0.4072 / 0.4925 |
+| 未見過去9/19〜9/26 | 295 / -0.1559 / 0.7830 | 266 / -0.1767 / 0.7565 |
+
+探索期間では72件のEntryが後へ移り15件が不成立。未見期間では112件が後へ移り33件が不成立。
+未見期間の両方確定266 setupの平均R差は0で、全体成績は悪化しました。
+両期間とも利益は負で、この時系列条件だけによるfixed 2R利益改善の仮説は採用見送りです。
+未見期間の現行構造TPは9確定・平均R+0.2463・PF1.3695ですが、INSUFFICIENT SAMPLEで結論を出しません。
+
+GET `/api/chronology-review`とREPLAY内の比較欄に静的結果を表示します。
+RETROSPECTIVE・本番昇格対象外と明示し、OPEN・AMBIGUOUS・除外・カバー率も保持します。
+既存戦略・ライブShadow・DB・通知・昇格条件は変更していません。
+[公開元足と再検証run 37097545870](https://github.com/y-ai-lab/edgex-breakout-alert/actions/runs/37097545870)。
