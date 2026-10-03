@@ -232,6 +232,12 @@ button{-webkit-tap-highlight-color:transparent}
         <div id="chronologyReviewChanges" class="status"></div>
         <div class="sub">追加条件は、同じ直近4本の中に4Hブレイク確定後に始まるretest足があることだけ。確認足自身のretestは許容します。各戦略の初回Entryを時間順に再計算し、価格・SL・TPもその時点で算出します。未見期間も過去履歴・現在の銘柄集合による検証で、将来のライブ成績を保証しません。ライブ昇格サンプルへ加算せず、本番条件・既存Shadow・通知を変更しません。</div>
       </details>
+      <details><summary>機会数を増やす案 — EMA20押し目Shadowの検証</summary>
+        <div id="pullbackReviewStatus" class="status">押し目Shadowの検証結果を読み込み中です。</div>
+        <div class="scroll"><table><thead><tr><th>期間 / 戦略</th><th>signals / resolved</th><th>TP / SL / OPEN / 曖昧</th><th>勝率</th><th>Avg R / Expectancy</th><th>PF</th><th>MFE / MAE (R)</th><th>最大連敗</th><th>サンプル</th></tr></thead><tbody id="pullbackReviewBody"></tbody></table></div>
+        <div id="pullbackReviewNotes" class="status"></div>
+        <div class="sub">4Hトレンド中のEMA20への押し目・戻りを別setupとして追跡し、4H確定後の15Mリテストと方向＋水準の確認を要求します。4H構造SL＋既存ATRバッファを使い、事前の20本の構造高値・安値まで2R以上の余地がある場合だけ第一TPを2Rにします。ルール・2期間を結果を見る前に固定しました。過去検証のみで、ENTRY NOW・通知・ライブ昇格サンプルには加算しません。</div>
+      </details>
     </details>
     <div class="analyticsBox">
       <div class="boxLabel">READY v2 — 検証中</div>
@@ -468,7 +474,18 @@ function renderReplayReview(j){
  var insufficient=['current','shadow'].filter(function(k){return (p[k]||{}).sample_status==='INSUFFICIENT SAMPLE'}).map(function(k){return k==='current'?'現行':'Shadow'});
  notes.textContent=(insufficient.length?'INSUFFICIENT SAMPLE: '+insufficient.join(' / ')+'。':'')+'保存条件: min RR '+((manifest.parameters||{}).min_rr==null?'—':manifest.parameters.min_rr)+'。現在取引可能な銘柄だけの検証で、上場・生存銘柄の偏りがあります。180本の連続した指標足が揃う期間のみ評価し、欠測・初回Entry時刻が不明なsetupを除外します。履歴は後から修正される場合があり、ライブで観測した結果とは別です。Entry時刻・価格差を含む比較で、手数料・スリッページ・Fundingは未反映。過去結果だけで採用・条件変更は行いません。';
 }
-async function loadReplayReview(){try{renderReplayReview(await jf('/api/replay-review'))}catch(e){var st=document.getElementById('replayReviewStatus');if(st)st.textContent='過去検証を取得できません: '+e.message}loadEntryDiagnostics();loadChronologyReview()}
+async function loadReplayReview(){try{renderReplayReview(await jf('/api/replay-review'))}catch(e){var st=document.getElementById('replayReviewStatus');if(st)st.textContent='過去検証を取得できません: '+e.message}loadEntryDiagnostics();loadChronologyReview();loadPullbackReview()}
+function renderPullbackReview(j){
+ var st=document.getElementById('pullbackReviewStatus'),body=document.getElementById('pullbackReviewBody'),notes=document.getElementById('pullbackReviewNotes');if(!st||!body||!notes)return;
+ if(!j||j.dataset!=='RETROSPECTIVE'||j.eligible_for_live_promotion!==false||j.automatic_promotion!==false||j.status==='NOT_RUN'||!Array.isArray(j.periods)||j.periods.length!==2||j.periods.some(function(p){return !p||p.dataset!=='RETROSPECTIVE'||p.eligible_for_live_promotion!==false||p.automatic_promotion!==false})){st.textContent='押し目Shadowの保存結果を確認できません';body.innerHTML='';notes.textContent='';return}
+ function value(v){return v==null?'—':lifecycleEscape(typeof v==='number'?fmt(v,3):v)}
+ function period(p){return p.role==='REUSED_DEVELOPMENT_HISTORY'?'既存過去期間':'未見過去期間'}
+ var verdicts={KILL:'KILL — 収益基準を満たさず採用見送り',CONTINUE_INSUFFICIENT_SAMPLE:'CONTINUE — INSUFFICIENT SAMPLE',PIVOT_NO_INCREMENTAL_OPPORTUNITIES:'PIVOT — 追加機会なし',CONTINUE_FORWARD_SHADOW_REQUIRED:'CONTINUE — ライブShadow検証が必要'};
+ st.textContent=(verdicts[j.decision]||'判定未確認')+' / 過去検証・本番昇格対象外';
+ body.innerHTML=j.periods.map(function(p){return [['current','現行'],['existing_shadow','既存Shadow'],['pullback','EMA20押し目Shadow']].map(function(pair){var m=(p.metrics||{})[pair[0]]||{};return '<tr><td>'+period(p)+' / '+pair[1]+'<br>'+new Date(p.start_ms).toLocaleString('ja-JP')+' 〜 '+new Date(p.end_ms).toLocaleString('ja-JP')+'</td><td>'+(m.signals||0)+' / '+(m.resolved||0)+'</td><td>'+(m.tp||0)+' / '+(m.sl||0)+' / '+(m.open||0)+' / '+(m.ambiguous||0)+'</td><td>'+value(m.win_rate)+(m.win_rate==null?'':'%')+'</td><td>'+value(m.avg_r)+' / '+value(m.expectancy_r)+'</td><td>'+value(m.profit_factor)+'</td><td>'+value(m.avg_mfe_r)+' / '+value(m.avg_mae_r)+'</td><td>'+value(m.max_consecutive_losses)+'</td><td>'+lifecycleEscape(m.sample_status||'INSUFFICIENT SAMPLE')+'</td></tr>'}).join('')}).join('');
+ notes.textContent=j.periods.map(function(p){var o=p.opportunities||{},c=p.coverage||{};return period(p)+': 押し目 '+(o.pullback||0)+'件 / 現行にないEntry時刻 '+(o.additional_vs_current||0)+'件 / 現行と同時 '+(o.overlap_current||0)+'件。取得 '+(c.fetched_markets||0)+' / '+(c.requested_markets||0)+'銘柄、失敗 '+(c.failed_markets||0)+' / 観測点カバー率 '+value(c.pullback_coverage_pct)+'%。'}).join('\n')+'\n初回Entryを独立して再計算した候補数です。同時保有制約・手数料・スリッページ・Fundingは未反映で、実際の取引回数ではありません。現在の銘柄集合による上場・生存銘柄の偏りがあります。候補増加だけで採用せず、条件の再調整や自動昇格は行いません。';notes.style.whiteSpace='pre-line';
+}
+async function loadPullbackReview(){try{renderPullbackReview(await jf('/api/pullback-review'))}catch(e){var st=document.getElementById('pullbackReviewStatus'),body=document.getElementById('pullbackReviewBody'),notes=document.getElementById('pullbackReviewNotes');if(st)st.textContent='押し目Shadowの結果を取得できません: '+e.message;if(body)body.innerHTML='';if(notes)notes.textContent=''}}
 function renderChronologyReview(j){
  var st=document.getElementById('chronologyReviewStatus'),body=document.getElementById('chronologyReviewBody'),changes=document.getElementById('chronologyReviewChanges');if(!st||!body||!changes)return;
  if(j.dataset!=='RETROSPECTIVE'||j.eligible_for_live_promotion!==false||j.status==='NOT_RUN'||!(j.periods||[]).length||(j.periods||[]).some(function(p){return p.dataset!=='RETROSPECTIVE'||p.eligible_for_live_promotion!==false})){st.textContent='別Shadowの保存結果を確認できません';body.innerHTML='';changes.textContent='';return}

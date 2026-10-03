@@ -1,0 +1,21 @@
+{
+  "protocol": "trend_ema20_pullback_structural_room_2r_v1",
+  "model": "trend_ema20_pullback_structural_room_fixed_2r",
+  "dataset": "RETROSPECTIVE",
+  "eligible_for_live_promotion": false,
+  "parameters": {"monitor_interval":"HOUR_4","entry_interval":"MINUTE_15","trend_fast_ema":20,"trend_slow_ema":50,"atr_period":14,"roll_lookback":20,"roll_max_age":6,"retest_lookback":4,"atr_stop_buffer":0.5,"atr_target_buffer":0.25,"retest_atr_tolerance":0.35,"min_rr":2.0},
+  "anchor": "At a newly closed 4H bar: EMA20>EMA50 and close>EMA20 for LONG, inverse for SHORT. Previous 4H close must be on the trend side of its EMA20. The bar's low/high must bracket its EMA20. Freeze this EMA20 and the preceding 20 bars' directional extreme at discovery. Latest qualifying anchor replaces the older anchor; maximum age remains 6 closed 4H bars.",
+  "confirmation": "Within the same last 4 closed 15M bars, a bar beginning at or after anchor 4H close must intersect level +/- max(ATR15*.35,level*.001). Latest closed bar must also begin after anchor close. LONG close>open AND close>frozen level; SHORT close<open AND close<frozen level.",
+  "stop": "LONG min(frozen EMA20, lows of closed 4H bars from anchor through entry)-ATR4*.5; SHORT max(frozen EMA20, highs from anchor through entry)+ATR4*.5. No stop relaxation.",
+  "target": "Structural extension = extreme of 20 closed 4H bars preceding anchor, buffered inward by ATR4*.25 at entry. Only valid structural room >=2R qualifies. First TP fixed 2R. Extension is recorded separately; never assumed reachable just because TP is fixed 2R.",
+  "identity": "pullback-v1:ticker:direction:anchor_time:frozen_level; one first entry per identity, including warmup observations. Never share lifecycle identity with breakout setups.",
+  "windows": {"HOUR_4":180,"MINUTE_15":180},
+  "periods": [
+    {"role":"REUSED_DEVELOPMENT_HISTORY","start_ms":1790391600000,"end_ms":1790996400000},
+    {"role":"NEW_HISTORICAL_VALIDATION","start_ms":1789182000000,"end_ms":1789786800000}
+  ],
+  "comparison": "Reproduce archived current and measured-room Shadow baselines on both source datasets. Compare independent strategy metrics, not paired setup effects. Count extra entry timestamps using ticker+direction+signal-close against each baseline; overlaps remain visible. Signals are candidate entries, not portfolio trades.",
+  "outcomes": "signal close+1ms; exclude signal/prior and forming bars. Evaluate only the consecutive post-entry prefix. Stop at a history gap; no inferred TP/SL ordering. Same-bar TP/SL = AMBIGUOUS. Retrospective samples do not enter any live gate.",
+  "decision": "Freeze before inspecting model outcomes. Any period with resolved>=20 and AvgR<=0 or PF<=1 => KILL. Otherwise sample shortage => CONTINUE_INSUFFICIENT_SAMPLE. With sufficient positive performance in both periods, no extra current-baseline entry times in either period => PIVOT_NO_INCREMENTAL_OPPORTUNITIES, otherwise CONTINUE_FORWARD_SHADOW_REQUIRED. No automatic promotion or parameter tuning.",
+  "limitations": ["Current frozen universe of 182 markets: survivorship/listing bias; not forward observations.","Coverage denominator includes all requested markets; missing 180-bar windows and warmup first entries are excluded and counted.","Fees, slippage, funding and overlapping-position constraints are not modeled. A signal frequency is not a daily trade quota."]
+}

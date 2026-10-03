@@ -3802,7 +3802,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="EdgeX Analysis Terminal",
-    version="19.0.11",
+    version="19.0.12",
     lifespan=lifespan,
 )
 
@@ -3814,7 +3814,7 @@ async def health():
     return {
         "ok": True,
         "service": "edgex-analysis-terminal",
-        "version": "19.0.11",
+        "version": "19.0.12",
         "time_ms": int(time.time() * 1000),
         "storage": {
             "market_snapshots_48h": len(history),
@@ -4255,6 +4255,21 @@ async def entry_diagnostics_api():
 @app.get("/api/chronology-review")
 async def chronology_review_api():
     return _retrospective_report("chronology_latest.json")
+
+
+@app.get("/api/pullback-review")
+async def pullback_review_api():
+    report = _retrospective_report("pullback_latest.json")
+    if report.get("status") == "NOT_RUN":
+        return report
+    periods = report.get("periods")
+    if (report.get("automatic_promotion") is not False or not isinstance(periods, list)
+            or len(periods) != 2
+            or any(not isinstance(p, dict) or p.get("dataset") != "RETROSPECTIVE"
+                   or p.get("eligible_for_live_promotion") is not False
+                   or p.get("automatic_promotion") is not False for p in periods)):
+        raise HTTPException(503, "Invalid pullback research report")
+    return report
 
 
 def _retrospective_report(filename: str):
