@@ -28,7 +28,8 @@ import app as scanner
 from analysis_terminal.outcomes import evaluate_paper_signal, verified_result
 from analysis_terminal.setups import first_per_setup, later_ready_time, ready_times_by_setup, setup_identity
 from analysis_terminal.lifecycle import ENDED, current_observation, new_setup, observe_setup
-from analysis_terminal.comparison import strategy_comparison
+from analysis_terminal.comparison import cohort, strategy_comparison
+from analysis_terminal.tracking import tracking_summary
 
 SETTINGS = scanner.Settings.from_env(dry_run_override=True)
 CLIENT = scanner.EdgeXClient(SETTINGS)
@@ -440,6 +441,47 @@ def _load_shadow_v2_signals(limit: int = 500) -> list[dict[str, Any]]:
             (max(1, min(limit, 2000)),),
         ).fetchall()
     return [json.loads(row["payload"]) for row in rows]
+
+
+SIGNAL_TABLES = {"current": "paper_signals", "shadow": "shadow_v2_signals"}
+
+
+def _load_pending_signals(model: str) -> list[dict[str, Any]]:
+    table = SIGNAL_TABLES[model]  # Internal allowlist, never a user-supplied table name.
+    with _db_connect() as conn:
+        rows = conn.execute(f"""SELECT payload FROM {table}
+            WHERE COALESCE(json_extract(payload, '$.result.status'), '')
+                NOT IN ('TP', 'SL', 'AMBIGUOUS')
+            ORDER BY created_ms, signal_key""").fetchall()
+    return [json.loads(row["payload"]) for row in rows]
+
+
+def _save_outcome_refresh_report(model: str, report: dict[str, Any]) -> None:
+    try:
+        _state_set(f"outcome_refresh_{model}", json.dumps(report, separators=(",", ":")))
+    except Exception as exc:
+        # Diagnostic persistence must not block signal evaluation or the other model.
+        print(f"Outcome diagnostics save error: {type(exc).__name__}", flush=True)
+
+
+def _outcome_tracking_review(limit: int = 50) -> dict[str, Any]:
+    now_ms = int(time.time()*1000)
+    models = {}
+    with _db_connect() as conn:
+        conn.execute("BEGIN")
+        for model, table in SIGNAL_TABLES.items():
+            records = [json.loads(row["payload"]) for row in conn.execute(
+                f"SELECT payload FROM {table} ORDER BY created_ms, signal_key")]
+            first, exclusions = cohort(records)
+            state = conn.execute("SELECT value FROM app_state WHERE key=?", (f"outcome_refresh_{model}",)).fetchone()
+            report = json.loads(state["value"]) if state else None
+            models[model] = dict(
+                all_records=tracking_summary(records, interval_ms=scanner.INTERVAL_MS[SETTINGS.entry_interval], now_ms=now_ms, limit=0),
+                setup_cohort=tracking_summary(first, interval_ms=scanner.INTERVAL_MS[SETTINGS.entry_interval], now_ms=now_ms, limit=limit),
+                exclusions=exclusions, last_refresh=report,
+                refresh_age_seconds=round(max(0, now_ms-int(report.get("finished_ms") or report["started_ms"]))/1000, 1) if report else None)
+    return dict(time_ms=now_ms, interval_ms=scanner.INTERVAL_MS[SETTINGS.entry_interval], models=models,
+                rule="All nonterminal records remain eligible for updates; no history gaps are inferred or repaired.")
 
 
 def _persist_shadow_v2_signals(rows: list[dict[str, Any]]) -> int:
@@ -1619,113 +1661,68 @@ def _evaluate_paper_signal(
     )
 
 
-async def _refresh_paper_signal_results(
-    contracts: dict[str, scanner.Contract],
-) -> None:
-    signals = _load_paper_signals(limit=1000)
-    pending = [
-        signal
-        for signal in signals
-        if (signal.get("result") or {}).get("status") not in {"TP", "SL", "AMBIGUOUS"}
-    ]
-    if not pending:
-        return
-
+async def _refresh_signal_results(model: str, contracts: dict[str, scanner.Contract]) -> None:
+    pending = _load_pending_signals(model)
+    report = dict(started_ms=int(time.time()*1000), finished_ms=None, status="RUNNING",
+                  selected=len(pending), evaluated=0, advanced=0, missing_contract=0, missing_snapshot=0,
+                  chunk_errors=0, signal_errors=0, contracts_requested=0)
+    _save_outcome_refresh_report(model, report)
     by_name = {contract.contract_name.upper(): contract for contract in contracts.values()}
-    contract_ids: list[str] = []
-    signal_contract: dict[str, scanner.Contract] = {}
+    signal_contract = {}
     for signal in pending:
         contract = by_name.get(str(signal.get("ticker") or "").upper())
-        if contract is None:
-            continue
-        signal_contract[str(signal["key"])] = contract
-        if contract.contract_id not in contract_ids:
-            contract_ids.append(contract.contract_id)
-
-    if not contract_ids:
-        return
-
+        if contract is not None:
+            signal_contract[str(signal["key"])] = contract
+        else:
+            report["missing_contract"] += 1
+    contract_ids = sorted({contract.contract_id for contract in signal_contract.values()})
+    report["contracts_requested"] = len(contract_ids)
     snapshots: dict[tuple[str, str], list[scanner.Candle]] = {}
     for start in range(0, len(contract_ids), 50):
-        chunk = contract_ids[start : start + 50]
         try:
-            part = await fetch_snapshots(
-                chunk,
-                intervals=(SETTINGS.entry_interval,),
-                timeout=25.0,
-            )
-            snapshots.update(part)
+            snapshots.update(await fetch_snapshots(
+                contract_ids[start:start+50], intervals=(SETTINGS.entry_interval,), timeout=25.0))
         except Exception as exc:
-            print(f"Paper signal refresh chunk error: {exc}", flush=True)
-
+            report["chunk_errors"] += 1
+            print(f"{model} outcome refresh chunk error: {type(exc).__name__}", flush=True)
+    update = _update_paper_signal if model == "current" else _update_shadow_v2_signal
     for signal in pending:
         contract = signal_contract.get(str(signal["key"]))
         if contract is None:
             continue
         candles = snapshots.get((contract.contract_id, SETTINGS.entry_interval), [])
         if not candles:
+            report["missing_snapshot"] += 1
             continue
-        result = _evaluate_paper_signal(signal, candles)
-        signal["result"] = result
-        _update_paper_signal(signal)
-
-
-async def _refresh_shadow_v2_results(
-    contracts: dict[str, scanner.Contract],
-) -> None:
-    signals = _load_shadow_v2_signals(limit=2000)
-    pending = [
-        signal
-        for signal in signals
-        if str((signal.get("result") or {}).get("status") or "")
-        not in {"TP", "SL", "AMBIGUOUS"}
-    ]
-    if not pending:
-        return
-
-    by_name = {
-        contract.contract_name.upper(): contract
-        for contract in contracts.values()
-    }
-    contract_ids: list[str] = []
-    signal_contract: dict[str, scanner.Contract] = {}
-    for signal in pending:
-        contract = by_name.get(str(signal.get("ticker") or "").upper())
-        if contract is None:
-            continue
-        signal_contract[str(signal["key"])] = contract
-        if contract.contract_id not in contract_ids:
-            contract_ids.append(contract.contract_id)
-
-    if not contract_ids:
-        return
-
-    snapshots: dict[tuple[str, str], list[scanner.Candle]] = {}
-    for start in range(0, len(contract_ids), 50):
-        chunk = contract_ids[start : start + 50]
         try:
-            part = await fetch_snapshots(
-                chunk,
-                intervals=(SETTINGS.entry_interval,),
-                timeout=25.0,
-            )
-            snapshots.update(part)
+            previous = signal.get("result") or {}
+            result = _evaluate_paper_signal(signal, candles)
+            signal["result"] = result
+            update(signal)
+            report["evaluated"] += 1
+            if result.get("status") == "ERROR":
+                report["signal_errors"] += 1
+            if result.get("history_end_ms") is not None and (
+                previous.get("evaluation_version") != result.get("evaluation_version")
+                or previous.get("history_end_ms") is None
+                or int(result["history_end_ms"]) > int(previous["history_end_ms"])
+            ):
+                report["advanced"] += 1
         except Exception as exc:
-            print(f"Shadow v2 refresh chunk error: {exc}", flush=True)
+            report["signal_errors"] += 1
+            print(f"{model} outcome record error: {type(exc).__name__}", flush=True)
+    report["finished_ms"] = int(time.time()*1000)
+    failed = any(report[k] for k in ("missing_contract", "missing_snapshot", "chunk_errors", "signal_errors"))
+    report["status"] = ("PARTIAL" if report["evaluated"] else "ERROR") if failed else "OK"
+    _save_outcome_refresh_report(model, report)
 
-    for signal in pending:
-        contract = signal_contract.get(str(signal["key"]))
-        if contract is None:
-            continue
-        candles = snapshots.get(
-            (contract.contract_id, SETTINGS.entry_interval),
-            [],
-        )
-        if not candles:
-            continue
-        result = _evaluate_paper_signal(signal, candles)
-        signal["result"] = result
-        _update_shadow_v2_signal(signal)
+
+async def _refresh_paper_signal_results(contracts: dict[str, scanner.Contract]) -> None:
+    await _refresh_signal_results("current", contracts)
+
+
+async def _refresh_shadow_v2_results(contracts: dict[str, scanner.Contract]) -> None:
+    await _refresh_signal_results("shadow", contracts)
 
 
 async def _refresh_candidate_event_results(
@@ -3893,7 +3890,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="EdgeX Analysis Terminal",
-    version="19.0.5",
+    version="19.0.6",
     lifespan=lifespan,
 )
 
@@ -3905,7 +3902,7 @@ async def health():
     return {
         "ok": True,
         "service": "edgex-analysis-terminal",
-        "version": "19.0.5",
+        "version": "19.0.6",
         "time_ms": int(time.time() * 1000),
         "storage": {
             "market_snapshots_48h": len(history),
@@ -4324,6 +4321,11 @@ async def readiness_review_api(
         "scanned": len(rows),
         "review": _readiness_review(rows),
     }
+
+
+@app.get("/api/outcome-tracking")
+async def outcome_tracking_api(limit: int = Query(default=50, ge=1, le=500)):
+    return _outcome_tracking_review(limit)
 
 
 @app.get("/api/setups")
