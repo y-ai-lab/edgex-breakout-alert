@@ -25,7 +25,7 @@ Python 3.12とNode.jsが必要です。
 
 ```bash
 python -m pip install -r analysis_terminal/test-requirements.txt
-python -m unittest analysis_terminal.test_outcomes analysis_terminal.test_storage analysis_terminal.test_setups -v
+python -m unittest analysis_terminal.test_outcomes analysis_terminal.test_storage analysis_terminal.test_setups analysis_terminal.test_entry_ui -v
 python -m unittest discover -s tests -v
 ```
 
@@ -62,3 +62,20 @@ Shadow APIのtrackedは保存された全件、setup_tracked/open/resolved/TP/SL
 保持した旧記録件数です。昇格判定はこのsetupサンプルでresolved >= 20、Avg R > 0、PF > 1
 を満たす必要があり、満たしても自動で本番へ切り替えません。
 このIDは同一setupの重複を防ぎますが、銘柄間の相関や統計的独立性を保証しません。
+
+## ENTRY表示の鮮度（v19.0.3）
+
+ENTRY NOWとglobal status barは共通のentryFreshnessを使用します。
+APIのsnapshot_age_secondsに受信後の経過時間を一度だけ加え、120秒以上なら
+READY/WAIT判定を「データ鮮度を確認」に切り替えます。取得時刻・鮮度が不明な場合も同様です。
+120秒までの残り時間でタイマーを予約し、定期更新・通信失敗・タブ復帰でも再評価します。
+非表示タブではブラウザがタイマーを遅延するため、復帰時は通信完了前に古い表示を取り消します。
+
+資金計算の返答後に鮮度と表示の世代を確認し、古い返答によるREADYの復活を防ぎます。
+カードと共通バーのクリック時にも再確認します。戦略条件・server側のREADY・Push条件は変更しません。
+テストは実際のHTML内の関数を、時刻とDOMを制御して実行します。
+本番HTMLにも同じ回帰ケースを実行できます。
+
+```bash
+node analysis_terminal/test_entry_freshness.js /path/to/production-index.html
+```
