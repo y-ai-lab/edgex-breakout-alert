@@ -209,6 +209,12 @@ button{-webkit-tap-highlight-color:transparent}
       <div id="strategyComparisonSummary" class="summary"></div>
       <div id="strategyComparisonStatus" class="status">比較データを読み込み中です。</div>
       <details><summary>結果データの収集状況</summary><div id="outcomeTrackingSummary" class="summary"></div><div id="outcomeTrackingStatus" class="status">追跡状況を読み込み中です。</div><div class="sub">遅延は未処理の確定足が2本以上の場合。履歴不足は未処理遅延と別に表示します。欠測のTP／SLは推測せず、監視終了後も保存済み取引の追跡を続けます。</div></details>
+      <details><summary>保存結果と公開実足の照合</summary>
+        <div id="outcomeAuditStatus" class="status">結果監査を読み込み中です。</div>
+        <div id="outcomeAuditSummary" class="summary"></div>
+        <div class="scroll"><table><thead><tr><th>戦略 / 銘柄</th><th>保存結果</th><th>照合</th><th>判定済み最終足</th><th>差異 / 欠測</th></tr></thead><tbody id="outcomeAuditBody"></tbody></table></div>
+        <div class="sub">表示した監査時点の保存済みEntry・SL・TPを使い、確認足の確定後から判定済み最終足までの公開15M足で結果を再計算します。保存結果を再計算の入力には使いません。OPENの一致は利益確定ではありません。公開履歴は後から修正され得るため、差異は調査対象とし、保存結果の自動上書きや昇格標本の追加は行いません。</div>
+      </details>
       <div class="scroll"><table><thead><tr><th>母集団 / 戦略</th><th>signals</th><th>resolved</th><th>TP / SL</th><th>OPEN / 曖昧</th><th>勝率</th><th>Avg R</th><th>PF</th><th>MFE / MAE (R)</th><th>最大連敗</th><th>Expectancy (R)</th><th>サンプル</th></tr></thead><tbody id="strategyComparisonMetrics"></tbody></table></div>
       <details><summary>集計方法・除外データ</summary><div id="strategyComparisonNotes" class="status"></div></details>
       <div class="sub">成立したsetupの履歴（ENTRY NOWの現在判定とは別）。時刻は各戦略の記録時刻です。</div>
@@ -430,7 +436,7 @@ function renderShadowV2(j){
  var sum=document.getElementById("shadowV2Summary"),st=document.getElementById("shadowV2Status"),cur=document.getElementById("shadowV2Current"),body=document.getElementById("shadowV2Body");if(!sum||!st||!cur||!body)return;
  var m=j.metrics||{},now=j.current||{};
  sum.innerHTML=card("現在のv2候補",now.ready_count||0)+card("setup追跡",m.setup_tracked||0)+card("過去記録（IDなし）",m.legacy_unidentified_signals||0)+card("確定",m.resolved||0)+card("TP / SL",(m.tp||0)+" / "+(m.sl||0))+card("勝率",m.win_rate==null?"—":fmt(m.win_rate,1)+"%")+card("平均R",m.avg_r==null?"—":fmt(m.avg_r,2)+"R")+card("PF",m.profit_factor==null?"—":m.profit_factor);
- if(!m.decision_ready)st.innerHTML='<span class="warn">INSUFFICIENT SAMPLE — まだ採用しません。異なるsetupの検証済み確定 '+(m.resolved||0)+' / '+(m.minimum_resolved||20)+'件。未検証・履歴不足 '+(m.unverified_results||0)+'件は除外。IDなしの過去記録 '+(m.legacy_unidentified_signals||0)+'件も昇格判定から除外。最低20件 + 平均R&gt;0 + PF&gt;1 が採用ゲートです。</span>';
+ if(!m.decision_ready)st.innerHTML='<span class="warn">INSUFFICIENT SAMPLE — まだ採用しません。異なるsetupの検証済み確定 '+(m.resolved||0)+' / '+(m.minimum_resolved||20)+'件。'+(m.setup_unverified_results==null?'setupの品質内訳を確認中。':'setup未検証・履歴不足 '+m.setup_unverified_results+'件は除外。')+'IDなしの過去記録 '+(m.legacy_unidentified_signals||0)+'件も昇格判定から除外'+(m.legacy_unverified_results==null?'。':'（うち結果未検証 '+m.legacy_unverified_results+'件）。')+'最低20件 + 平均R&gt;0 + PF&gt;1 が採用ゲートです。</span>';
  else if(m.promotion_pass)st.innerHTML='<span class="good">採用ゲートを通過しています。ただし現行Telegram戦略への切替は別判断で行います。</span>';
  else st.innerHTML='<span class="warn">20件以上確定しましたが採用条件未達です。現行戦略は維持します。</span>';
  cur.innerHTML=(now.items||[]).length?(now.items||[]).map(function(x){return '<div class="priorityRow shadowV2Ticker" data-ticker="'+x.ticker+'"><div class="priorityTop"><b>'+x.ticker+'</b><span class="badge READY">v2 READY</span><span class="pill">'+directionJa(x.direction)+'</span><span class="pill">余地RR '+fmt(x.room_rr,2)+'</span></div><div class="priorityBreakdown"><span class="pill">Entry '+fmt(x.entry,8)+'</span><span class="pill">SL '+fmt(x.stop,8)+'</span><span class="pill">2R TP '+fmt(x.target_2r,8)+'</span></div></div>'}).join(""):'<span class="muted">現在のv2候補なし</span>';
@@ -461,7 +467,18 @@ function renderOutcomeTracking(j){
  st.style.whiteSpace='pre-line';
  st.className='status'+(['current','shadow'].some(function(name){var m=models[name]||{},q=m.setup_cohort||{},r=m.last_refresh;return (q.overdue||0)>0||(q.incomplete_history||0)>0||((q.quality_counts||{}).DATA_ERROR||0)>0||!r||r.status!=='OK'||m.refresh_age_seconds==null||m.refresh_age_seconds>=2*j.interval_ms/1000})?' warn':'');
 }
-async function loadOutcomeTracking(){try{renderOutcomeTracking(await jf("/api/outcome-tracking?limit=50"))}catch(e){var st=document.getElementById("outcomeTrackingStatus");if(st){st.className='status warn';st.textContent='追跡状況を確認できません: '+e.message}}}
+async function loadOutcomeTracking(){try{renderOutcomeTracking(await jf("/api/outcome-tracking?limit=50"))}catch(e){var st=document.getElementById("outcomeTrackingStatus");if(st){st.className='status warn';st.textContent='追跡状況を確認できません: '+e.message}}loadOutcomeAudit()}
+function renderOutcomeAudit(j){
+ var st=document.getElementById('outcomeAuditStatus'),sum=document.getElementById('outcomeAuditSummary'),body=document.getElementById('outcomeAuditBody');if(!st||!sum||!body)return;
+ if(!j||j.dataset!=='LIVE_RECORD_RECONCILIATION'||j.eligible_for_live_promotion!==false||j.changes_live_results!==false||j.automatic_promotion!==false||j.status==='NOT_RUN'){st.textContent='保存結果の監査データを確認できません';sum.innerHTML='';body.innerHTML='';return}
+ var models=j.models||{},counts={records:0,matched:0,mismatches:0,incomplete:0};
+ ['current','shadow'].forEach(function(k){var s=(models[k]||{}).summary||{};counts.records+=s.records||0;counts.matched+=s.matched||0;counts.mismatches+=s.mismatches||0;counts.incomplete+=s.incomplete_or_invalid||0});
+ st.textContent='保存記録の取得 '+lifecycleTime(j.captured_ms)+' / 公開履歴の照合 '+lifecycleTime(j.audited_ms)+' / 時点監査・現在の結果とは別 / 昇格標本への追加なし';
+ st.className='status'+(j.outcome==='MATCH'?'':' warn');
+ sum.innerHTML=card('照合一致',counts.matched+' / '+counts.records)+card('差異',counts.mismatches)+card('欠測・確認不能',counts.incomplete);
+ body.innerHTML=['current','shadow'].map(function(k){return ((models[k]||{}).items||[]).map(function(x){return '<tr><td>'+(k==='current'?'現行':'Shadow')+' / '+lifecycleEscape(x.ticker)+'</td><td>'+lifecycleEscape(resultJa(x.saved_status||'OPEN'))+'</td><td>'+lifecycleEscape(x.status)+'</td><td>'+lifecycleEscape(lifecycleTime(x.saved_history_end_ms))+'</td><td>'+lifecycleEscape((x.differences||[]).join(', ')||(x.first_gap_ms?'欠測 '+lifecycleTime(x.first_gap_ms):x.error_type||'—'))+'</td></tr>'}).join('')}).join('');
+}
+async function loadOutcomeAudit(){try{renderOutcomeAudit(await jf('/api/outcome-audit'))}catch(e){var st=document.getElementById('outcomeAuditStatus'),sum=document.getElementById('outcomeAuditSummary'),body=document.getElementById('outcomeAuditBody');if(st)st.textContent='結果監査を取得できません: '+e.message;if(sum)sum.innerHTML='';if(body)body.innerHTML=''}}
 function renderReplayReview(j){
  var st=document.getElementById('replayReviewStatus'),sum=document.getElementById('replayReviewSummary'),body=document.getElementById('replayReviewBody'),notes=document.getElementById('replayReviewNotes');if(!st||!sum||!body||!notes)return;
  if(j.dataset!=='RETROSPECTIVE'||j.eligible_for_live_promotion!==false){st.textContent='過去検証のデータ区分を確認できません';sum.innerHTML='';body.innerHTML='';notes.textContent='';return}

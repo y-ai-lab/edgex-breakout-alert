@@ -219,7 +219,8 @@ class TrackingUITests(unittest.TestCase):
 const fs=require('fs'),assert=require('assert');
 const html=fs.readFileSync(process.argv[1],'utf8');
 for(const m of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g))new Function(m[1]);
-const sum={innerHTML:''},st={textContent:'',className:'',style:{}},document={getElementById:id=>id==='outcomeTrackingSummary'?sum:st},card=(k,v)=>k+':'+v;
+const sum={innerHTML:''},st={textContent:'',className:'',style:{}},auditSt={textContent:''},auditSum={innerHTML:'old'},auditBody={innerHTML:'old'};
+const nodes={outcomeTrackingSummary:sum,outcomeTrackingStatus:st,outcomeAuditStatus:auditSt,outcomeAuditSummary:auditSum,outcomeAuditBody:auditBody},document={getElementById:id=>nodes[id]||null},card=(k,v)=>k+':'+v;
 eval(html.slice(html.indexOf('function renderOutcomeTracking('),html.indexOf('function lifecycleEscape(')));
 const report={started_ms:1,finished_ms:2,status:'OK',selected:8,evaluated:8,advanced:8};
 const j={time_ms:3,interval_ms:900000,models:{current:{setup_cohort:{},all_records:{},last_refresh:report,refresh_age_seconds:1},shadow:{setup_cohort:{pending:8,overdue:0,incomplete_history:0},all_records:{pending:13,incomplete_history:5,quality_counts:{UNVERIFIED_TERMINAL:2}},last_refresh:report,refresh_age_seconds:1}}};
@@ -230,7 +231,7 @@ j.models.shadow.setup_cohort.overdue=0;j.models.shadow.setup_cohort.incomplete_h
 j.models.shadow.setup_cohort.incomplete_history=0;j.models.shadow.refresh_age_seconds=1800;renderOutcomeTracking(j);assert(st.className.includes('warn'));
 j.models.shadow.refresh_age_seconds=1;j.models.shadow.last_refresh=null;renderOutcomeTracking(j);assert(st.className.includes('warn'));
 const jf=async()=>{throw new Error('offline')};
-(async()=>{await loadOutcomeTracking();assert(st.textContent.includes('追跡状況を確認できません'));assert(st.className.includes('warn'));console.log('Outcome tracking UI: OK')})().catch(e=>{console.error(e);process.exit(1)});
+(async()=>{await loadOutcomeTracking();assert(st.textContent.includes('追跡状況を確認できません'));assert(st.className.includes('warn'));assert(auditSt.textContent.includes('結果監査を取得できません'));assert(auditSum.innerHTML==='');assert(auditBody.innerHTML==='');console.log('Outcome tracking and audit failures remain separate: OK')})().catch(e=>{console.error(e);process.exit(1)});
 '''
         p=subprocess.run(["node","-e",script,str(Path(__file__).with_name('index.html'))],capture_output=True,text=True)
         self.assertEqual(p.returncode,0,p.stdout+p.stderr)

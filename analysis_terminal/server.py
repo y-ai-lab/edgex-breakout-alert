@@ -670,6 +670,16 @@ def _shadow_v2_metrics(
             1 for signal in signals
             if signal.get("result") and not verified_result(signal.get("result"))
         ),
+        "unverified_results_basis": "all_records_including_legacy",
+        "setup_unverified_results": sum(
+            1 for signal in cohort
+            if signal.get("result") and not verified_result(signal.get("result"))
+        ),
+        "legacy_unverified_results": sum(
+            1 for signal in signals
+            if not signal.get("setup_id") and signal.get("result")
+            and not verified_result(signal.get("result"))
+        ),
         "sample_status": "SUFFICIENT SAMPLE" if decision_ready else "INSUFFICIENT SAMPLE",
         "open": sum(
             1 for signal in cohort
@@ -3802,7 +3812,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="EdgeX Analysis Terminal",
-    version="19.0.12",
+    version="19.0.13",
     lifespan=lifespan,
 )
 
@@ -3814,7 +3824,7 @@ async def health():
     return {
         "ok": True,
         "service": "edgex-analysis-terminal",
-        "version": "19.0.12",
+        "version": "19.0.13",
         "time_ms": int(time.time() * 1000),
         "storage": {
             "market_snapshots_48h": len(history),
@@ -4185,7 +4195,11 @@ async def screener_api(
 async def shadow_v2_api(
     limit: int = Query(default=500, ge=1, le=2000),
 ):
-    signals = _load_shadow_v2_signals(limit=limit)
+    # Display limits must never shrink the promotion/quality sample. Read the
+    # entire archive once so metrics and displayed records share one snapshot.
+    with _db_connect() as conn:
+        signals = [json.loads(row["payload"]) for row in conn.execute(
+            "SELECT payload FROM shadow_v2_signals ORDER BY created_ms DESC, signal_key")]
     try:
         _contracts, rows = await _scan_market_rows(force=False)
         current = _readiness_review(rows)["proposed_v2"]
@@ -4203,7 +4217,7 @@ async def shadow_v2_api(
         ),
         "current": current,
         "metrics": _shadow_v2_metrics(signals),
-        "latest": signals[:50],
+        "latest": signals[:min(limit, 50)],
     }
 
 
@@ -4240,6 +4254,24 @@ async def readiness_review_api(
 @app.get("/api/outcome-tracking")
 async def outcome_tracking_api(limit: int = Query(default=50, ge=1, le=500)):
     return _outcome_tracking_review(limit)
+
+
+@app.get("/api/outcome-audit")
+async def outcome_audit_api():
+    path = Path(__file__).with_name("outcome_audit_latest.json")
+    if not path.exists():
+        return {"dataset": "LIVE_RECORD_RECONCILIATION", "status": "NOT_RUN",
+                "eligible_for_live_promotion": False, "changes_live_results": False,
+                "automatic_promotion": False}
+    try:
+        report = json.loads(path.read_text())
+    except (OSError, ValueError) as exc:
+        raise HTTPException(503, "Outcome audit unavailable") from exc
+    if (not isinstance(report, dict) or report.get("dataset") != "LIVE_RECORD_RECONCILIATION"
+            or any(report.get(key) is not False for key in
+                   ("eligible_for_live_promotion", "changes_live_results", "automatic_promotion"))):
+        raise HTTPException(503, "Invalid outcome audit")
+    return report
 
 
 @app.get("/api/replay-review")
