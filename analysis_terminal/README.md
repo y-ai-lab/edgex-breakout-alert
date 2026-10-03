@@ -25,7 +25,7 @@ Python 3.12とNode.jsが必要です。
 
 ```bash
 python -m pip install -r analysis_terminal/test-requirements.txt
-python -m unittest analysis_terminal.test_outcomes analysis_terminal.test_storage analysis_terminal.test_setups analysis_terminal.test_entry_ui -v
+python -m unittest analysis_terminal.test_outcomes analysis_terminal.test_storage analysis_terminal.test_setups analysis_terminal.test_entry_ui analysis_terminal.test_lifecycle -v
 python -m unittest discover -s tests -v
 ```
 
@@ -79,3 +79,28 @@ READY/WAIT判定を「データ鮮度を確認」に切り替えます。取得�
 ```bash
 node analysis_terminal/test_entry_freshness.js /path/to/production-index.html
 ```
+
+## setup lifecycle（v19.0.4）
+
+`setup_lifecycles` / `setup_lifecycle_events`に監視状態と遷移を追記します。
+GET `/api/setups?limit=100&ticker=BTCUSDC` は状態・理由・観測時刻と、同setupの現行／Shadowの結果を返します。
+`OPEN`は監視中、`READY`は現行READYの成立履歴、`EXPIRED` / `INVALIDATED`は監視終了です。
+現在のエントリー可否は従来のscreener・ENTRY NOWで判断します。
+
+終了根拠は既存コードと同じです。breakoutが直近roll_max_age本の4H検索窓から外れたらEXPIRED。
+trend条件の崩壊、別setupへの交代、ブレイクが選択対象から外れる、stop_valid=falseはINVALIDATED。
+structural targetが近すぎるSTRUCTURE_WAITだけでは終了させません。
+同時に複数の根拠がある場合は検索窓→trend→setup交代→stopの順で理由を表示します。
+終了時刻は市場データで初めて確認した観測時刻であり、欠測中の終了時刻や足内順序を推測しません。
+
+最新の確定4H足と15M足が揃わない銘柄・欠損銘柄・DATA_WAITは更新を保留します。
+同setupが既存条件で復活した場合はREACTIVATEDを履歴に残し、同じIDを再利用します。
+初回の現行／Shadow成立時刻は保持し、追加エントリーは生成しません。
+既存のID付きpaper/Shadow記録は、その本来の成立時刻を保持して読み込みます。
+ブレイク情報のない旧記録は推測で紐付けません。読み込みだけでは市場確認済みとは扱いません。
+
+監視の終了はpaper取引の決済ではありません。既存のOPEN/TP/SL/AMBIGUOUS結果、価格、
+signal close+1ms、評価器、昇格集計を変更せず、終了したsetupのTP/SL追跡も継続します。
+collectorでmarket/paper/Shadow保存後に更新し、GET APIは記録を変更しません。
+旧テーブルの削除・再構築は行わず、既存snapshot・購読・シグナルを保持します。
+遷移は15Mごとの観測であり、観測間の短い状態変化をすべて捕捉するものではありません。

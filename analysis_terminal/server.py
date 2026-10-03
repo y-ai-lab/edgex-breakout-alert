@@ -27,6 +27,7 @@ sys.path.insert(0, str(ROOT))
 import app as scanner
 from analysis_terminal.outcomes import evaluate_paper_signal, verified_result
 from analysis_terminal.setups import first_per_setup, later_ready_time, ready_times_by_setup, setup_identity
+from analysis_terminal.lifecycle import ENDED, current_observation, new_setup, observe_setup
 
 SETTINGS = scanner.Settings.from_env(dry_run_override=True)
 CLIENT = scanner.EdgeXClient(SETTINGS)
@@ -289,6 +290,17 @@ def _init_db() -> None:
             )
             """
         )
+        conn.execute("""CREATE TABLE IF NOT EXISTS setup_lifecycles (
+            setup_id TEXT PRIMARY KEY, ticker TEXT NOT NULL, status TEXT NOT NULL,
+            payload TEXT NOT NULL, updated_ms INTEGER NOT NULL)""")
+        conn.execute("""CREATE INDEX IF NOT EXISTS setup_lifecycle_ticker
+            ON setup_lifecycles(ticker, status)""")
+        conn.execute("""CREATE TABLE IF NOT EXISTS setup_lifecycle_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, setup_id TEXT NOT NULL,
+            status TEXT NOT NULL, reason TEXT NOT NULL, payload TEXT NOT NULL,
+            observed_ms INTEGER NOT NULL)""")
+        conn.execute("""CREATE INDEX IF NOT EXISTS setup_lifecycle_event_setup
+            ON setup_lifecycle_events(setup_id, id)""")
         conn.commit()
 
     if VAPID_PRIVATE_KEY:
@@ -467,6 +479,96 @@ def _persist_shadow_v2_signals(rows: list[dict[str, Any]]) -> int:
         if _insert_shadow_v2_signal(signal):
             inserted += 1
     return inserted
+
+
+def _write_setup_lifecycle(conn: sqlite3.Connection, setup: dict[str, Any], reason: str | None) -> None:
+    payload = json.dumps(setup, separators=(",", ":"))
+    conn.execute("""INSERT INTO setup_lifecycles(setup_id,ticker,status,payload,updated_ms)
+        VALUES (?,?,?,?,?) ON CONFLICT(setup_id) DO UPDATE SET
+        status=excluded.status,payload=excluded.payload,updated_ms=excluded.updated_ms""",
+        (setup["setup_id"], setup["ticker"], setup["status"], payload, setup["last_observed_ms"]))
+    if reason:
+        conn.execute("""INSERT INTO setup_lifecycle_events(setup_id,status,reason,payload,observed_ms)
+            VALUES (?,?,?,?,?)""", (setup["setup_id"], setup["status"], reason, payload, setup["last_observed_ms"]))
+
+
+def _persist_setup_lifecycles(rows: list[dict[str, Any]], *, observed_ms: int | None = None) -> None:
+    now_ms = observed_ms if observed_ms is not None else int(time.time() * 1000)
+    monitor_ms = scanner.INTERVAL_MS[SETTINGS.monitor_interval]
+    entry_ms = scanner.INTERVAL_MS[SETTINGS.entry_interval]
+    observations = {
+        str(row["ticker"]): row for row in rows
+        if current_observation(row, now_ms, monitor_ms, entry_ms)
+    }
+    current_ids = [row["setup_id"] for row in observations.values() if row.get("setup_id")]
+    # Import only entries with real breakout metadata; never infer legacy setup IDs.
+    signals = [(s, "first_ready_ms") for s in _load_paper_signals(limit=1000)]
+    signals += [(s, "first_shadow_ready_ms") for s in _load_shadow_v2_signals(limit=2000)]
+    with _db_connect() as conn:
+        for signal, field in signals:
+            source = dict(signal, direction=signal.get("side"))
+            identity = setup_identity(source)
+            if not identity or identity != signal.get("setup_id"):
+                continue
+            stored = conn.execute("SELECT payload FROM setup_lifecycles WHERE setup_id=?", (identity,)).fetchone()
+            setup = json.loads(stored["payload"]) if stored else new_setup(source, now_ms)
+            recorded_ms = int(signal["created_ms"])
+            if setup[field] is not None and setup[field] <= recorded_ms:
+                continue
+            setup[field] = recorded_ms
+            setup["last_observed_ms"] = max(now_ms, setup["last_observed_ms"])
+            if field == "first_ready_ms" and setup["status"] not in ENDED:
+                setup["status"] = "READY"
+            _write_setup_lifecycle(conn, setup, "RECORDED_ENTRY_IMPORTED")
+
+        query = "SELECT payload FROM setup_lifecycles WHERE status NOT IN ('EXPIRED','INVALIDATED')"
+        args: list[Any] = []
+        if current_ids:
+            query += " OR setup_id IN (" + ",".join("?" for _ in current_ids) + ")"
+            args = current_ids
+        tracked = {}
+        for stored in conn.execute(query, args).fetchall():
+            setup = json.loads(stored["payload"])
+            tracked[setup["setup_id"]] = setup
+        for row in observations.values():
+            identity = setup_identity(row)
+            if identity and identity == row.get("setup_id") and identity not in tracked:
+                tracked[identity] = new_setup(row, now_ms)
+                updated, _reason = observe_setup(tracked[identity], row, now_ms)
+                _write_setup_lifecycle(conn, updated, "SETUP_OBSERVED")
+                tracked[identity] = updated
+        for setup in tracked.values():
+            row = observations.get(setup["ticker"])
+            if row is None:
+                continue  # Partial scans and missing data do not invalidate setups.
+            updated, reason = observe_setup(setup, row, now_ms)
+            _write_setup_lifecycle(conn, updated, reason)
+        conn.commit()
+
+
+def _setup_lifecycle_review(limit: int = 100, ticker: str | None = None) -> dict[str, Any]:
+    where = " WHERE ticker=?" if ticker else ""
+    args: list[Any] = [ticker.strip().upper()] if ticker else []
+    with _db_connect() as conn:
+        counts = conn.execute("SELECT status,COUNT(*) AS n FROM setup_lifecycles" + where + " GROUP BY status", args).fetchall()
+        records = conn.execute("SELECT payload FROM setup_lifecycles" + where + " ORDER BY updated_ms DESC,setup_id LIMIT ?", args + [limit]).fetchall()
+        events = conn.execute("""SELECT e.id,e.reason,e.observed_ms,e.payload FROM setup_lifecycle_events e
+            JOIN setup_lifecycles s ON s.setup_id=e.setup_id""" + (" WHERE s.ticker=?" if ticker else "") + " ORDER BY e.id DESC LIMIT ?", args + [limit]).fetchall()
+    items = [json.loads(row["payload"]) for row in records]
+    # These are independent trade outcomes; setup termination never overwrites them.
+    paper = {s.get("setup_id"): s for s in _load_paper_signals(limit=1000) if s.get("setup_id")}
+    shadow = {s.get("setup_id"): s for s in _load_shadow_v2_signals(limit=2000) if s.get("setup_id")}
+    for item in items:
+        for name, signals in (("current_trade", paper), ("shadow_trade", shadow)):
+            signal = signals.get(item["setup_id"])
+            item[name] = ({"key": signal["key"], "created_ms": signal["created_ms"], "result": signal.get("result")} if signal else None)
+    return {
+        "tracked": sum(row["n"] for row in counts),
+        "status_counts": {row["status"]: row["n"] for row in counts},
+        "items": items,
+        "events": [{"id": e["id"], "reason": e["reason"], "observed_ms": e["observed_ms"], "setup": json.loads(e["payload"])} for e in events],
+        "rule": "Observed setup eligibility only; paper TP/SL tracking continues after setup termination",
+    }
 
 
 def _shadow_v2_metrics(
@@ -2246,6 +2348,7 @@ def analyze_contract(
         "atr_15m": atr15,
         "support_4h": min(c.low for c in monitor[-20:]),
         "resistance_4h": max(c.high for c in monitor[-20:]),
+        "breakout_window_start_ms": monitor[-SETTINGS.roll_max_age].time_ms,
     })
 
     breakdown = _score_breakdown(
@@ -3751,6 +3854,10 @@ async def _background_collector() -> None:
                 contracts, rows = await _scan_market_rows(force=True)
                 _persist_scan_result(contracts, rows)
                 _persist_shadow_v2_signals(rows)
+                try:
+                    _persist_setup_lifecycles(rows)
+                except Exception as exc:
+                    print(f"Setup lifecycle collector error: {exc}", flush=True)
                 await _process_priority_changes(rows, bucket)
                 await _maybe_push_candidate_changes(rows)
                 await _evaluate_custom_alerts(rows)
@@ -3785,7 +3892,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="EdgeX Analysis Terminal",
-    version="19.0.3",
+    version="19.0.4",
     lifespan=lifespan,
 )
 
@@ -3797,7 +3904,7 @@ async def health():
     return {
         "ok": True,
         "service": "edgex-analysis-terminal",
-        "version": "19.0.3",
+        "version": "19.0.4",
         "time_ms": int(time.time() * 1000),
         "storage": {
             "market_snapshots_48h": len(history),
@@ -4204,6 +4311,14 @@ async def readiness_review_api(
         "scanned": len(rows),
         "review": _readiness_review(rows),
     }
+
+
+@app.get("/api/setups")
+async def setup_lifecycle_api(
+    limit: int = Query(default=100, ge=1, le=500),
+    ticker: str | None = Query(default=None, min_length=2, max_length=64),
+):
+    return _setup_lifecycle_review(limit, ticker)
 
 
 @app.get("/api/confirmation-diagnostics")
