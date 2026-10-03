@@ -30,6 +30,8 @@ from analysis_terminal.setups import first_per_setup, later_ready_time, ready_ti
 from analysis_terminal.lifecycle import ENDED, current_observation, new_setup, observe_setup
 from analysis_terminal.comparison import cohort, strategy_comparison
 from analysis_terminal.tracking import tracking_summary
+from analysis_terminal.history import fetch_history
+from analysis_terminal.outcome_history import BACKFILL_BARS, BACKFILL_REQUESTS, consecutive_window, merge_candles
 
 SETTINGS = scanner.Settings.from_env(dry_run_override=True)
 CLIENT = scanner.EdgeXClient(SETTINGS)
@@ -482,7 +484,11 @@ def _outcome_tracking_review(limit: int = 50) -> dict[str, Any]:
                 exclusions=exclusions, last_refresh=report,
                 refresh_age_seconds=round(max(0, now_ms-int(report.get("finished_ms") or report["started_ms"]))/1000, 1) if report else None)
     return dict(time_ms=now_ms, interval_ms=scanner.INTERVAL_MS[SETTINGS.entry_interval], models=models,
-                rule="All nonterminal records remain eligible for updates; no history gaps are inferred or repaired.")
+                rule="Identified pending setups require consecutive closed bars; existing unverified history is preserved for a separate audit.",
+                gap_policy="HOLD_UNTIL_CONTIGUOUS_CANDLES",
+                backfill=dict(max_requests_per_model=BACKFILL_REQUESTS, max_bars_per_request=BACKFILL_BARS,
+                              max_pages=1, eligible="IDENTIFIED_PENDING_ONLY",
+                              existing_unverified="REQUIRES_SEPARATE_AUDIT"))
 
 
 def _persist_shadow_v2_signals(rows: list[dict[str, Any]]) -> int:
@@ -1580,7 +1586,9 @@ async def _refresh_signal_results(model: str, contracts: dict[str, scanner.Contr
     pending = _load_pending_signals(model)
     report = dict(started_ms=int(time.time()*1000), finished_ms=None, status="RUNNING",
                   selected=len(pending), evaluated=0, advanced=0, missing_contract=0, missing_snapshot=0,
-                  chunk_errors=0, signal_errors=0, contracts_requested=0)
+                  chunk_errors=0, signal_errors=0, contracts_requested=0,
+                  backfill_requests=0, backfill_candles=0, backfill_recovered=0,
+                  backfill_errors=0, gap_deferred=0, unverified_pending=0)
     _save_outcome_refresh_report(model, report)
     by_name = {contract.contract_name.upper(): contract for contract in contracts.values()}
     signal_contract = {}
@@ -1601,17 +1609,55 @@ async def _refresh_signal_results(model: str, contracts: dict[str, scanner.Contr
             report["chunk_errors"] += 1
             print(f"{model} outcome refresh chunk error: {type(exc).__name__}", flush=True)
     update = _update_paper_signal if model == "current" else _update_shadow_v2_signal
+    # Rotate identified setups each closed-bar cycle so an unavailable history
+    # cannot monopolize the bounded recovery budget. Legacy records keep their path.
+    identified = [s for s in pending if s.get("setup_id")]
+    if identified:
+        offset = report["started_ms"] // scanner.INTERVAL_MS[SETTINGS.entry_interval] % len(identified)
+        pending = identified[offset:] + identified[:offset] + [s for s in pending if not s.get("setup_id")]
     for signal in pending:
         contract = signal_contract.get(str(signal["key"]))
         if contract is None:
             continue
         candles = snapshots.get((contract.contract_id, SETTINGS.entry_interval), [])
-        if not candles:
+        if not candles and not signal.get("setup_id"):
             report["missing_snapshot"] += 1
             continue
         try:
             previous = signal.get("result") or {}
-            result = _evaluate_paper_signal(signal, candles)
+            if signal.get("setup_id"):
+                # Already incomplete results need a separate full-history audit;
+                # never turn their cursor into an apparently verified outcome.
+                if previous.get("history_end_ms") is not None and not verified_result(previous):
+                    report["unverified_pending"] += 1
+                    continue
+                now_ms = report["started_ms"]
+                prefix, gap, end = consecutive_window(signal, candles, contract, SETTINGS.entry_interval, now_ms=now_ms)
+                result = evaluate_paper_signal(signal, prefix, interval_ms=scanner.INTERVAL_MS[SETTINGS.entry_interval], now_ms=now_ms)
+                if gap is not None and result.get("status") not in {"TP", "SL", "AMBIGUOUS", "ERROR"}:
+                    if report["backfill_requests"] < BACKFILL_REQUESTS:
+                        report["backfill_requests"] += 1
+                        try:
+                            history = await fetch_history(CLIENT._get_json_sync, contract, SETTINGS.entry_interval,
+                                gap, min(end, gap + BACKFILL_BARS * scanner.INTERVAL_MS[SETTINGS.entry_interval]), max_pages=1)
+                            report["backfill_candles"] += len(history)
+                            merged = merge_candles([c for c in candles if gap <= c.time_ms < end], history)
+                            repaired, gap, _ = consecutive_window(signal, prefix + merged, contract,
+                                SETTINGS.entry_interval, now_ms=now_ms)
+                            if len(repaired) > len(prefix):
+                                report["backfill_recovered"] += 1
+                            result = evaluate_paper_signal(signal, repaired,
+                                interval_ms=scanner.INTERVAL_MS[SETTINGS.entry_interval], now_ms=now_ms)
+                        except Exception as exc:
+                            report["backfill_errors"] += 1
+                            print(f"{model} outcome history error: {type(exc).__name__}", flush=True)
+                    if gap is not None and result.get("status") not in {"TP", "SL", "AMBIGUOUS", "ERROR"}:
+                        report["gap_deferred"] += 1
+                if not prefix and result.get("history_end_ms") is None and result.get("status") != "ERROR":
+                    # No observed post-entry candle: keep the stored result intact.
+                    continue
+            else:
+                result = _evaluate_paper_signal(signal, candles)
             signal["result"] = result
             update(signal)
             report["evaluated"] += 1
@@ -1627,7 +1673,8 @@ async def _refresh_signal_results(model: str, contracts: dict[str, scanner.Contr
             report["signal_errors"] += 1
             print(f"{model} outcome record error: {type(exc).__name__}", flush=True)
     report["finished_ms"] = int(time.time()*1000)
-    failed = any(report[k] for k in ("missing_contract", "missing_snapshot", "chunk_errors", "signal_errors"))
+    failed = any(report[k] for k in ("missing_contract", "missing_snapshot", "chunk_errors", "signal_errors",
+                                    "backfill_errors", "gap_deferred", "unverified_pending"))
     report["status"] = ("PARTIAL" if report["evaluated"] else "ERROR") if failed else "OK"
     _save_outcome_refresh_report(model, report)
 
@@ -3755,7 +3802,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="EdgeX Analysis Terminal",
-    version="19.0.10",
+    version="19.0.11",
     lifespan=lifespan,
 )
 
@@ -3767,7 +3814,7 @@ async def health():
     return {
         "ok": True,
         "service": "edgex-analysis-terminal",
-        "version": "19.0.10",
+        "version": "19.0.11",
         "time_ms": int(time.time() * 1000),
         "storage": {
             "market_snapshots_48h": len(history),

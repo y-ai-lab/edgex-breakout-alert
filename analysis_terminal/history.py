@@ -9,15 +9,16 @@ PATH = "/api/v2/public/quote/getKline"
 
 
 async def fetch_history(get_json: Callable, contract: scanner.Contract, interval: str,
-                        begin_ms: int, end_ms: int, *, size: int = 1000) -> list[scanner.Candle]:
+                        begin_ms: int, end_ms: int, *, size: int = 1000,
+                        max_pages: int = 100) -> list[scanner.Candle]:
     step = scanner.INTERVAL_MS[interval]
-    if begin_ms <= 0 or end_ms <= begin_ms or not 1 <= size <= 1000:
+    if begin_ms <= 0 or end_ms <= begin_ms or not 1 <= size <= 1000 or not 1 <= max_pages <= 100:
         raise ValueError("Invalid public history bounds")
     params = dict(contractId=contract.contract_id, klineType=interval, priceType="LAST_PRICE", size=str(size),
                   filterBeginKlineTimeInclusive=str(begin_ms), filterEndKlineTimeExclusive=str(end_ms))
     found = {}
     seen_tokens = set()
-    for _ in range(100):
+    for _ in range(max_pages):
         payload = await asyncio.to_thread(get_json, PATH, dict(params))
         if payload.get("code") != "SUCCESS" or not isinstance(payload.get("data"), dict):
             raise ValueError("Invalid public history response")

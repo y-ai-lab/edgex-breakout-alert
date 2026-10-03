@@ -30,6 +30,9 @@ class StorageTests(unittest.IsolatedAsyncioTestCase):
             context.start()
             self.addCleanup(context.stop)
         self.now_ms = int(server.time.time() * 1000)
+        history = patch.object(server, "fetch_history", AsyncMock(side_effect=AssertionError("unexpected history request")))
+        history.start()
+        self.addCleanup(history.stop)
         # A legacy table predating the additive preference migrations.
         with sqlite3.connect(db) as conn:
             conn.execute("""CREATE TABLE push_subscriptions (
