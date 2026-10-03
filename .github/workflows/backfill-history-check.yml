@@ -1,0 +1,91 @@
+name: Outcome public history recovery v19.0.11
+on:
+  push:
+    branches: ["research/collector-backfill-v19-0-11"]
+    paths: [".github/workflows/backfill-history-check.yml"]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: python -m pip install -r analysis_terminal/test-requirements.txt
+      - name: Terminal and existing regression tests
+        run: |
+          python -m unittest analysis_terminal.test_outcomes analysis_terminal.test_storage analysis_terminal.test_setups analysis_terminal.test_entry_ui analysis_terminal.test_lifecycle analysis_terminal.test_comparison analysis_terminal.test_tracking analysis_terminal.test_outcome_history analysis_terminal.test_replay analysis_terminal.test_replay_review analysis_terminal.test_entry_diagnostics analysis_terminal.test_chronology_replay analysis_terminal.test_chronology_review -v
+          python -m unittest discover -s tests -v
+      - name: Recover omitted snapshot bar using real public history in temporary SQLite
+        run: |
+          python - <<'PY'
+          """Real public candles + temporary test fixture. Never touches production storage."""
+          import asyncio,json,tempfile,time
+          from dataclasses import asdict
+          from pathlib import Path
+          from unittest.mock import AsyncMock,patch
+          from analysis_terminal import server
+          from analysis_terminal.history import fetch_history
+          from analysis_terminal.outcomes import evaluate_paper_signal,verified_result
+          from analysis_terminal.setups import setup_identity
+          
+          async def check():
+              contracts=await server.CLIENT.get_contracts()
+              contract=next(c for c in contracts.values() if c.contract_name.upper()=='BTCUSDC')
+              step=900000
+              end=int(time.time()*1000)//step*step-step
+              start=end-12*step
+              bars=await fetch_history(server.CLIENT._get_json_sync,contract,'MINUTE_15',start,end,max_pages=1)
+              assert [c.time_ms for c in bars]==list(range(start,end,step))
+              price=bars[0].open
+              signal=dict(key='public-backfill-test-fixture',ticker=contract.contract_name,side='LONG',
+                          created_ms=start+1,signal_candle_ms=start-step,entry=price,stop=price*.5,target=price*2,
+                          breakout_time_ms=start-14400000,breakout_level=price,dataset='TEST_FIXTURE')
+              signal['setup_id']=setup_identity(dict(signal,direction='LONG'))
+              assert all(price*.5<c.low<=c.high<price*2 for c in bars)
+              expected=evaluate_paper_signal(signal,bars,interval_ms=step,now_ms=end)
+              assert expected['status']=='OPEN' and verified_result(expected)
+              output=Path('audit-output');output.mkdir(exist_ok=True)
+              (output/'public-history.json').write_text(json.dumps([asdict(c) for c in bars],indent=2))
+              reports={}
+              with tempfile.TemporaryDirectory() as directory,patch.object(server,'DB_PATH',Path(directory)/'test.db'):
+                  server._init_db()
+                  for model in ('current','shadow'):
+                      legacy=dict(key='legacy-'+model,created_ms=start+1,result=dict(status='TP',final_r=2))
+                      insert=server._insert_paper_signal if model=='current' else server._insert_shadow_v2_signal
+                      insert(legacy)
+                      modern=dict(signal,key='fixture-'+model)
+                      insert(modern)
+                      # The first post-entry bar is omitted only from the test snapshot.
+                      with patch.object(server,'fetch_snapshots',AsyncMock(return_value={(contract.contract_id,'MINUTE_15'):bars[1:]})),patch.object(server.time,'time',return_value=end/1000):
+                          await server._refresh_signal_results(model,{contract.contract_id:contract})
+                      load=server._load_paper_signals if model=='current' else server._load_shadow_v2_signals
+                      stored={s['key']:s for s in load()}
+                      assert stored[modern['key']]['result']==expected,stored[modern['key']]['result']
+                      assert stored[legacy['key']]==legacy
+                      assert server._subscription_count()==0
+                      report=json.loads(server._state_get('outcome_refresh_'+model))
+                      assert report['backfill_requests']==report['backfill_recovered']==1
+                      assert report['backfill_candles']==12 and report['gap_deferred']==report['backfill_errors']==0
+                      assert report['status']=='OK'
+                      reports[model]=report
+                  assert server._load_push_events()==[]
+              report=dict(dataset='TEST_FIXTURE',eligible_for_live_promotion=False,market=contract.contract_name,
+                          source='EdgeX public LAST_PRICE',begin_ms=start,end_ms=end,bars=len(bars),
+                          omitted_snapshot_bars=[bars[0].time_ms],expected_result=expected,models=reports,
+                          production_db_touched=False,push_sent=False)
+              (output/'public-backfill-report.json').write_text(json.dumps(report,indent=2))
+              print('PUBLIC_BACKFILL_CHECK='+json.dumps(report))
+          
+          asyncio.run(check())
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: edgex-outcome-backfill-v19-0-11
+          path: audit-output/
+          retention-days: 14
