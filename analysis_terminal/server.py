@@ -28,6 +28,7 @@ import app as scanner
 from analysis_terminal.outcomes import evaluate_paper_signal, verified_result
 from analysis_terminal.setups import first_per_setup, later_ready_time, ready_times_by_setup, setup_identity
 from analysis_terminal.lifecycle import ENDED, current_observation, new_setup, observe_setup
+from analysis_terminal.comparison import strategy_comparison
 
 SETTINGS = scanner.Settings.from_env(dry_run_override=True)
 CLIENT = scanner.EdgeXClient(SETTINGS)
@@ -3892,7 +3893,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="EdgeX Analysis Terminal",
-    version="19.0.4",
+    version="19.0.5",
     lifespan=lifespan,
 )
 
@@ -3904,7 +3905,7 @@ async def health():
     return {
         "ok": True,
         "service": "edgex-analysis-terminal",
-        "version": "19.0.4",
+        "version": "19.0.5",
         "time_ms": int(time.time() * 1000),
         "storage": {
             "market_snapshots_48h": len(history),
@@ -4293,6 +4294,18 @@ async def shadow_v2_api(
         "metrics": _shadow_v2_metrics(signals),
         "latest": signals[:50],
     }
+
+
+@app.get("/api/strategy-comparison")
+async def strategy_comparison_api(limit: int = Query(default=50, ge=1, le=500)):
+    # One read transaction; the display limit never truncates the metric cohort.
+    with _db_connect() as conn:
+        conn.execute("BEGIN")
+        current = [json.loads(row["payload"]) for row in conn.execute(
+            "SELECT payload FROM paper_signals ORDER BY created_ms, signal_key")]
+        shadow = [json.loads(row["payload"]) for row in conn.execute(
+            "SELECT payload FROM shadow_v2_signals ORDER BY created_ms, signal_key")]
+    return strategy_comparison(current, shadow, limit)
 
 
 @app.get("/api/readiness-review")
