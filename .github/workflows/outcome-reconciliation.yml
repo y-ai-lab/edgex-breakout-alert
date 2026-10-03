@@ -50,7 +50,7 @@ jobs:
           import json,os
           from pathlib import Path
           p=Path('reconciliation-output/outcome-audit-latest.json');r=json.loads(p.read_text())
-          r['provenance']=dict(code_commit='fd83148a2416bdb6ed875634e58f4d388cf9b5af',workflow_commit=os.environ['GITHUB_SHA'],workflow_run_id=int(os.environ['GITHUB_RUN_ID']))
+          r['provenance']=dict(code_commit=os.environ['GITHUB_SHA'],workflow_commit=os.environ['GITHUB_SHA'],workflow_run_id=int(os.environ['GITHUB_RUN_ID']))
           p.write_text(json.dumps(r,ensure_ascii=False,indent=2,allow_nan=False))
           print('Audit evidence saved; no production results, strategy or notifications changed.')
           PYTHON

@@ -31,7 +31,8 @@ def audit_signal(signal, candles, contract, *, interval="MINUTE_15"):
         row["status"] = "INVALID_IDENTITY"
         return row
     try:
-        source = int(signal["signal_candle_ms"])
+        source_ms = signal.get("signal_candle_ms")
+        source = int(source_ms if source_ms is not None else signal["source_candle_ms"])
         created = int(signal["created_ms"])
         end = int(saved["history_end_ms"])
         if source % step or created != source + step + 1 or end < source + step or end % step:

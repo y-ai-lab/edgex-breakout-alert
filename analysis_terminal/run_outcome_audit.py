@@ -51,7 +51,8 @@ async def run(source_path, output):
                 # Include the signal candle as an exclusion control. Closed bars
                 # after the saved cursor are never used to compare an earlier state.
                 candles = await fetch_history(server.CLIENT._get_json_sync, contract, "MINUTE_15",
-                    int(signal["signal_candle_ms"]), int(end) + 900_000, max_pages=10)
+                    int(signal.get("signal_candle_ms") if signal.get("signal_candle_ms") is not None
+                        else signal["source_candle_ms"]), int(end) + 900_000, max_pages=10)
                 payload = dict(contract=asdict(contract), candles=[asdict(c) for c in candles])
                 encoded = json.dumps(payload, separators=(",", ":"), allow_nan=False).encode()
                 name = model + "-" + hashlib.sha256(signal["key"].encode()).hexdigest()[:16] + ".json"

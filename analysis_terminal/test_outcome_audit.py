@@ -43,6 +43,15 @@ class OutcomeAuditTests(unittest.TestCase):
         self.assertEqual((audited["status"], audited["recomputed"]["status"]), ("MATCH", "OPEN"))
         self.assertIsNone(audited["recomputed"]["final_r"])
 
+    def test_current_signal_source_field_is_equivalent_to_shadow_signal_field(self):
+        rows = [fixture.c(START, low=85)]
+        s = evaluated(rows)
+        current = deepcopy(s)
+        current['source_candle_ms'] = current.pop('signal_candle_ms')
+        self.assertEqual(audit_signal(current, rows, CONTRACT), audit_signal(s, rows, CONTRACT))
+        current['signal_candle_ms'] = None
+        self.assertEqual(audit_signal(current, rows, CONTRACT)['status'], 'MATCH')
+
     def test_signal_prior_and_future_candles_cannot_affect_comparison(self):
         rows = [fixture.c(START), fixture.c(START+STEP)]
         s = evaluated(rows)
