@@ -1,0 +1,31 @@
+{
+  "protocol": "post_breakout_retest_comparison_v1",
+  "baseline_model": "measured_room_fixed_2r",
+  "variant_model": "measured_room_fixed_2r_post_breakout_retest",
+  "additional_condition": "Within the same last 4 closed 15M candles, at least one matching retest candle must start at or after the selected 4H breakout close. The confirmation candle may also be that retest candle.",
+  "unchanged": [
+    "4H trend",
+    "breakout",
+    "15M confirmation",
+    "retest tolerance/lookback",
+    "structural stop",
+    "min_rr=2",
+    "Measured Move >=2R",
+    "fixed 2R TP"
+  ],
+  "periods": [
+    {
+      "role": "EXPLORATORY",
+      "start_ms": 1790391600000,
+      "end_ms": 1790996400000
+    },
+    {
+      "role": "UNINSPECTED_RETROSPECTIVE",
+      "start_ms": 1789786800000,
+      "end_ms": 1790391600000
+    }
+  ],
+  "entry_policy": "Replay in time order and track first entry separately for each model, including warmup and missing-history exclusions.",
+  "universe": "Current tradable contracts. Historical delisted contracts unavailable; not a forward/live validation.",
+  "decision_policy": "No threshold tuning or auto-promotion. Retrospective results never count toward live resolved>=20 gate."
+}

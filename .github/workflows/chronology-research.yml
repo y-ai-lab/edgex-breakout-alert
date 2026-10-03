@@ -1,0 +1,72 @@
+name: Fixed post-breakout retest comparison
+on:
+  push:
+    branches: ["research/post-breakout-retest-v19-0-9"]
+    paths: [".github/workflows/chronology-research.yml"]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -r analysis_terminal/test-requirements.txt
+      - name: Chronology and existing safety tests
+        run: |
+          python -m unittest analysis_terminal.test_outcomes analysis_terminal.test_storage analysis_terminal.test_setups analysis_terminal.test_entry_ui analysis_terminal.test_lifecycle analysis_terminal.test_comparison analysis_terminal.test_tracking analysis_terminal.test_replay analysis_terminal.test_replay_review analysis_terminal.test_entry_diagnostics analysis_terminal.test_chronology_replay -v
+          python -m unittest discover -s tests -v
+      - name: Retrieve unchanged original public market archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/y-ai-lab/edgex-breakout-alert/actions/artifacts/11262672328/zip > original.zip
+          python - <<'PY'
+          import zipfile
+          from pathlib import Path
+          Path("research-output/original").mkdir(parents=True)
+          with zipfile.ZipFile("original.zip") as archive:
+              archive.extractall("research-output/original")
+          PY
+      - name: Replay exploratory period in time order
+        run: python -m analysis_terminal.chronology_replay --source research-output/original --role EXPLORATORY --output research-output/exploratory
+      - name: Fetch predeclared uninspected historical period using the same universe
+        run: python -m analysis_terminal.run_replay --end-ms 1790391600000 --days 7 --universe-manifest research-output/original/replay-report.json --output research-output/uninspected-source
+      - name: Replay uninspected period without changing rules
+        run: |
+          python -m analysis_terminal.chronology_replay --source research-output/uninspected-source --role UNINSPECTED_RETROSPECTIVE --output research-output/uninspected
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from analysis_terminal.chronology_replay import PERIODS
+          reports=[json.loads(Path("research-output",name,"chronology-report.json").read_text()) for name in ("exploratory","uninspected")]
+          assert len({r["variant_rule_fingerprint"] for r in reports})==1
+          for r in reports:
+              assert r["dataset"]=="RETROSPECTIVE" and r["eligible_for_live_promotion"] is False
+              assert (r["start_ms"],r["end_ms"])==PERIODS[r["role"]]
+              assert r["coverage"]["requested_markets"]==182
+              assert r["coverage"]["failed_markets"]==0,r["coverage"]
+              assert r["comparison"]["automatic_promotion"] is False
+              for signals in r["signals"].values():
+                  assert len(signals)==len({s["setup_id"] for s in signals})
+                  for s in signals:
+                      assert s["created_ms"]==s["signal_candle_ms"]+900000+1
+                      assert r["start_ms"]<=s["created_ms"]<r["end_ms"]
+                      result=s["result"]
+                      if result["history_start_ms"] is not None:
+                          assert result["history_start_ms"]>=s["created_ms"]-1
+                      if result["status"] in {"TP","SL","AMBIGUOUS"}:
+                          assert result["history_end_ms"]==result["outcome_time_ms"]
+          Path("research-output/protocol.json").write_text(Path("analysis_terminal/chronology_protocol.json").read_text())
+          print("Both fixed periods: source hashes, baseline reconstruction, unique first entries and separation OK")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: edgex-post-breakout-retest-v19-0-9
+          path: research-output/
+          retention-days: 14
