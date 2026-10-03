@@ -1639,8 +1639,8 @@ async def fetch_snapshots(
     }
 
 
-def closed(candles: list[scanner.Candle], interval: str) -> list[scanner.Candle]:
-    cutoff = int(time.time() * 1000)
+def closed(candles: list[scanner.Candle], interval: str, *, as_of_ms: int | None = None) -> list[scanner.Candle]:
+    cutoff = int(time.time() * 1000) if as_of_ms is None else as_of_ms
     interval_ms = scanner.INTERVAL_MS[interval]
     return [
         candle
@@ -2254,9 +2254,10 @@ def analyze_contract(
     contract: scanner.Contract,
     monitor_raw: list[scanner.Candle],
     entry_raw: list[scanner.Candle],
+    *, as_of_ms: int | None = None,
 ) -> dict[str, Any]:
-    monitor = closed(monitor_raw, SETTINGS.monitor_interval)
-    entries = closed(entry_raw, SETTINGS.entry_interval)
+    monitor = closed(monitor_raw, SETTINGS.monitor_interval, as_of_ms=as_of_ms)
+    entries = closed(entry_raw, SETTINGS.entry_interval, as_of_ms=as_of_ms)
     base: dict[str, Any] = {
         "ticker": contract.contract_name,
         "contract_id": contract.contract_id,
@@ -2289,7 +2290,7 @@ def analyze_contract(
 
     latest4 = monitor[-1]
     latest15 = entries[-1]
-    now_ms = int(time.time() * 1000)
+    now_ms = int(time.time() * 1000) if as_of_ms is None else as_of_ms
     base.update({
         "latest_4h_time_ms": latest4.time_ms,
         "latest_15m_time_ms": latest15.time_ms,
@@ -3890,7 +3891,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="EdgeX Analysis Terminal",
-    version="19.0.6",
+    version="19.0.7",
     lifespan=lifespan,
 )
 
@@ -3902,7 +3903,7 @@ async def health():
     return {
         "ok": True,
         "service": "edgex-analysis-terminal",
-        "version": "19.0.6",
+        "version": "19.0.7",
         "time_ms": int(time.time() * 1000),
         "storage": {
             "market_snapshots_48h": len(history),
@@ -4326,6 +4327,20 @@ async def readiness_review_api(
 @app.get("/api/outcome-tracking")
 async def outcome_tracking_api(limit: int = Query(default=50, ge=1, le=500)):
     return _outcome_tracking_review(limit)
+
+
+@app.get("/api/replay-review")
+async def replay_review_api():
+    path = Path(__file__).with_name("replay_latest.json")
+    if not path.exists():
+        return {"dataset": "RETROSPECTIVE", "status": "NOT_RUN", "eligible_for_live_promotion": False}
+    try:
+        report = json.loads(path.read_text())
+    except (OSError, ValueError) as exc:
+        raise HTTPException(503, "Retrospective report unavailable") from exc
+    if not isinstance(report, dict) or report.get("dataset") != "RETROSPECTIVE" or report.get("eligible_for_live_promotion") is not False:
+        raise HTTPException(503, "Invalid retrospective report")
+    return report
 
 
 @app.get("/api/setups")

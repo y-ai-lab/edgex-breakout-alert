@@ -25,7 +25,7 @@ Python 3.12とNode.jsが必要です。
 
 ```bash
 python -m pip install -r analysis_terminal/test-requirements.txt
-python -m unittest analysis_terminal.test_outcomes analysis_terminal.test_storage analysis_terminal.test_setups analysis_terminal.test_entry_ui analysis_terminal.test_lifecycle -v
+python -m unittest analysis_terminal.test_outcomes analysis_terminal.test_storage analysis_terminal.test_setups analysis_terminal.test_entry_ui analysis_terminal.test_lifecycle analysis_terminal.test_comparison analysis_terminal.test_tracking analysis_terminal.test_replay analysis_terminal.test_replay_review -v
 python -m unittest discover -s tests -v
 ```
 
@@ -104,3 +104,33 @@ signal close+1ms、評価器、昇格集計を変更せず、終了したsetup�
 collectorでmarket/paper/Shadow保存後に更新し、GET APIは記録を変更しません。
 旧テーブルの削除・再構築は行わず、既存snapshot・購読・シグナルを保持します。
 遷移は15Mごとの観測であり、観測間の短い状態変化をすべて捕捉するものではありません。
+
+## 隔離した過去検証（v19.0.7）
+
+GET `/api/replay-review` と検証画面内のREPLAY欄は、静的な `replay_latest.json` を読みます。
+RETROSPECTIVEと明示し、ライブDB・Shadow昇格集計・ENTRY表示・通知には混ぜません。
+本番collectorは過去検証を実行しません。再実行は別の作業ディレクトリで行います。
+
+```bash
+python -m analysis_terminal.run_replay --end-ms 1790996400000 --days 7 --output /tmp/edgex-replay
+```
+
+公開getKlineのLAST_PRICE履歴をページ取得し、銘柄・時刻・OHLC・重複・改訂競合を検証します。
+4H/15Mの確定180本を各時点で切り出し、同じanalyze_contractにその時点の時計を渡します。
+候補判断に未来足を渡さず、結果判定はsignal close + 1ms以後の足だけです。
+setupごとに各戦略の初回Entryを保持し、期間前の成立と欠測中の不明な初回Entryを除外します。
+同時TP/SLはAMBIGUOUS、欠測後の結果は未検証として正式指標から除外します。
+取得時の公開データとSHA256、条件・取得失敗・観測点除外を成果物に保存します。
+
+最初の固定期間は2026-09-26 03:00〜2026-10-03 03:00 UTC、取得対象182銘柄、取得失敗0。
+有効観測点108,492 / 122,304（88.7%）。現行2 setup / 1確定でINSUFFICIENT SAMPLE。
+Shadow235 setup / 179確定（TP33、SL146）、平均R -0.4469、PF 0.4521、最大連敗29。
+LONG/SHORTとも平均Rは負。両戦略で確定した同一setupは0件で、TP変更の因果効果は判定できません。
+候補数の増加は確認できましたが、fixed 2Rの利益改善を支持しません。本番昇格は見送り、
+ライブShadowは条件を維持して収集を継続します。戦略パラメータの再最適化は行っていません。
+
+現在取引可能な銘柄のみの選択、改訂済み履歴、180本の固定指標窓、欠測の除外、
+手数料・Funding・スリッページ未反映に偏りがあります。235件の独立性も保証しません。
+過去検証の179確定はライブのresolved>=20条件へ加算しません。
+元コード・公開データ成果物: [research run 37093101900](https://github.com/y-ai-lab/edgex-breakout-alert/actions/runs/37093101900)。
+取得元SHAとrun/artifact IDは配布結果のprovenanceにも残しています。
