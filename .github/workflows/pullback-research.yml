@@ -16,7 +16,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install terminal dependencies
-        run: pip install -r analysis_terminal/requirements.txt
+        run: pip install -r analysis_terminal/requirements.txt httpx
       - name: Fixed protocol regression checks
         run: python -m unittest analysis_terminal.test_pullback -v
       - name: Retrieve immutable public market archive
