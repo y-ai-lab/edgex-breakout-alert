@@ -7,6 +7,13 @@ ROOT = Path(__file__).resolve().parent
 
 
 class EntryFreshnessTests(unittest.TestCase):
+    def test_foreground_notifications_only_allow_fresh_ready(self):
+        result = subprocess.run(
+            ["node", str(ROOT / "test_notifications.js"), str(ROOT / "index.html")],
+            capture_output=True, text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_entry_freshness_and_async_render_regressions(self):
         for case in ("boundaries", "unknown", "ageing", "expired_calculation",
                      "expiry_timer", "superseded_calculation", "heartbeat_failure", "clicks", "visibility"):

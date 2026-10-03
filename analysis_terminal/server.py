@@ -44,6 +44,7 @@ VAPID_SUBJECT = os.getenv(
     "WEBPUSH_VAPID_SUBJECT",
     "https://edgex-analysis-terminal-production.up.railway.app",
 ).strip()
+NOTIFICATION_POLICY = "READY_ONLY"
 DAILY_SUMMARY_HOUR_JST = int(os.getenv("DAILY_SUMMARY_HOUR_JST", "8"))
 VAPID_KEY_PATH = DB_PATH.parent / "webpush_vapid_private.pem"
 JST = ZoneInfo("Asia/Tokyo")
@@ -750,7 +751,7 @@ def _save_push_subscription(req: PushSubscriptionRequest) -> str:
                 endpoint,
                 payload,
                 int(req.candidate_alerts),
-                int(req.daily_summary),
+                0,
                 req.timezone,
                 now_ms,
                 now_ms,
@@ -784,7 +785,7 @@ def _subscription_suppressed(
     subscription: sqlite3.Row,
     kind: str | None,
 ) -> bool:
-    if kind != "candidate":
+    if kind not in {"candidate", "ready"}:
         return False
     now_ms = int(time.time() * 1000)
     snooze_until = subscription["snooze_until_ms"]
@@ -808,10 +809,10 @@ def _subscription_suppressed(
 
 def _load_push_subscriptions(kind: str | None = None) -> list[sqlite3.Row]:
     where = ""
-    if kind == "candidate":
+    if kind in {"candidate", "ready"}:
         where = "WHERE candidate_alerts = 1"
     elif kind == "daily":
-        where = "WHERE daily_summary = 1"
+        return []
     with _db_connect() as conn:
         rows = conn.execute(
             f"SELECT * FROM push_subscriptions {where} ORDER BY created_ms"
@@ -824,6 +825,9 @@ def _load_push_subscriptions(kind: str | None = None) -> list[sqlite3.Row]:
 
 
 def _send_push_sync(subscription: sqlite3.Row, payload: dict[str, Any]) -> bool:
+    # Only current READY alerts and explicit subscribe/test requests may deliver.
+    if payload.get("notification_kind") not in {"READY", "MANUAL"}:
+        return False
     if not _push_enabled():
         return False
     endpoint = str(subscription["endpoint"])
@@ -865,6 +869,8 @@ async def _broadcast_push(
     *,
     kind: str,
 ) -> tuple[int, int]:
+    if kind != "ready" or payload.get("notification_kind") != "READY":
+        return 0, 0
     subscriptions = _load_push_subscriptions(kind)
     if not subscriptions:
         _log_push_event(
@@ -907,7 +913,7 @@ def _update_push_preferences(req: PushPreferenceRequest) -> bool:
             """,
             (
                 int(req.candidate_alerts),
-                int(req.daily_summary),
+                0,
                 req.snooze_until_ms,
                 req.quiet_start,
                 req.quiet_end,
@@ -1245,54 +1251,8 @@ def _custom_alert_match(
 
 
 async def _evaluate_custom_alerts(rows: list[dict[str, Any]]) -> None:
-    alerts = _load_custom_alerts(active_only=True)
-    if not alerts:
-        return
-    row_map = {
-        str(row.get("ticker") or "").upper(): row
-        for row in rows
-    }
-    for alert in alerts:
-        row = row_map.get(str(alert["ticker"]).upper())
-        if row is None:
-            continue
-        matched, detail = _custom_alert_match(alert, row)
-        if not matched:
-            continue
-        subscription = _get_push_subscription(str(alert["endpoint"]))
-        if subscription is None:
-            continue
-        if _subscription_suppressed(subscription, "candidate"):
-            continue
-        payload = {
-            "title": f"EdgeX 条件アラート — {alert['ticker']}",
-            "body": detail,
-            "url": f"/?tab=analysis&ticker={alert['ticker']}",
-            "tag": f"edgex-custom-{alert['id']}",
-        }
-        delivered = await asyncio.to_thread(
-            _send_push_sync,
-            subscription,
-            payload,
-        )
-        _log_push_event(
-            kind="custom",
-            payload=payload,
-            sent=1 if delivered else 0,
-            attempted=1,
-        )
-        if delivered:
-            now_ms = int(time.time() * 1000)
-            with _db_connect() as conn:
-                conn.execute(
-                    """
-                    UPDATE custom_alerts
-                    SET active = 0, triggered_ms = ?, updated_ms = ?
-                    WHERE id = ?
-                    """,
-                    (now_ms, now_ms, int(alert["id"])),
-                )
-                conn.commit()
+    """Disabled by READY_ONLY; existing rules and reports remain stored."""
+    return
 
 
 def _jst_day_bounds(date_value) -> tuple[int, int]:
@@ -1492,7 +1452,8 @@ async def _maybe_push_candidate_changes(rows: list[dict[str, Any]]) -> None:
         )
         await _broadcast_push(
             {
-                "title": "EdgeX エントリー候補",
+                "title": "EdgeX エントリー可能",
+                "notification_kind": "READY",
                 "body": (
                     f"{label}\n{_push_row_summary(row)}"
                     f"{_push_trade_levels(row)}"
@@ -1500,11 +1461,10 @@ async def _maybe_push_candidate_changes(rows: list[dict[str, Any]]) -> None:
                 "url": f"/?tab=analysis&ticker={ticker}",
                 "tag": f"edgex-ready-{ticker}",
             },
-            kind="candidate",
+            kind="ready",
         )
 
     for row in near:
-        ticker = str(row["ticker"])
         setup_id = row.get("setup_id")
         if not setup_id or setup_id in prev_near or setup_id in prev_ready:
             continue
@@ -1513,56 +1473,11 @@ async def _maybe_push_candidate_changes(rows: list[dict[str, Any]]) -> None:
             kind="NEAR",
             label="有力な直前候補に追加",
         )
-        await _broadcast_push(
-            {
-                "title": "EdgeX 有力な直前候補",
-                "body": f"15分足の条件に接近\n{_push_row_summary(row)}",
-                "url": f"/?tab=analysis&ticker={ticker}",
-                "tag": f"edgex-near-{ticker}",
-            },
-            kind="candidate",
-        )
 
 
 async def _maybe_push_daily_summary(rows: list[dict[str, Any]]) -> None:
-    if not _load_push_subscriptions("daily"):
-        return
-    now = datetime.now(JST)
-    if now.hour < DAILY_SUMMARY_HOUR_JST:
-        return
-    today = now.date().isoformat()
-    if _state_get("daily_summary_date") == today:
-        return
-
-    summary = _market_summary(rows)
-    regime = _market_regime(rows)
-    picks = _daily_picks(rows)
-    bias_ja = {
-        "LONG_BIASED": "ロング優勢",
-        "SHORT_BIASED": "ショート優勢",
-        "BALANCED": "ほぼ均衡",
-    }.get(regime["bias"], "方向不明")
-    activity_ja = {
-        "SIGNAL_ACTIVE": "シグナルあり",
-        "SETUP_BUILDING": "セットアップ形成中",
-        "QUIET": "静観相場",
-        "SELECTIVE": "選別相場",
-    }.get(regime["activity"], "状態不明")
-    pick_text = "、".join(str(item["ticker"]) for item in picks) or "候補なし"
-    payload = {
-        "title": "EdgeX 朝の市場サマリー",
-        "body": (
-            f"{bias_ja} / {activity_ja}\n"
-            f"エントリー可能 {summary['ready_count']}件 / "
-            f"有力直前 {summary['qualified_near_count']}件\n"
-            f"まず確認: {pick_text}"
-        ),
-        "url": "/?tab=dashboard",
-        "tag": f"edgex-daily-{today}",
-    }
-    _sent, attempted = await _broadcast_push(payload, kind="daily")
-    if attempted:
-        _state_set("daily_summary_date", today)
+    """Disabled by READY_ONLY; existing rules and reports remain stored."""
+    return
 
 
 async def fetch_snapshots(
@@ -2615,7 +2530,7 @@ async def market_snapshots(force: bool = False):
 class PushSubscriptionRequest(BaseModel):
     subscription: dict[str, Any]
     candidate_alerts: bool = True
-    daily_summary: bool = True
+    daily_summary: bool = False
     timezone: str = Field(default="Asia/Tokyo", max_length=64)
 
 
@@ -2626,7 +2541,7 @@ class PushUnsubscribeRequest(BaseModel):
 class PushPreferenceRequest(BaseModel):
     endpoint: str = Field(min_length=10, max_length=4096)
     candidate_alerts: bool = True
-    daily_summary: bool = True
+    daily_summary: bool = False
     snooze_until_ms: int | None = Field(default=None, ge=0)
     quiet_start: str | None = Field(default=None, max_length=5)
     quiet_end: str | None = Field(default=None, max_length=5)
@@ -3582,36 +3497,6 @@ async def _process_priority_changes(
                 rr=float(rr) if rr is not None else None,
             )
 
-            if event_type == "TOP3_ENTRY":
-                movement = (
-                    f"{previous_rank}位→{current_rank}位"
-                    if previous_rank is not None
-                    else f"新規TOP{current_rank}"
-                )
-                title = "EdgeX TOP3入り"
-            else:
-                movement = f"{previous_rank}位→{current_rank}位"
-                title = "EdgeX ランキング急上昇"
-
-            await _broadcast_push(
-                {
-                    "title": title,
-                    "body": (
-                        f"{ticker} {movement}\n"
-                        f"{_priority_event_stage_ja(stage)} / "
-                        f"優先度 {priority_score:.1f}点"
-                        + (
-                            f" / RR {float(rr):.2f}"
-                            if rr is not None
-                            else ""
-                        )
-                    ),
-                    "url": f"/?tab=analysis&ticker={ticker}",
-                    "tag": f"edgex-rank-{ticker}-{bucket_ms}",
-                },
-                kind="candidate",
-            )
-
         approach_cross = (
             actionable
             and rr_ok
@@ -3636,25 +3521,6 @@ async def _process_priority_changes(
                 stop=item.get("stop_loss"),
                 target=item.get("take_profit"),
                 setup_id=item.get("setup_id"),
-            )
-            await _broadcast_push(
-                {
-                    "title": "EdgeX 急接近候補",
-                    "body": (
-                        f"{ticker} 急接近度 "
-                        f"{previous_approach:.1f}→{approach_score:.1f}点\n"
-                        f"現在{current_rank}位 / "
-                        f"{_priority_event_stage_ja(stage)}"
-                        + (
-                            f" / RR {float(rr):.2f}"
-                            if rr is not None
-                            else ""
-                        )
-                    ),
-                    "url": f"/?tab=analysis&ticker={ticker}",
-                    "tag": f"edgex-approach-{ticker}-{bucket_ms}",
-                },
-                kind="candidate",
             )
 
     _save_priority_snapshot(bucket_ms, enriched_ranking)
@@ -3859,13 +3725,11 @@ async def _background_collector() -> None:
                     print(f"Setup lifecycle collector error: {exc}", flush=True)
                 await _process_priority_changes(rows, bucket)
                 await _maybe_push_candidate_changes(rows)
-                await _evaluate_custom_alerts(rows)
                 await _refresh_paper_signal_results(contracts)
                 await _refresh_shadow_v2_results(contracts)
                 await _refresh_candidate_event_results(contracts)
                 await _refresh_approach_event_results(contracts)
                 _maybe_generate_daily_report()
-                await _maybe_push_daily_summary(rows)
                 last_bucket = bucket
             except Exception as exc:
                 print(f"Background analysis collector error: {exc}", flush=True)
@@ -3891,7 +3755,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="EdgeX Analysis Terminal",
-    version="19.0.9",
+    version="19.0.10",
     lifespan=lifespan,
 )
 
@@ -3903,7 +3767,7 @@ async def health():
     return {
         "ok": True,
         "service": "edgex-analysis-terminal",
-        "version": "19.0.9",
+        "version": "19.0.10",
         "time_ms": int(time.time() * 1000),
         "storage": {
             "market_snapshots_48h": len(history),
@@ -3914,6 +3778,8 @@ async def health():
             "enabled": _push_enabled(),
             "subscribers": _subscription_count(),
             "daily_summary_hour_jst": DAILY_SUMMARY_HOUR_JST,
+            "notification_policy": NOTIFICATION_POLICY,
+            "daily_summary_enabled": False,
         },
     }
 
@@ -4441,10 +4307,7 @@ async def custom_alerts_get_api(
 
 @app.post("/api/custom-alerts")
 async def custom_alerts_create_api(req: CustomAlertCreateRequest):
-    return {
-        "ok": True,
-        "alert": _create_custom_alert(req),
-    }
+    raise HTTPException(409, "通知はエントリー可能（現行READY）のみです。条件アラートは停止中です。")
 
 
 @app.post("/api/custom-alerts/delete")
@@ -4471,6 +4334,8 @@ async def push_config_api():
         "public_key": VAPID_PUBLIC_KEY if _push_enabled() else None,
         "subscribers": _subscription_count(),
         "daily_summary_hour_jst": DAILY_SUMMARY_HOUR_JST,
+        "notification_policy": NOTIFICATION_POLICY,
+        "daily_summary_enabled": False,
     }
 
 
@@ -4490,9 +4355,10 @@ async def push_subscribe_api(req: PushSubscriptionRequest):
             subscriptions[0],
             {
                 "title": "EdgeX バックグラウンド通知",
+                "notification_kind": "MANUAL",
                 "body": (
-                    "有効になりました。候補の変化と毎朝の市場サマリーを"
-                    "アプリを閉じていても通知します。"
+                    "有効になりました。現行READYのエントリー可能通知を"
+                    "アプリを閉じていても受信できます。"
                 ),
                 "url": "/?tab=dashboard",
                 "tag": "edgex-push-enabled",
@@ -4523,7 +4389,8 @@ async def push_preferences_get_api(
         raise HTTPException(404, "Push subscription not found")
     return {
         "candidate_alerts": bool(row["candidate_alerts"]),
-        "daily_summary": bool(row["daily_summary"]),
+        "daily_summary": False,
+        "notification_policy": NOTIFICATION_POLICY,
         "timezone": str(row["timezone"]),
         "last_success_ms": row["last_success_ms"],
         "snooze_until_ms": row["snooze_until_ms"],
@@ -4540,7 +4407,8 @@ async def push_preferences_api(req: PushPreferenceRequest):
     return {
         "ok": True,
         "candidate_alerts": bool(row["candidate_alerts"]) if row else False,
-        "daily_summary": bool(row["daily_summary"]) if row else False,
+        "daily_summary": False,
+        "notification_policy": NOTIFICATION_POLICY,
         "snooze_until_ms": row["snooze_until_ms"] if row else None,
         "quiet_start": row["quiet_start"] if row else None,
         "quiet_end": row["quiet_end"] if row else None,
@@ -4554,6 +4422,7 @@ async def push_test_api(req: PushTestRequest):
         raise HTTPException(404, "Push subscription not found")
     payload = {
         "title": "EdgeX テスト通知",
+        "notification_kind": "MANUAL",
         "body": "バックグラウンド通知は正常です。",
         "url": "/?tab=dashboard",
         "tag": "edgex-test",

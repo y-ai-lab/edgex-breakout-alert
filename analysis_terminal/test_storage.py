@@ -125,6 +125,103 @@ class StorageTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(server._load_candidate_events()[0]["label"], "新しくエントリー可能")
         self.assertEqual(server._subscription_count(), 1)
 
+    async def test_only_current_ready_delivers_but_near_history_is_kept(self):
+        server._state_set("server_candidate_state", '{"identity_version":1,"near":[],"ready":[]}')
+        near = dict(ticker="TESTUSDC", direction="LONG", stage="CONFIRMATION_WAIT",
+                    rr=3, score=85, setup_id="first", shadow_v2_ready=True)
+        async def inline(func, *args):
+            return func(*args)
+        with patch.object(server, "_send_push_sync", return_value=True) as send, patch.object(server.asyncio, "to_thread", inline):
+            await server._maybe_push_candidate_changes([near])
+            send.assert_not_called()
+            self.assertEqual(server._load_candidate_events()[0]["kind"], "NEAR")
+            await server._maybe_push_candidate_changes([dict(near, stage="RR_WAIT")])
+            send.assert_not_called()  # Shadow READY must never notify.
+            await server._maybe_push_candidate_changes([dict(near, stage="READY")])
+            send.assert_called_once()
+            payload = send.call_args.args[1]
+            self.assertEqual(payload["notification_kind"], "READY")
+            self.assertEqual(payload["title"], "EdgeX エントリー可能")
+            await server._maybe_push_candidate_changes([dict(near, stage="READY")])
+            send.assert_called_once()
+        self.assertEqual(server._load_push_events()[0]["kind"], "ready")
+
+    async def test_non_entry_dispatch_is_blocked_even_for_legacy_preferences(self):
+        before = dict(server._get_push_subscription("https://push.example.invalid/subscriber"))
+        server._create_custom_alert(server.CustomAlertCreateRequest(
+            endpoint=before["endpoint"], ticker="TESTUSDC", condition="PRICE_ABOVE", threshold=100))
+        rule = server._load_custom_alerts(endpoint=before["endpoint"])[0]
+        with patch.object(server, "_send_push_sync", Mock()) as send:
+            for kind in ("candidate", "daily", "custom", "ready"):
+                self.assertEqual(await server._broadcast_push({"title": "legacy"}, kind=kind), (0, 0))
+            await server._maybe_push_daily_summary([])
+            await server._evaluate_custom_alerts([dict(ticker="TESTUSDC", current_price=110)])
+            send.assert_not_called()
+        with patch.object(server, "webpush", Mock()) as push, patch.object(server, "_push_enabled", return_value=True):
+            self.assertFalse(server._send_push_sync(before, {"title": "legacy custom"}))
+            push.assert_not_called()
+        self.assertEqual(dict(server._get_push_subscription(before["endpoint"])), before)
+        self.assertEqual(server._load_push_subscriptions("daily"), [])
+        self.assertEqual(server._load_custom_alerts(endpoint=before["endpoint"])[0], rule)
+
+    async def test_ranking_events_are_kept_without_push(self):
+        row = dict(ticker="TESTUSDC", stage="READY", setup_id="first", priority_score=90, rr=3)
+        with (
+            patch.object(server, "_priority_ranking", return_value=[row]),
+            patch.object(server, "_load_previous_priority_snapshot", return_value=[dict(row, rank=8)]),
+            patch.object(server, "_approach_score", return_value=dict(approach_score=85)),
+            patch.object(server, "_broadcast_push", AsyncMock()) as broadcast,
+        ):
+            await server._process_priority_changes([row], self.now_ms)
+            broadcast.assert_not_called()
+        with server._db_connect() as conn:
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM priority_events").fetchone()[0], 1)
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM priority_snapshots").fetchone()[0], 1)
+
+    async def test_explicit_test_request_still_works_without_real_transport(self):
+        async def inline(func, *args):
+            return func(*args)
+        with patch.object(server, "_send_push_sync", return_value=True) as send, patch.object(server.asyncio, "to_thread", inline):
+            response = await server.push_test_api(server.PushTestRequest(endpoint="https://push.example.invalid/subscriber"))
+            self.assertTrue(response["delivered"])
+            self.assertEqual(send.call_args.args[1]["notification_kind"], "MANUAL")
+
+    async def test_ready_honors_opt_out_snooze_and_quiet_hours(self):
+        endpoint = "https://push.example.invalid/subscriber"
+        for preferences in (
+            dict(candidate_alerts=False),
+            dict(snooze_until_ms=self.now_ms + 3600000),
+            dict(quiet_start="00:00", quiet_end="23:59"),
+        ):
+            req = server.PushPreferenceRequest(endpoint=endpoint, **preferences)
+            server._update_push_preferences(req)
+            # Force noon for a deterministic quiet-hours check, independent of test clock.
+            with patch.object(server, "datetime", wraps=server.datetime) as clock:
+                clock.now.return_value = server.datetime(2026, 10, 3, 12, 0, tzinfo=server.JST)
+                with patch.object(server, "_send_push_sync", Mock()) as send:
+                    self.assertEqual(await server._broadcast_push({"notification_kind": "READY"}, kind="ready"), (0, 0))
+                    send.assert_not_called()
+
+    async def test_entry_policy_apis_keep_subscription_and_reject_custom_creation(self):
+        endpoint = "https://push.example.invalid/subscriber"
+        original = dict(server._get_push_subscription(endpoint))
+        async with AsyncClient(transport=ASGITransport(app=server.app), base_url="http://test") as client:
+            cfg = (await client.get("/api/push/config")).json()
+            self.assertEqual(cfg["notification_policy"], "READY_ONLY")
+            self.assertFalse(cfg["daily_summary_enabled"])
+            prefs = (await client.get("/api/push/preferences", params={"endpoint": endpoint})).json()
+            self.assertTrue(prefs["candidate_alerts"])
+            self.assertFalse(prefs["daily_summary"])
+            response = await client.post("/api/push/preferences", json=dict(endpoint=endpoint, candidate_alerts=True, daily_summary=True))
+            self.assertEqual(response.status_code, 200)
+            self.assertFalse(response.json()["daily_summary"])
+            custom = await client.post("/api/custom-alerts", json=dict(endpoint=endpoint, ticker="TESTUSDC", condition="PRICE_ABOVE", threshold=100))
+            self.assertEqual(custom.status_code, 409)
+        saved = server._get_push_subscription(endpoint)
+        for field in ("endpoint", "payload", "created_ms", "last_success_ms", "timezone"):
+            self.assertEqual(saved[field], original[field])
+        self.assertEqual(server._subscription_count(), 1)
+
     def test_opportunity_excludes_unknown_identity_from_no_ready_claim(self):
         base = dict(id=1, ticker="TESTUSDC", kind="NEAR", label="test", stage="CONFIRMATION_WAIT", direction="LONG", score=80, rr=2,
                     entry=100, stop=90, target=120, created_ms=self.now_ms-60000,

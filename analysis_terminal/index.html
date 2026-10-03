@@ -304,8 +304,8 @@ button{-webkit-tap-highlight-color:transparent}
       <div class="analyticsBox">
         <div class="boxLabel">通知センター</div>
         <div class="row compactRow">
-          <label class="pill"><input id="pushCandidatePref" type="checkbox"> 候補変化</label>
-          <label class="pill"><input id="pushDailyPref" type="checkbox"> 毎朝サマリー</label>
+          <label class="pill"><input id="pushCandidatePref" type="checkbox"> エントリー可能のみ</label>
+          <label style="display:none"><input id="pushDailyPref" type="checkbox" disabled> 毎朝サマリー（停止）</label>
         </div>
         <div class="row compactRow"><button class="ghost" id="pushTest">テスト通知</button><button class="ghost" id="refreshPushEvents">履歴更新</button></div>
         <div class="miniSection"><b>一時停止</b><div class="row compactRow"><button class="ghost" id="snooze30">30分</button><button class="ghost" id="snooze60">1時間</button><button class="ghost" id="snoozeMorning">朝8時まで</button><button class="ghost" id="clearSnooze">解除</button></div><div id="snoozeStatus" class="sub"></div></div>
@@ -313,7 +313,7 @@ button{-webkit-tap-highlight-color:transparent}
         <div id="pushPrefStatus" class="sub"></div>
         <div id="pushEvents" class="alertList"><span class="muted">配信履歴を読み込みます</span></div>
       </div>
-      <div class="analyticsBox"><div class="boxLabel">条件アラート</div><div class="sub">価格・Entry接近・RRの条件を1回だけPush通知します。</div><div id="customAlerts" class="status">通知ON後に設定できます。</div></div>
+      <div class="analyticsBox"><div class="boxLabel">条件アラート</div><div class="sub">エントリー可能のみ通知するため、保存済みの条件アラートは停止中です。</div><div id="customAlerts" class="status">保存済みの条件アラートを表示します。</div></div>
     </div>
     <div class="analyticsBox">
       <div class="boxLabel">お気に入りの端末間同期</div>
@@ -348,8 +348,8 @@ button{-webkit-tap-highlight-color:transparent}
 <div id="readyActionCard"></div>
 <div id="quickRiskOut"></div>
 <div id="analysisOut"></div>
-<div class="section"><h2>この銘柄を条件監視</h2><div class="sub">条件を満たしたらバックグラウンドPushを1回送信します。</div>
-<div class="row"><div class="field small"><label>条件</label><select id="customAlertCondition"><option value="PRICE_ABOVE">価格が以上</option><option value="PRICE_BELOW">価格が以下</option><option value="ENTRY_NEAR">Entryまでの距離 %以下</option><option value="RR_ABOVE">RRが以上</option></select></div><div class="field small"><label>しきい値</label><input id="customAlertThreshold" type="number" step="any" placeholder="例 0.5"></div><button class="ghost" id="createCustomAlert">アラート追加</button></div>
+<div class="section" style="display:none"><h2>この銘柄を条件監視</h2><div class="sub">通知は現行READYのエントリー可能のみです。条件アラートは停止中です。</div>
+<div class="row"><div class="field small"><label>条件</label><select id="customAlertCondition" disabled><option value="PRICE_ABOVE">価格が以上</option><option value="PRICE_BELOW">価格が以下</option><option value="ENTRY_NEAR">Entryまでの距離 %以下</option><option value="RR_ABOVE">RRが以上</option></select></div><div class="field small"><label>しきい値</label><input id="customAlertThreshold" disabled type="number" step="any" placeholder="例 0.5"></div><button class="ghost" id="createCustomAlert" disabled>アラート追加</button></div>
 <div id="customAlertStatus" class="sub" style="margin-top:8px"></div></div>
 <div class="section"><h2>値動き</h2><div class="legend"><span class="good">TP</span><span style="color:#7dd3fc">エントリー / ブレイク</span><span class="bad">SL</span><span style="color:#c4b5fd">EMA20</span><span style="color:#f9a8d4">EMA50</span></div><div class="chartGrid"><div class="chartWrap"><div class="chartTitle"><b>4H</b><span class="muted">大局</span></div><canvas id="chart4h" class="chart"></canvas></div><div class="chartWrap"><div class="chartTitle"><b>15M</b><span class="muted">エントリー</span></div><canvas id="chart15m" class="chart"></canvas></div></div></div>
 </section>
@@ -536,7 +536,12 @@ function renderServerCandidateEvents(events){
 }
 async function loadServerCandidateEvents(){try{var j=await jf("/api/candidate-events?limit=50");renderServerCandidateEvents(j.events||[])}catch(e){document.getElementById("serverCandidateEvents").innerHTML='<span class="error">'+e.message+'</span>'}}
 function renderCandidateAlerts(){var el=document.getElementById("candidateAlerts");if(!el)return;if(!candidateAlerts.length){el.innerHTML='<span class="muted">変化はまだありません</span>';return}el.innerHTML=candidateAlerts.slice(0,10).map(function(a){return '<div class="alertItem '+(a.kind==="READY"?"ready":"near")+'" data-ticker="'+a.ticker+'"><b>'+a.ticker+'</b> — '+a.label+'<div class="when">'+new Date(a.time_ms).toLocaleString("ja-JP")+(a.rr!=null?" / RR "+fmt(a.rr,2):"")+'</div></div>'}).join("");el.querySelectorAll(".alertItem").forEach(function(x){x.onclick=function(){document.getElementById("ticker").value=this.dataset.ticker;tab("analysis");analyze()}})}
-async function sendCandidateNotification(a){if(!candidateNotifyEnabled||!("Notification" in window)||Notification.permission!=="granted")return;var title=a.kind==="READY"?"EdgeX エントリー候補":"EdgeX 直前候補";var body=a.ticker+" — "+a.label+(a.rr!=null?" / RR "+fmt(a.rr,2):"");var url=location.origin+"/?tab=analysis&ticker="+encodeURIComponent(a.ticker);try{if("serviceWorker" in navigator){var reg=await navigator.serviceWorker.ready;await reg.showNotification(title,{body:body,tag:"edgex-"+a.kind+"-"+a.ticker,data:{url:url},icon:"/app-icon.svg"})}else new Notification(title,{body:body})}catch(e){}}
+async function sendCandidateNotification(a){
+ if(a.kind!=="READY"||!candidateNotifyEnabled||entryFreshness(lastMarketPayload).stale||!("Notification" in window)||Notification.permission!=="granted")return;
+ var title="EdgeX エントリー可能",body=a.ticker+" — "+a.label+(a.rr!=null?" / RR "+fmt(a.rr,2):"");
+ var url=location.origin+"/?tab=analysis&ticker="+encodeURIComponent(a.ticker),snapshot=lastMarketPayload;
+ try{if("serviceWorker" in navigator){var reg=await navigator.serviceWorker.ready;if(lastMarketPayload!==snapshot||entryFreshness(snapshot).stale)return;await reg.showNotification(title,{body:body,tag:"edgex-ready-"+a.ticker,data:{url:url},icon:"/app-icon.svg"})}else new Notification(title,{body:body})}catch(e){}
+}
 function pushCandidateAlert(a){candidateAlerts.unshift(a);candidateAlerts=candidateAlerts.slice(0,50);saveCandidateAlerts();renderCandidateAlerts();sendCandidateNotification(a)}
 function processCandidateTransitions(j){
  var ready=(j.ready_candidates||[]).filter(x=>x.setup_id),near=(j.qualified_near_candidates||[]).filter(x=>x.setup_id),now=Date.now(),newState={initialized:true,identity_version:1,ready:ready.map(x=>x.setup_id),near:near.map(x=>x.setup_id),stages:{}};
@@ -565,22 +570,22 @@ async function currentPushSubscription(){if(!("serviceWorker" in navigator)||!("
 function renderPushEvents(events){
  var el=document.getElementById("pushEvents");if(!el)return;
  if(!events||!events.length){el.innerHTML='<span class="muted">まだ配信履歴はありません</span>';return}
- el.innerHTML=events.slice(0,8).map(function(e){var ok=e.sent>0,label=e.kind==="daily"?"朝サマリー":e.kind==="candidate"?"候補通知":e.kind==="test"?"テスト通知":e.kind;return '<div class="alertItem '+(ok?"ready":"near")+'"><b>'+label+'</b> — '+(ok?"送信成功":"送信なし")+' '+e.sent+'/'+e.attempted+'<div>'+e.title+'</div><div class="when">'+new Date(e.created_ms).toLocaleString("ja-JP")+'</div></div>'}).join("");
+ el.innerHTML=events.slice(0,8).map(function(e){var ok=e.sent>0,label=e.kind==="ready"?"エントリー可能":e.kind==="daily"?"朝サマリー":e.kind==="candidate"?"候補通知":e.kind==="test"?"テスト通知":e.kind;return '<div class="alertItem '+(ok?"ready":"near")+'"><b>'+label+'</b> — '+(ok?"送信成功":"送信なし")+' '+e.sent+'/'+e.attempted+'<div>'+e.title+'</div><div class="when">'+new Date(e.created_ms).toLocaleString("ja-JP")+'</div></div>'}).join("");
 }
 async function loadPushEvents(){try{var j=await jf("/api/push/events?limit=20");renderPushEvents(j.events||[])}catch(e){document.getElementById("pushEvents").innerHTML='<span class="error">'+e.message+'</span>'}}
 async function loadPushPreferences(){
  var cbox=document.getElementById("pushCandidatePref"),dbox=document.getElementById("pushDailyPref"),st=document.getElementById("pushPrefStatus"),sub=await currentPushSubscription();
  if(!sub){cbox.checked=false;dbox.checked=false;cbox.disabled=true;dbox.disabled=true;st.textContent="バックグラウンド通知をONにすると設定できます。";return}
- cbox.disabled=false;dbox.disabled=false;
- try{var p=await jf("/api/push/preferences?endpoint="+encodeURIComponent(sub.endpoint));pushPreferenceState=p||{};cbox.checked=!!p.candidate_alerts;dbox.checked=!!p.daily_summary;document.getElementById("quietStart").value=p.quiet_start||"23:00";document.getElementById("quietEnd").value=p.quiet_end||"07:00";renderSnoozeStatus();st.textContent="この端末の設定を同期済み"+(p.last_success_ms?" / 最終送信 "+new Date(p.last_success_ms).toLocaleString("ja-JP"):"")}catch(e){st.textContent="設定を取得できません: "+e.message}
+ cbox.disabled=false;dbox.disabled=true;dbox.checked=false;
+ try{var p=await jf("/api/push/preferences?endpoint="+encodeURIComponent(sub.endpoint));pushPreferenceState=p||{};cbox.checked=!!p.candidate_alerts;dbox.checked=false;document.getElementById("quietStart").value=p.quiet_start||"23:00";document.getElementById("quietEnd").value=p.quiet_end||"07:00";renderSnoozeStatus();st.textContent="この端末の設定を同期済み"+(p.last_success_ms?" / 最終送信 "+new Date(p.last_success_ms).toLocaleString("ja-JP"):"")}catch(e){st.textContent="設定を取得できません: "+e.message}
 }
 async function savePushPreferences(){
  var sub=await currentPushSubscription();if(!sub)return;
  var cbox=document.getElementById("pushCandidatePref"),dbox=document.getElementById("pushDailyPref"),st=document.getElementById("pushPrefStatus");
- try{var payload={endpoint:sub.endpoint,candidate_alerts:cbox.checked,daily_summary:dbox.checked,snooze_until_ms:pushPreferenceState.snooze_until_ms||null,quiet_start:document.getElementById("quietStart").value||null,quiet_end:document.getElementById("quietEnd").value||null};var p=await jf("/api/push/preferences",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});pushPreferenceState=Object.assign({},pushPreferenceState,p);renderSnoozeStatus();st.textContent="通知設定を保存しました。"}catch(e){st.textContent="保存できません: "+e.message}
+ try{var payload={endpoint:sub.endpoint,candidate_alerts:cbox.checked,daily_summary:false,snooze_until_ms:pushPreferenceState.snooze_until_ms||null,quiet_start:document.getElementById("quietStart").value||null,quiet_end:document.getElementById("quietEnd").value||null};var p=await jf("/api/push/preferences",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});pushPreferenceState=Object.assign({},pushPreferenceState,p);renderSnoozeStatus();st.textContent="通知設定を保存しました。"}catch(e){st.textContent="保存できません: "+e.message}
 }
 function nextJst8(){var now=Date.now(),shift=9*60*60*1000,j=new Date(now+shift),y=j.getUTCFullYear(),m=j.getUTCMonth(),d=j.getUTCDate(),target=Date.UTC(y,m,d,-1,0,0,0);if(target<=now)target+=24*60*60*1000;return target}
-function renderSnoozeStatus(){var el=document.getElementById("snoozeStatus");if(!el)return;var until=Number(pushPreferenceState.snooze_until_ms||0);if(until>Date.now())el.innerHTML='<span class="warn">候補Push停止中 — '+new Date(until).toLocaleString("ja-JP")+'まで</span>';else el.textContent="候補Pushは一時停止されていません。"}
+function renderSnoozeStatus(){var el=document.getElementById("snoozeStatus");if(!el)return;var until=Number(pushPreferenceState.snooze_until_ms||0);if(until>Date.now())el.innerHTML='<span class="warn">エントリー通知停止中 — '+new Date(until).toLocaleString("ja-JP")+'まで</span>';else el.textContent="エントリー通知は一時停止されていません。"}
 async function setPushSnooze(mode){if(mode==="30")pushPreferenceState.snooze_until_ms=Date.now()+30*60*1000;else if(mode==="60")pushPreferenceState.snooze_until_ms=Date.now()+60*60*1000;else if(mode==="morning")pushPreferenceState.snooze_until_ms=nextJst8();else pushPreferenceState.snooze_until_ms=null;await savePushPreferences()}
 async function sendPushTest(){
  var sub=await currentPushSubscription(),st=document.getElementById("pushPrefStatus");if(!sub){st.textContent="先にバックグラウンド通知をONにしてください。";return}
@@ -591,7 +596,7 @@ function conditionJa(v){return ({PRICE_ABOVE:"価格以上",PRICE_BELOW:"価格�
 function renderCustomAlerts(){
  var el=document.getElementById("customAlerts");if(!el)return;
  if(!customAlerts.length){el.innerHTML='<span class="muted">有効な条件アラートはありません。</span>';return}
- el.innerHTML=customAlerts.map(function(a){return '<div class="alertRule"><b>'+a.ticker+'</b><span class="pill">'+conditionJa(a.condition)+' '+fmt(a.threshold,4)+'</span><span class="'+(a.active?"good":"muted")+'">'+(a.active?"監視中":"通知済み")+'</span><button class="ghost deleteCustomAlert" data-id="'+a.id+'">削除</button></div>'}).join("");
+ el.innerHTML=customAlerts.map(function(a){return '<div class="alertRule"><b>'+a.ticker+'</b><span class="pill">'+conditionJa(a.condition)+' '+fmt(a.threshold,4)+'</span><span class="'+(a.active?"good":"muted")+'">'+(a.active?"通知停止中":"通知済み")+'</span><button class="ghost deleteCustomAlert" data-id="'+a.id+'">削除</button></div>'}).join("");
  el.querySelectorAll(".deleteCustomAlert").forEach(function(b){b.onclick=async function(){var sub=await currentPushSubscription();if(!sub)return;await jf("/api/custom-alerts/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({endpoint:sub.endpoint,alert_id:Number(this.dataset.id)})});loadCustomAlerts()}});
 }
 async function loadCustomAlerts(){var sub=await currentPushSubscription();if(!sub){customAlerts=[];renderCustomAlerts();return}try{var j=await jf("/api/custom-alerts?endpoint="+encodeURIComponent(sub.endpoint));customAlerts=j.alerts||[];renderCustomAlerts()}catch(e){document.getElementById("customAlerts").innerHTML='<span class="error">'+e.message+'</span>'}}
@@ -616,7 +621,7 @@ async function syncBackgroundPushButton(){
   var cfg=await jf("/api/push/config"),sub=await currentPushSubscription(),on=!!sub;
   b.textContent="バックグラウンド通知 "+(on?"ON":"OFF");b.classList.toggle("good",on);
   if(!cfg.enabled){s.innerHTML='<span class="warn">サーバーPushは準備中です。</span>';return}
-  s.innerHTML=on?'<span class="good">有効</span> — アプリを閉じていても候補変化と毎朝'+cfg.daily_summary_hour_jst+'時(JST)のサマリーを受信します。':'OFF — ONにすると、候補変化と毎朝'+cfg.daily_summary_hour_jst+'時(JST)のサマリーを受信します。';
+  s.innerHTML=on?'<span class="good">有効</span> — アプリを閉じていても現行READYのエントリー可能通知のみ受信します。':'OFF — ONにすると、現行READYのエントリー可能通知のみ受信します。';
   loadPushPreferences();
  }catch(e){s.innerHTML='<span class="error">通知状態を確認できません: '+e.message+'</span>'}
 }
@@ -633,8 +638,8 @@ async function toggleBackgroundPush(){
   var permission=Notification.permission;if(permission!=="granted")permission=await Notification.requestPermission();if(permission!=="granted"){alert("通知が許可されていません。ブラウザまたは端末設定から許可してください。");return}
   var cfg=await jf("/api/push/config");if(!cfg.enabled||!cfg.public_key)throw new Error("サーバーPushが未設定です");
   var sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlBase64ToUint8Array(cfg.public_key)});
-  var result=await jf("/api/push/subscribe",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({subscription:sub.toJSON(),candidate_alerts:true,daily_summary:true,timezone:"Asia/Tokyo"})});
-  b.textContent="バックグラウンド通知 ON";b.classList.add("good");s.innerHTML='<span class="good">有効</span> — 候補変化 + 毎朝'+cfg.daily_summary_hour_jst+'時(JST)。'+(result.test_delivered?"確認通知を送信しました。":"購読を登録しました。");
+  var result=await jf("/api/push/subscribe",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({subscription:sub.toJSON(),candidate_alerts:true,daily_summary:false,timezone:"Asia/Tokyo"})});
+  b.textContent="バックグラウンド通知 ON";b.classList.add("good");s.innerHTML='<span class="good">有効</span> — 現行READYのエントリー可能通知のみ。'+(result.test_delivered?"確認通知を送信しました。":"購読を登録しました。");
   loadNotificationCenter();
  }catch(e){s.innerHTML='<span class="error">有効化できません: '+e.message+'</span>'}
 }
