@@ -1,0 +1,393 @@
+name: Terminal v19.0.15 read-only audit
+on:
+  push:
+    branches: ["audit/terminal-v19-0-15"]
+    paths: [".github/workflows/terminal-readonly-audit.yml"]
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install test dependencies
+        run: python -m pip install -r analysis_terminal/test-requirements.txt
+      - name: Terminal and existing regression tests
+        run: |
+          python -m unittest analysis_terminal.test_outcomes analysis_terminal.test_storage analysis_terminal.test_setups analysis_terminal.test_entry_ui analysis_terminal.test_lifecycle analysis_terminal.test_comparison analysis_terminal.test_tracking analysis_terminal.test_outcome_history analysis_terminal.test_replay analysis_terminal.test_replay_review analysis_terminal.test_entry_diagnostics analysis_terminal.test_chronology_replay analysis_terminal.test_chronology_review analysis_terminal.test_pullback analysis_terminal.test_pullback_review analysis_terminal.test_outcome_audit analysis_terminal.test_outcome_audit_review analysis_terminal.test_readiness_history -v
+          python -m unittest discover -s tests -v
+      - name: Read production APIs and validate retained data
+        run: |
+          python - <<'PY'
+          import concurrent.futures, json, urllib.request, time
+          from analysis_terminal.setups import setup_identity
+          from datetime import datetime, timezone
+          from pathlib import Path
+          base = "https://edgex-analysis-terminal-production.up.railway.app"
+          paths = {
+              "index": "/", "health": "/health",
+              "screener": "/api/screener?limit=200",
+              "analyze": "/api/analyze?ticker=BTCUSDC",
+              "review": "/api/readiness-review",
+              "readiness_history": "/api/readiness-history?days=7",
+              "readiness_history_one": "/api/readiness-history?days=1",
+              "readiness_history_month": "/api/readiness-history?days=30",
+              "shadow": "/api/shadow-v2?limit=2000",
+              "push_config": "/api/push/config",
+              "push_events": "/api/push/events?limit=1",
+              "history": "/api/server-history?hours=720",
+              "candidate_events": "/api/candidate-events?limit=500",
+              "approach_events": "/api/approach-events?limit=500",
+              "approach_validation": "/api/approach-validation?limit=500",
+              "opportunity": "/api/opportunity-analysis?limit=500",
+              "paper": "/api/server-paper-signals?limit=1000",
+              "setups": "/api/setups?limit=500",
+              "setups_btc": "/api/setups?limit=5&ticker=BTCUSDC",
+              "comparison": "/api/strategy-comparison?limit=500",
+              "comparison_one": "/api/strategy-comparison?limit=1",
+              "tracking": "/api/outcome-tracking?limit=500",
+              "tracking_one": "/api/outcome-tracking?limit=1",
+              "replay": "/api/replay-review",
+              "entry_diagnostics": "/api/entry-diagnostics",
+              "chronology": "/api/chronology-review",
+              "pullback": "/api/pullback-review",
+              "outcome_audit": "/api/outcome-audit",
+              "shadow_one": "/api/shadow-v2?limit=1",
+          }
+          output = Path("audit-output")
+          output.mkdir()
+          def fetch(item):
+              name, path = item
+              with urllib.request.urlopen(base + path, timeout=65) as response:
+                  raw = response.read().decode()
+                  assert response.status == 200, (name, response.status)
+                  data = raw if name == "index" else json.loads(raw)
+                  if name == "push_config":
+                      data.pop("public_key", None)
+                  if name == "push_events":
+                      data = {"event_count": len(data.get("events") or [])}
+                  (output / (name + (".html" if name == "index" else ".json"))).write_text(
+                      raw if name == "index" else json.dumps(data, ensure_ascii=False)
+                  )
+                  return name, data
+          for attempt in range(18):
+              try:
+                  with urllib.request.urlopen(base + "/health", timeout=15) as response:
+                      if json.load(response).get("version") == "19.0.15":
+                          break
+              except Exception:
+                  pass
+              time.sleep(5)
+          else:
+              raise AssertionError("v19.0.15 not available")
+          with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+              results = dict(pool.map(fetch, paths.items()))
+          health = results["health"]
+          assert health["version"] == "19.0.15", health
+          assert "<title>EdgeX 分析ターミナル v19.0.15</title>" in results["index"]
+          assert 'class="versionBadge">v19.0.15</span>' in results["index"]
+          assert "__APP_VERSION__" not in results["index"]
+          assert health["storage"]["db_exists"]
+          assert health["storage"]["market_snapshots_48h"] >= 192
+          assert health["push"]["enabled"] and health["push"]["subscribers"] >= 1
+          assert results["push_config"]["enabled"]
+          assert health["push"]["subscribers"] == 1
+          for cfg in (health["push"], results["push_config"]):
+              assert cfg["notification_policy"] == "READY_ONLY"
+              assert cfg["daily_summary_enabled"] is False
+          history = results["history"]["snapshots"]
+          assert len(history) >= 192
+          assert set([1790812800000, 1790813700000, 1790814600000, 1790815500000, 1790816400000, 1790817300000, 1790818200000, 1790819100000, 1790820000000, 1790820900000, 1790821800000, 1790822700000, 1790823600000, 1790824500000, 1790825400000, 1790826300000, 1790827200000, 1790828100000, 1790829000000, 1790829900000, 1790830800000, 1790831700000, 1790832600000, 1790833500000, 1790834400000, 1790835300000, 1790836200000, 1790837100000, 1790838000000, 1790838900000, 1790839800000, 1790840700000, 1790841600000, 1790842500000, 1790843400000, 1790844300000, 1790845200000, 1790846100000, 1790847000000, 1790847900000, 1790848800000, 1790849700000, 1790850600000, 1790851500000, 1790852400000, 1790853300000, 1790854200000, 1790855100000, 1790856000000, 1790856900000, 1790857800000, 1790858700000, 1790859600000, 1790860500000, 1790861400000, 1790862300000, 1790863200000, 1790864100000, 1790865000000, 1790865900000, 1790866800000, 1790867700000, 1790868600000, 1790869500000, 1790870400000, 1790871300000, 1790872200000, 1790873100000, 1790874000000, 1790874900000, 1790875800000, 1790876700000, 1790877600000, 1790878500000, 1790879400000, 1790880300000, 1790881200000, 1790882100000, 1790883000000, 1790883900000, 1790884800000, 1790885700000, 1790886600000, 1790887500000, 1790888400000, 1790889300000, 1790890200000, 1790891100000, 1790892000000, 1790892900000, 1790893800000, 1790894700000, 1790895600000, 1790896500000, 1790897400000, 1790898300000, 1790899200000, 1790900100000, 1790901000000, 1790901900000, 1790902800000, 1790903700000, 1790904600000, 1790905500000, 1790906400000, 1790907300000, 1790908200000, 1790909100000, 1790910000000, 1790910900000, 1790911800000, 1790912700000, 1790913600000, 1790914500000, 1790915400000, 1790916300000, 1790917200000, 1790918100000, 1790919000000, 1790919900000, 1790920800000, 1790921700000, 1790922600000, 1790923500000, 1790924400000, 1790925300000, 1790926200000, 1790927100000, 1790928000000, 1790928900000, 1790929800000, 1790930700000, 1790931600000, 1790932500000, 1790933400000, 1790934300000, 1790935200000, 1790936100000, 1790937000000, 1790937900000, 1790938800000, 1790939700000, 1790940600000, 1790941500000, 1790942400000, 1790943300000, 1790944200000, 1790945100000, 1790946000000, 1790946900000, 1790947800000, 1790948700000, 1790949600000, 1790950500000, 1790951400000, 1790952300000, 1790953200000, 1790954100000, 1790955000000, 1790955900000, 1790956800000, 1790957700000, 1790958600000, 1790959500000, 1790960400000, 1790961300000, 1790962200000, 1790963100000, 1790964000000, 1790964900000, 1790965800000, 1790966700000, 1790967600000, 1790968500000, 1790969400000, 1790970300000, 1790971200000, 1790972100000, 1790973000000, 1790973900000, 1790974800000, 1790975700000, 1790976600000, 1790977500000, 1790978400000, 1790979300000, 1790980200000, 1790981100000, 1790982000000, 1790982900000, 1790983800000, 1790984700000, 1790985600000, 1790986500000, 1790987400000, 1790988300000, 1790989200000, 1790990100000, 1790991000000, 1790991900000, 1790992800000, 1790993700000, 1790994600000, 1790995500000, 1790996400000, 1790997300000, 1790998200000, 1790999100000, 1791000000000, 1791000900000, 1791001800000, 1791002700000, 1791003600000, 1791004500000, 1791005400000, 1791006300000, 1791007200000, 1791008100000, 1791009000000, 1791009900000, 1791010800000, 1791011700000, 1791012600000, 1791013500000, 1791014400000, 1791015300000, 1791016200000, 1791017100000, 1791018000000, 1791018900000, 1791019800000, 1791020700000, 1791021600000, 1791022500000, 1791023400000, 1791024300000, 1791025200000, 1791026100000, 1791027000000, 1791027900000, 1791028800000, 1791029700000, 1791030600000, 1791031500000, 1791032400000, 1791033300000, 1791034200000, 1791035100000, 1791036000000, 1791036900000, 1791037800000, 1791038700000, 1791039600000, 1791040500000, 1791041400000, 1791042300000, 1791043200000, 1791044100000, 1791045000000, 1791045900000, 1791046800000, 1791047700000, 1791048600000, 1791049500000, 1791050400000, 1791051300000, 1791052200000, 1791053100000, 1791054000000, 1791054900000, 1791055800000, 1791056700000, 1791057600000, 1791058500000, 1791059400000, 1791060300000, 1791061200000, 1791062100000, 1791063000000, 1791063900000, 1791064800000, 1791065700000, 1791066600000, 1791067500000, 1791068400000, 1791069300000, 1791070200000, 1791071100000]) <= {s["time_ms"] for s in history}
+          rh = results["readiness_history"]
+          assert rh["dataset"] == "RECORDED_LIVE_OBSERVATIONS"
+          assert rh["timezone"] == "Asia/Tokyo"
+          assert rh["automatic_promotion"] is False and rh["changes_live_rules"] is False
+          assert len(rh["daily"]) == 7
+          assert len(results["readiness_history_one"]["daily"]) == 1
+          assert len(results["readiness_history_month"]["daily"]) == 30
+          assert rh["daily"][0]["partial"] is True
+          assert rh["summary"]["shadow_observations"] >= 1, "Collector has not persisted new additive snapshot fields"
+          assert rh["summary"]["missing_shadow_observations"] > 0
+          assert rh["summary"]["missing_funnel_observations"] == 0
+          assert sum(d["signals"]["current"]["signals"] for d in rh["daily"]) == rh["summary"]["signals"]["current"]["signals"]
+          assert sum(d["signals"]["shadow"]["signals"] for d in rh["daily"]) == rh["summary"]["signals"]["shadow"]["signals"]
+          assert rh["summary"]["signals"]["current"]["signals"] == results["comparison"]["current"]["signals"]
+          assert rh["summary"]["signals"]["shadow"]["signals"] == results["comparison"]["shadow"]["signals"]
+          for d in rh["daily"]:
+              assert d["observations"] <= d["expected_buckets"]
+              assert sum(d["dropped"].values()) + d["passed"]["ready"] == d["passed"]["scanned"]
+              assert d["shadow_ready_buckets"] is None if not d["shadow_observations"] else d["shadow_ready_buckets"] >= 0
+              source = [x for x in history if d["start_ms"] <= x["time_ms"] < d["end_ms"]]
+              # Cross-check saved stage counts with independent sums, not the app's aggregation helper.
+              for stage, count in d["dropped"].items():
+                  assert count == sum(x["stages"].get(stage, 0) for x in source), (d["date"],stage)
+              assert d["passed"]["ready"] == sum(x["stages"].get("READY",0) for x in source)
+          assert 'id="readinessHistoryFunnel"' in results["index"]
+          assert 'id="readinessHistoryFrequency"' in results["index"]
+          shadow = results["shadow"]
+          for s in shadow["latest"]:
+              assert s["created_ms"] == s["signal_candle_ms"] + 900000 + 1
+              r = s.get("result") or {}
+              if r.get("evaluation_version") == 2 and r.get("history_start_ms") is not None:
+                  assert r["history_start_ms"] >= s["created_ms"] - 1
+                  if r.get("status") in {"TP", "SL", "AMBIGUOUS"}:
+                      assert r["outcome_time_ms"] >= s["created_ms"] - 1
+                      assert r["history_end_ms"] == r["outcome_time_ms"]
+          lifecycle = results["setups"]
+          assert lifecycle["tracked"] == sum(lifecycle["status_counts"].values())
+          setups = {s["setup_id"]: s for s in lifecycle["items"]}
+          assert set(["v2:setup-v1:MRVLUSDC:LONG:1790928000000:273.07","v2:setup-v1:SAMSUNGUSDC:LONG:1790942400000:205.74","v2:setup-v1:UBUSDC:SHORT:1790956800000:0.13716","v2:setup-v1:SKHYUSDC:LONG:1790942400000:193.97","v2:setup-v1:PIEVERSEUSDC:SHORT:1790942400000:1.3739","v2:setup-v1:XLVUSDC:SHORT:1790884800000:166.7","v2:setup-v1:SKDDUSDC:SHORT:1790942400000:6.353"]).issubset({"v2:" + s for s in setups})
+          assert any(s["market_observed_ms"] is not None for s in setups.values())
+          for s in setups.values():
+              assert s["setup_id"] == setup_identity(s)
+              assert s["last_observed_ms"] >= s["first_seen_ms"]
+              if s["status"] in {"EXPIRED", "INVALIDATED"}:
+                  assert s["ended_ms"] >= s["first_seen_ms"] and s["end_reason"]
+              for field in ("current_trade", "shadow_trade"):
+                  t = s.get(field)
+                  if t and (t.get("result") or {}).get("status") == "OPEN":
+                      assert "final_r" not in t["result"] or t["result"]["final_r"] is None
+          comparison = results["comparison"]
+          assert comparison["sample_basis"] == "unique_setup_first_recorded_entry_all_history"
+          assert comparison["automatic_promotion"] is False
+          groups = comparison["groups"]
+          assert comparison["current"]["signals"] == groups["current_only"]["setups"] + groups["both"]["setups"]
+          assert comparison["shadow"]["signals"] == groups["shadow_only"]["setups"] + groups["both"]["setups"]
+          assert comparison["exclusions"]["shadow"]["legacy_unidentified"] >= 297
+          assert len(results["comparison_one"]["latest"]) <= 1
+          for name in ("current", "shadow"):
+              m = comparison[name]
+              assert m["resolved"] == m["tp"] + m["sl"]
+              assert m["avg_r"] == m["expectancy_r"]
+              if m["resolved"] < 20:
+                  assert m["sample_status"] == "INSUFFICIENT SAMPLE"
+              for field in ("win_rate", "avg_r", "profit_factor", "avg_mfe_r", "avg_mae_r", "max_consecutive_losses", "expectancy_r"):
+                  assert field in m
+          assert comparison["paired"]["resolved"] <= groups["both"]["setups"]
+          assert comparison["paired"]["current"]["resolved"] == comparison["paired"]["shadow"]["resolved"] == comparison["paired"]["resolved"]
+          indexed_shadow = {s["key"]: s for s in shadow["latest"]}
+          for previous in json.loads('[{"key": "v2:setup-v1:ONUSDC:SHORT:1791028800000:0.10322", "created_ms": 1791062100001, "signal_candle_ms": 1791061200000, "entry": 0.10302, "stop": 0.11203056606300756, "target": 0.08499886787398489, "result": {"status": "OPEN", "final_r": null, "mfe_r": 0.0311, "mae_r": 0.4805, "tp1_time_ms": null, "outcome_time_ms": null, "ambiguous_reason": null, "last_price": 0.10655, "coverage_complete": true, "history_start_ms": 1791062100000, "history_end_ms": 1791068400000, "candles_checked": 8, "evaluation_version": 2, "observation_start_ms": 1791062100000, "partial_entry_candle_excluded": false}}, {"key": "v2:setup-v1:PONSUSDC:SHORT:1791043200000:0.4092", "created_ms": 1791060300001, "signal_candle_ms": 1791059400000, "entry": 0.4071, "stop": 0.4322630493048526, "target": 0.35677390139029486, "result": {"status": "OPEN", "final_r": null, "mfe_r": 0.2225, "mae_r": 0.3775, "tp1_time_ms": null, "outcome_time_ms": null, "ambiguous_reason": null, "last_price": 0.4121, "coverage_complete": true, "history_start_ms": 1791060300000, "history_end_ms": 1791068400000, "candles_checked": 10, "evaluation_version": 2, "observation_start_ms": 1791060300000, "partial_entry_candle_excluded": false}}, {"key": "v2:setup-v1:VSTUSDC:LONG:1791043200000:146.15", "created_ms": 1791058500001, "signal_candle_ms": 1791057600000, "entry": 146.64, "stop": 144.3449203788604, "target": 151.23015924227917, "result": {"status": "OPEN", "final_r": null, "mfe_r": 0.2396, "mae_r": 0.2353, "tp1_time_ms": null, "outcome_time_ms": null, "ambiguous_reason": null, "last_price": 146.77, "coverage_complete": true, "history_start_ms": 1791058500000, "history_end_ms": 1791068400000, "candles_checked": 12, "evaluation_version": 2, "observation_start_ms": 1791058500000, "partial_entry_candle_excluded": false}}, {"key": "v2:setup-v1:EDGEUSDC:SHORT:1791043200000:0.4711", "created_ms": 1791057600001, "signal_candle_ms": 1791056700000, "entry": 0.4681, "stop": 0.48521368638319934, "target": 0.43387262723360137, "result": {"status": "SL", "final_r": -1.0, "mfe_r": 0.0, "mae_r": 1.0109, "tp1_time_ms": null, "outcome_time_ms": 1791068400000, "ambiguous_reason": null, "last_price": 0.485, "coverage_complete": true, "history_start_ms": 1791057600000, "history_end_ms": 1791068400000, "candles_checked": 13, "evaluation_version": 2, "observation_start_ms": 1791057600000, "partial_entry_candle_excluded": false}}, {"key": "v2:setup-v1:BTWUSDC:LONG:1791043200000:1.48646", "created_ms": 1791057600001, "signal_candle_ms": 1791056700000, "entry": 1.5783, "stop": 1.4170548115389856, "target": 1.900790376922029, "result": {"status": "SL", "final_r": -1.0, "mfe_r": 0.1046, "mae_r": 1.6203, "tp1_time_ms": null, "outcome_time_ms": 1791063000000, "ambiguous_reason": null, "last_price": 1.32697, "coverage_complete": true, "history_start_ms": 1791057600000, "history_end_ms": 1791063000000, "candles_checked": 7, "evaluation_version": 2, "observation_start_ms": 1791057600000, "partial_entry_candle_excluded": false}}, {"key": "v2:setup-v1:\u725b\u6765USDC:SHORT:1791043200000:0.08098", "created_ms": 1791057600001, "signal_candle_ms": 1791056700000, "entry": 0.07864, "stop": 0.08543107816440568, "target": 0.06505784367118865, "result": {"status": "OPEN", "final_r": null, "mfe_r": 0.1944, "mae_r": 0.2341, "tp1_time_ms": null, "outcome_time_ms": null, "ambiguous_reason": null, "last_price": 0.08023, "coverage_complete": true, "history_start_ms": 1791057600000, "history_end_ms": 1791068400000, "candles_checked": 13, "evaluation_version": 2, "observation_start_ms": 1791057600000, "partial_entry_candle_excluded": false}}, {"key": "v2:setup-v1:CASHCATUSDC:SHORT:1790971200000:0.15984", "created_ms": 1791050400001, "signal_candle_ms": 1791049500000, "entry": 0.15971, "stop": 0.17205999013727763, "target": 0.1350100197254447, "result": {"status": "OPEN", "final_r": null, "mfe_r": 0.2008, "mae_r": 0.2858, "tp1_time_ms": null, "outcome_time_ms": null, "ambiguous_reason": null, "last_price": 0.1598, "coverage_complete": true, "history_start_ms": 1791050400000, "history_end_ms": 1791068400000, "candles_checked": 21, "evaluation_version": 2, "observation_start_ms": 1791050400000, "partial_entry_candle_excluded": false}}, {"key": "v2:setup-v1:PIEVERSEUSDC:SHORT:1791028800000:1.3426", "created_ms": 1791045900001, "signal_candle_ms": 1791045000000, "entry": 1.341, "stop": 1.3845642045068685, "target": 1.253871590986263, "result": {"status": "OPEN", "final_r": null, "mfe_r": 0.0161, "mae_r": 0.4155, "tp1_time_ms": null, "outcome_time_ms": null, "ambiguous_reason": null, "last_price": 1.3576, "coverage_complete": true, "history_start_ms": 1791045900000, "history_end_ms": 1791068400000, "candles_checked": 26, "evaluation_version": 2, "observation_start_ms": 1791045900000, "partial_entry_candle_excluded": false}}, {"key": "v2:setup-v1:EDGEUSDC:SHORT:1791028800000:0.4745", "created_ms": 1791044100001, "signal_candle_ms": 1791043200000, "entry": 0.4732, "stop": 0.48751473811336155, "target": 0.44457052377327694, "result": {"status": "OPEN", "final_r": null, "mfe_r": 0.3912, "mae_r": 0.8523, "tp1_time_ms": null, "outcome_time_ms": null, "ambiguous_reason": null, "last_price": 0.485, "coverage_complete": true, "history_start_ms": 1791044100000, "history_end_ms": 1791068400000, "candles_checked": 28, "evaluation_version": 2, "observation_start_ms": 1791044100000, "partial_entry_candle_excluded": false}}, {"key": "v2:setup-v1:AMDUSDC:LONG:1790942400000:630.97", "created_ms": 1791032400001, "signal_candle_ms": 1791031500000, "entry": 632.4, "stop": 623.1548353732741, "target": 650.8903292534518, "result": {"status": "OPEN", "final_r": null, "mfe_r": 0.3353, "mae_r": 0.1547, "tp1_time_ms": null, "outcome_time_ms": null, "ambiguous_reason": null, "last_price": 634.63, "coverage_complete": true, "history_start_ms": 1791032400000, "history_end_ms": 1791068400000, "candles_checked": 41, "evaluation_version": 2, "observation_start_ms": 1791032400000, "partial_entry_candle_excluded": false}}, {"key": "v2:setup-v1:\u725b\u6765USDC:SHORT:1791014400000:0.08259", "created_ms": 1791028800001, "signal_candle_ms": 1791027900000, "entry": 0.0825, "stop": 0.08655006698357107, "target": 0.07439986603285788, "result": {"status": "OPEN", "final_r": null, "mfe_r": 1.279, "mae_r": 0.1679, "tp1_time_ms": null, "outcome_time_ms": null, "ambiguous_reason": null, "last_price": 0.08023, "coverage_complete": true, "history_start_ms": 1791028800000, "history_end_ms": 1791068400000, "candles_checked": 45, "evaluation_version": 2, "observation_start_ms": 1791028800000, "partial_entry_candle_excluded": false}}, {"key": "v2:setup-v1:LITUSDC:SHORT:1791000000000:3.4759", "created_ms": 1791020700001, "signal_candle_ms": 1791019800000, "entry": 3.4647, "stop": 3.5725091485253513, "target": 3.2490817029492978, "result": {"status": "SL", "final_r": -1.0, "mfe_r": 0.0, "mae_r": 1.0324, "tp1_time_ms": null, "outcome_time_ms": 1791045900000, "ambiguous_reason": null, "last_price": 3.5753, "coverage_complete": true, "history_start_ms": 1791020700000, "history_end_ms": 1791045900000, "candles_checked": 29, "evaluation_version": 2, "observation_start_ms": 1791020700000, "partial_entry_candle_excluded": false}}, {"key": "v2:setup-v1:PENGUSDC:LONG:1790956800000:61.03", "created_ms": 1791020700001, "signal_candle_ms": 1791019800000, "entry": 61.51, "stop": 59.64636373711733, "target": 65.23727252576532, "result": {"status": "OPEN", "final_r": null, "mfe_r": 0.0268, "mae_r": 0.7834, "tp1_time_ms": null, "outcome_time_ms": null, "ambiguous_reason": null, "last_price": 61.35, "coverage_complete": true, "history_start_ms": 1791020700000, "history_end_ms": 1791068400000, "candles_checked": 54, "evaluation_version": 2, "observation_start_ms": 1791020700000, "partial_entry_candle_excluded": false}}, {"key": "v2:setup-v1:BANKUSDC:SHORT:1790956800000:0.02996", "created_ms": 1791018000001, "signal_candle_ms": 1791017100000, "entry": 0.02983, "stop": 0.030533770665522753, "target": 0.02842245866895449, "result": {"status": "OPEN", "final_r": null, "mfe_r": 1.222, "mae_r": 0.1279, "tp1_time_ms": null, "outcome_time_ms": null, "ambiguous_reason": null, "last_price": 0.02943, "coverage_complete": true, "history_start_ms": 1791018000000, "history_end_ms": 1791068400000, "candles_checked": 57, "evaluation_version": 2, "observation_start_ms": 1791018000000, "partial_entry_candle_excluded": false}}, {"key": "v2:setup-v1:AAVEUSDC:LONG:1790913600000:177.82", "created_ms": 1791005400001, "signal_candle_ms": 1791004500000, "entry": 178.71, "stop": 173.27775785060538, "target": 189.57448429878926, "result": {"status": "OPEN", "final_r": null, "mfe_r": 0.8431, "mae_r": 0.151, "tp1_time_ms": null, "outcome_time_ms": null, "ambiguous_reason": null, "last_price": 180.58, "coverage_complete": true, "history_start_ms": 1791005400000, "history_end_ms": 1791068400000, "candles_checked": 71, "evaluation_version": 2, "observation_start_ms": 1791005400000, "partial_entry_candle_excluded": false}}, {"key": "v2:setup-v1:PONSUSDC:SHORT:1790985600000:0.4383", "created_ms": 1791000900001, "signal_candle_ms": 1791000000000, "entry": 0.4319, "stop": 0.46288496107277577, "target": 0.3699300778544485, "result": {"status": "OPEN", "final_r": null, "mfe_r": 0.9811, "mae_r": 0.0452, "tp1_time_ms": null, "outcome_time_ms": null, "ambiguous_reason": null, "last_price": 0.4121, "coverage_complete": true, "history_start_ms": 1791000900000, "history_end_ms": 1791068400000, "candles_checked": 76, "evaluation_version": 2, "observation_start_ms": 1791000900000, "partial_entry_candle_excluded": false}}, {"key": "v2:setup-v1:VELVETUSDC:LONG:1790971200000:0.07432", "created_ms": 1790991000001, "signal_candle_ms": 1790990100000, "entry": 0.07817, "stop": 0.07171896075717986, "target": 0.09107207848564029, "result": {"status": "SL", "final_r": -1.0, "mfe_r": 0.8789, "mae_r": 1.6974, "tp1_time_ms": null, "outcome_time_ms": 1791004500000, "ambiguous_reason": null, "last_price": 0.06979, "coverage_complete": true, "history_start_ms": 1790991000000, "history_end_ms": 1791004500000, "candles_checked": 16, "evaluation_version": 2, "observation_start_ms": 1790991000000, "partial_entry_candle_excluded": false}}, {"key": "v2:setup-v1:PDDUSDC:SHORT:1790942400000:75.77", "created_ms": 1790987400001, "signal_candle_ms": 1790986500000, "entry": 75.69, "stop": 76.69119147434694, "target": 73.68761705130612, "result": {"status": "OPEN", "final_r": null, "mfe_r": 0.4195, "mae_r": 0.2297, "tp1_time_ms": null, "outcome_time_ms": null, "ambiguous_reason": null, "last_price": 75.62, "coverage_complete": true, "history_start_ms": 1790987400000, "history_end_ms": 1791068400000, "candles_checked": 91, "evaluation_version": 2, "observation_start_ms": 1790987400000, "partial_entry_candle_excluded": false}}, {"key": "v2:setup-v1:MRVLUSDC:LONG:1790928000000:273.07", "created_ms": 1790985600001, "signal_candle_ms": 1790984700000, "entry": 273.31, "stop": 269.3025281946332, "target": 281.32494361073356, "result": {"status": "OPEN", "final_r": null, "mfe_r": 0.1323, "mae_r": 0.3643, "tp1_time_ms": null, "outcome_time_ms": null, "ambiguous_reason": null, "last_price": 272.83, "coverage_complete": true, "history_start_ms": 1790985600000, "history_end_ms": 1791068400000, "candles_checked": 93, "evaluation_version": 2, "observation_start_ms": 1790985600000, "partial_entry_candle_excluded": false}}, {"key": "v2:setup-v1:SAMSUNGUSDC:LONG:1790942400000:205.74", "created_ms": 1790984700001, "signal_candle_ms": 1790983800000, "entry": 205.97, "stop": 201.61009333951148, "target": 214.68981332097704, "result": {"status": "OPEN", "final_r": null, "mfe_r": 0.117, "mae_r": 0.3349, "tp1_time_ms": null, "outcome_time_ms": null, "ambiguous_reason": null, "last_price": 205.21, "coverage_complete": true, "history_start_ms": 1790984700000, "history_end_ms": 1791068400000, "candles_checked": 94, "evaluation_version": 2, "observation_start_ms": 1790984700000, "partial_entry_candle_excluded": false}}, {"key": "v2:setup-v1:UBUSDC:SHORT:1790956800000:0.13716", "created_ms": 1790984700001, "signal_candle_ms": 1790983800000, "entry": 0.13647, "stop": 0.1420004371893643, "target": 0.1254091256212714, "result": {"status": "OPEN", "final_r": null, "mfe_r": 0.7504, "mae_r": 0.0922, "tp1_time_ms": null, "outcome_time_ms": null, "ambiguous_reason": null, "last_price": 0.13448, "coverage_complete": true, "history_start_ms": 1790984700000, "history_end_ms": 1791068400000, "candles_checked": 94, "evaluation_version": 2, "observation_start_ms": 1790984700000, "partial_entry_candle_excluded": false}}, {"key": "v2:setup-v1:SKHYUSDC:LONG:1790942400000:193.97", "created_ms": 1790984700001, "signal_candle_ms": 1790983800000, "entry": 194.18, "stop": 190.12263776975863, "target": 202.29472446048277, "result": {"status": "OPEN", "final_r": null, "mfe_r": 0.1282, "mae_r": 0.387, "tp1_time_ms": null, "outcome_time_ms": null, "ambiguous_reason": null, "last_price": 194.4, "coverage_complete": true, "history_start_ms": 1790984700000, "history_end_ms": 1791068400000, "candles_checked": 94, "evaluation_version": 2, "observation_start_ms": 1790984700000, "partial_entry_candle_excluded": false}}, {"key": "v2:setup-v1:PIEVERSEUSDC:SHORT:1790942400000:1.3739", "created_ms": 1790984700001, "signal_candle_ms": 1790983800000, "entry": 1.3699, "stop": 1.40033162792759, "target": 1.3090367441448199, "result": {"status": "OPEN", "final_r": null, "mfe_r": 1.0877, "mae_r": 0.4863, "tp1_time_ms": null, "outcome_time_ms": null, "ambiguous_reason": null, "last_price": 1.3576, "coverage_complete": true, "history_start_ms": 1790984700000, "history_end_ms": 1791068400000, "candles_checked": 94, "evaluation_version": 2, "observation_start_ms": 1790984700000, "partial_entry_candle_excluded": false}}, {"key": "v2:setup-v1:XLVUSDC:SHORT:1790884800000:166.7", "created_ms": 1790984700001, "signal_candle_ms": 1790983800000, "entry": 166.25, "stop": 168.01781217676339, "target": 162.71437564647323, "result": {"status": "OPEN", "final_r": null, "mfe_r": 0.1527, "mae_r": 0.6279, "tp1_time_ms": null, "outcome_time_ms": null, "ambiguous_reason": null, "last_price": 166.46, "coverage_complete": true, "history_start_ms": 1790984700000, "history_end_ms": 1791068400000, "candles_checked": 94, "evaluation_version": 2, "observation_start_ms": 1790984700000, "partial_entry_candle_excluded": false}}, {"key": "v2:setup-v1:SKDDUSDC:SHORT:1790942400000:6.353", "created_ms": 1790984700001, "signal_candle_ms": 1790983800000, "entry": 6.325, "stop": 6.614866102198796, "target": 5.745267795602408, "result": {"status": "OPEN", "final_r": null, "mfe_r": 0.0483, "mae_r": 0.2346, "tp1_time_ms": null, "outcome_time_ms": null, "ambiguous_reason": null, "last_price": 6.324, "coverage_complete": true, "history_start_ms": 1790984700000, "history_end_ms": 1791068400000, "candles_checked": 94, "evaluation_version": 2, "observation_start_ms": 1790984700000, "partial_entry_candle_excluded": false}}]'):
+              assert previous["key"] in indexed_shadow
+              for field in ("created_ms", "signal_candle_ms", "entry", "stop", "target"):
+                  assert indexed_shadow[previous["key"]][field] == previous[field], (previous["key"], field)
+          for row in comparison["latest"]:
+              assert row["group"] in {"both", "current_only", "shadow_only"}
+              for name in ("current", "shadow"):
+                  s = row.get(name)
+                  if s:
+                      r = s.get("result") or {}
+                      if r.get("evaluation_version") == 2 and r.get("history_start_ms") is not None:
+                          assert r["history_start_ms"] >= s["created_ms"] - 1
+          replay = results["replay"]
+          assert replay["dataset"] == "RETROSPECTIVE" and replay["eligible_for_live_promotion"] is False
+          assert replay["provenance"]["workflow_run"] == 37093101900
+          assert replay["coverage"]["requested_markets"] == replay["coverage"]["fetched_markets"] == 182
+          assert replay["coverage"]["failed_markets"] == 0
+          assert replay["comparison"]["shadow"]["resolved"] == 179
+          assert replay["comparison"]["shadow"]["avg_r"] == -0.4469
+          assert replay["comparison"]["shadow"]["profit_factor"] == 0.4521
+          assert replay["manifest"]["parameters"]["min_rr"] == 2
+          assert comparison["shadow"]["resolved"] == shadow["metrics"]["resolved"]
+          assert comparison["shadow"]["signals"] == shadow["metrics"]["setup_tracked"]
+          diagnostics = results["entry_diagnostics"]
+          assert diagnostics["dataset"] == "RETROSPECTIVE" and diagnostics["eligible_for_live_promotion"] is False
+          assert diagnostics["verified_source_files"] == 182 and diagnostics["reconstructed_entries"] == 235
+          assert diagnostics["summary"]["metrics"] == replay["comparison"]["shadow"]
+          chronology = {s["group"]: s for s in diagnostics["summary"]["strata"]["retest_chronology"]}
+          assert chronology["ONLY_BEFORE_BREAKOUT_CLOSE"]["signals"] == 87
+          assert chronology["ONLY_BEFORE_BREAKOUT_CLOSE"]["avg_r"] == -0.7143
+          for rows in diagnostics["summary"]["strata"].values():
+              assert sum(s["signals"] for s in rows) == 235
+              assert sum(s["resolved"] for s in rows) == 179
+          assert diagnostics["protocol"] == "entry_loss_diagnostics_v1"
+          chronology = results["chronology"]
+          assert chronology["dataset"] == "RETROSPECTIVE" and chronology["eligible_for_live_promotion"] is False
+          assert chronology["protocol"] == "post_breakout_retest_comparison_v1"
+          assert chronology["provenance"]["workflow_run"] == 37097545870
+          assert chronology["decision"] == "DO_NOT_ADOPT_PROFITABILITY_HYPOTHESIS"
+          assert [p["role"] for p in chronology["periods"]] == ["EXPLORATORY", "UNINSPECTED_RETROSPECTIVE"]
+          for period, resolved, avg, pf in zip(chronology["periods"], [167,266], [-0.4072,-0.1767], [0.4925,0.7565]):
+              assert period["eligible_for_live_promotion"] is False
+              assert period["comparison"]["automatic_promotion"] is False
+              assert period["comparison"]["shadow"]["resolved"] == resolved
+              assert period["comparison"]["shadow"]["avg_r"] == avg
+              assert period["comparison"]["shadow"]["profit_factor"] == pf
+              assert period["coverage"]["requested_markets"] == period["source_files_verified"] == 182
+              assert period["coverage"]["failed_markets"] == 0
+          metrics = shadow["metrics"]
+          assert metrics["sample_basis"] == "unique_setup_first_entry"
+          assert metrics["legacy_unidentified_signals"] >= 297
+          assert metrics["duplicate_setup_signals"] == 0
+          if metrics["resolved"] < 20:
+              assert not metrics["decision_ready"] and not metrics["promotion_pass"]
+              assert metrics["sample_status"] == "INSUFFICIENT SAMPLE"
+          setup_signals = [s for s in shadow["latest"] if s.get("setup_id")]
+          assert len(set(s["setup_id"] for s in setup_signals)) == len(setup_signals)
+          assert metrics["setup_tracked"] >= 6
+          assert set(["v2:setup-v1:MRVLUSDC:LONG:1790928000000:273.07","v2:setup-v1:SAMSUNGUSDC:LONG:1790942400000:205.74","v2:setup-v1:UBUSDC:SHORT:1790956800000:0.13716","v2:setup-v1:SKHYUSDC:LONG:1790942400000:193.97","v2:setup-v1:PIEVERSEUSDC:SHORT:1790942400000:1.3739","v2:setup-v1:XLVUSDC:SHORT:1790884800000:166.7","v2:setup-v1:SKDDUSDC:SHORT:1790942400000:6.353"]) <= {s["key"] for s in setup_signals}
+          for s in setup_signals:
+              assert s["setup_id"] == setup_identity(dict(s, direction=s["side"]))
+              assert s["key"] == "v2:" + s["setup_id"]
+          for row in results["screener"]["results"]:
+              if row.get("breakout_time_ms"):
+                  assert row["setup_id"] == setup_identity(row)
+          # Confirm the collector/API do not rewrite the original entry for a setup.
+          time.sleep(15)
+          _, again = fetch(("shadow_repeat", paths["shadow"]))
+          indexed = {s["key"]: s for s in again["latest"]}
+          for s in setup_signals:
+              if s["key"] in indexed:
+                  for field in ("created_ms", "signal_candle_ms", "entry", "stop", "target"):
+                      assert s[field] == indexed[s["key"]][field], (s["key"], field)
+          results["shadow_repeat"] = again
+          # Wait for the startup collector's first completed result refresh.
+          tracking = results["tracking"]
+          for _ in range(10):
+              if all((tracking["models"][name]["last_refresh"] or {}).get("finished_ms") for name in ("current", "shadow")):
+                  break
+              time.sleep(10)
+              _, tracking = fetch(("tracking_ready", paths["tracking"]))
+          assert all((tracking["models"][name]["last_refresh"] or {}).get("finished_ms") for name in ("current", "shadow")), tracking
+          assert tracking["interval_ms"] == 900000
+          assert tracking["gap_policy"] == "HOLD_UNTIL_CONTIGUOUS_CANDLES"
+          assert tracking["backfill"]["max_requests_per_model"] == 4
+          assert tracking["backfill"]["max_bars_per_request"] == 256
+          assert tracking["backfill"]["max_pages"] == 1
+          for name, model in tracking["models"].items():
+              total, cohort = model["all_records"], model["setup_cohort"]
+              report = model["last_refresh"]
+              assert total["records"] >= cohort["records"]
+              assert total["pending"] >= cohort["pending"]
+              assert sum(total["quality_counts"].values()) == total["records"]
+              assert len(results["tracking_one"]["models"][name]["setup_cohort"]["pending_items"]) <= 1
+              assert report["status"] in {"OK", "PARTIAL", "ERROR"}
+              assert 0 <= report["backfill_requests"] <= 4
+              assert report["backfill_candles"] <= 4 * 256
+              assert report["backfill_recovered"] <= report["backfill_requests"]
+              assert report["gap_deferred"] <= report["selected"]
+              assert report["finished_ms"] >= report["started_ms"]
+              assert report["evaluated"] + report["missing_contract"] + report["missing_snapshot"] <= report["selected"]
+              assert 0 <= report["advanced"] <= report["evaluated"]
+          tracked = tracking["models"]["shadow"]["setup_cohort"]
+          assert tracked["records"] >= 11
+          assert tracked["overdue"] == 0 and tracked["incomplete_history"] == 0, tracked
+          assert tracked["quality_counts"].get("DATA_ERROR", 0) == 0
+          _, current_shadow = fetch(("shadow_tracking_check", paths["shadow"]))
+          indexed = {s["key"]: s for s in current_shadow["latest"]}
+          advanced_since_baseline = []
+          new_observations_due = False
+          for previous in json.loads('[{"key": "v2:setup-v1:ONUSDC:SHORT:1791028800000:0.10322", "created_ms": 1791062100001, "signal_candle_ms": 1791061200000, "entry": 0.10302, "stop": 0.11203056606300756, "target": 0.08499886787398489, "result": {"status": "OPEN", "final_r": null, "mfe_r": 0.0311, "mae_r": 0.4805, "tp1_time_ms": null, "outcome_time_ms": null, "ambiguous_reason": null, "last_price": 0.10655, "coverage_complete": true, "history_start_ms": 1791062100000, "history_end_ms": 1791068400000, "candles_checked": 8, "evaluation_version": 2, "observation_start_ms": 1791062100000, "partial_entry_candle_excluded": false}}, {"key": "v2:setup-v1:PONSUSDC:SHORT:1791043200000:0.4092", "created_ms": 1791060300001, "signal_candle_ms": 1791059400000, "entry": 0.4071, "stop": 0.4322630493048526, "target": 0.35677390139029486, "result": {"status": "OPEN", "final_r": null, "mfe_r": 0.2225, "mae_r": 0.3775, "tp1_time_ms": null, "outcome_time_ms": null, "ambiguous_reason": null, "last_price": 0.4121, "coverage_complete": true, "history_start_ms": 1791060300000, "history_end_ms": 1791068400000, "candles_checked": 10, "evaluation_version": 2, "observation_start_ms": 1791060300000, "partial_entry_candle_excluded": false}}, {"key": "v2:setup-v1:VSTUSDC:LONG:1791043200000:146.15", "created_ms": 1791058500001, "signal_candle_ms": 1791057600000, "entry": 146.64, "stop": 144.3449203788604, "target": 151.23015924227917, "result": {"status": "OPEN", "final_r": null, "mfe_r": 0.2396, "mae_r": 0.2353, "tp1_time_ms": null, "outcome_time_ms": null, "ambiguous_reason": null, "last_price": 146.77, "coverage_complete": true, "history_start_ms": 1791058500000, "history_end_ms": 1791068400000, "candles_checked": 12, "evaluation_version": 2, "observation_start_ms": 1791058500000, "partial_entry_candle_excluded": false}}, {"key": "v2:setup-v1:EDGEUSDC:SHORT:1791043200000:0.4711", "created_ms": 1791057600001, "signal_candle_ms": 1791056700000, "entry": 0.4681, "stop": 0.48521368638319934, "target": 0.43387262723360137, "result": {"status": "SL", "final_r": -1.0, "mfe_r": 0.0, "mae_r": 1.0109, "tp1_time_ms": null, "outcome_time_ms": 1791068400000, "ambiguous_reason": null, "last_price": 0.485, "coverage_complete": true, "history_start_ms": 1791057600000, "history_end_ms": 1791068400000, "candles_checked": 13, "evaluation_version": 2, "observation_start_ms": 1791057600000, "partial_entry_candle_excluded": false}}, {"key": "v2:setup-v1:BTWUSDC:LONG:1791043200000:1.48646", "created_ms": 1791057600001, "signal_candle_ms": 1791056700000, "entry": 1.5783, "stop": 1.4170548115389856, "target": 1.900790376922029, "result": {"status": "SL", "final_r": -1.0, "mfe_r": 0.1046, "mae_r": 1.6203, "tp1_time_ms": null, "outcome_time_ms": 1791063000000, "ambiguous_reason": null, "last_price": 1.32697, "coverage_complete": true, "history_start_ms": 1791057600000, "history_end_ms": 1791063000000, "candles_checked": 7, "evaluation_version": 2, "observation_start_ms": 1791057600000, "partial_entry_candle_excluded": false}}, {"key": "v2:setup-v1:\u725b\u6765USDC:SHORT:1791043200000:0.08098", "created_ms": 1791057600001, "signal_candle_ms": 1791056700000, "entry": 0.07864, "stop": 0.08543107816440568, "target": 0.06505784367118865, "result": {"status": "OPEN", "final_r": null, "mfe_r": 0.1944, "mae_r": 0.2341, "tp1_time_ms": null, "outcome_time_ms": null, "ambiguous_reason": null, "last_price": 0.08023, "coverage_complete": true, "history_start_ms": 1791057600000, "history_end_ms": 1791068400000, "candles_checked": 13, "evaluation_version": 2, "observation_start_ms": 1791057600000, "partial_entry_candle_excluded": false}}, {"key": "v2:setup-v1:CASHCATUSDC:SHORT:1790971200000:0.15984", "created_ms": 1791050400001, "signal_candle_ms": 1791049500000, "entry": 0.15971, "stop": 0.17205999013727763, "target": 0.1350100197254447, "result": {"status": "OPEN", "final_r": null, "mfe_r": 0.2008, "mae_r": 0.2858, "tp1_time_ms": null, "outcome_time_ms": null, "ambiguous_reason": null, "last_price": 0.1598, "coverage_complete": true, "history_start_ms": 1791050400000, "history_end_ms": 1791068400000, "candles_checked": 21, "evaluation_version": 2, "observation_start_ms": 1791050400000, "partial_entry_candle_excluded": false}}, {"key": "v2:setup-v1:PIEVERSEUSDC:SHORT:1791028800000:1.3426", "created_ms": 1791045900001, "signal_candle_ms": 1791045000000, "entry": 1.341, "stop": 1.3845642045068685, "target": 1.253871590986263, "result": {"status": "OPEN", "final_r": null, "mfe_r": 0.0161, "mae_r": 0.4155, "tp1_time_ms": null, "outcome_time_ms": null, "ambiguous_reason": null, "last_price": 1.3576, "coverage_complete": true, "history_start_ms": 1791045900000, "history_end_ms": 1791068400000, "candles_checked": 26, "evaluation_version": 2, "observation_start_ms": 1791045900000, "partial_entry_candle_excluded": false}}, {"key": "v2:setup-v1:EDGEUSDC:SHORT:1791028800000:0.4745", "created_ms": 1791044100001, "signal_candle_ms": 1791043200000, "entry": 0.4732, "stop": 0.48751473811336155, "target": 0.44457052377327694, "result": {"status": "OPEN", "final_r": null, "mfe_r": 0.3912, "mae_r": 0.8523, "tp1_time_ms": null, "outcome_time_ms": null, "ambiguous_reason": null, "last_price": 0.485, "coverage_complete": true, "history_start_ms": 1791044100000, "history_end_ms": 1791068400000, "candles_checked": 28, "evaluation_version": 2, "observation_start_ms": 1791044100000, "partial_entry_candle_excluded": false}}, {"key": "v2:setup-v1:AMDUSDC:LONG:1790942400000:630.97", "created_ms": 1791032400001, "signal_candle_ms": 1791031500000, "entry": 632.4, "stop": 623.1548353732741, "target": 650.8903292534518, "result": {"status": "OPEN", "final_r": null, "mfe_r": 0.3353, "mae_r": 0.1547, "tp1_time_ms": null, "outcome_time_ms": null, "ambiguous_reason": null, "last_price": 634.63, "coverage_complete": true, "history_start_ms": 1791032400000, "history_end_ms": 1791068400000, "candles_checked": 41, "evaluation_version": 2, "observation_start_ms": 1791032400000, "partial_entry_candle_excluded": false}}, {"key": "v2:setup-v1:\u725b\u6765USDC:SHORT:1791014400000:0.08259", "created_ms": 1791028800001, "signal_candle_ms": 1791027900000, "entry": 0.0825, "stop": 0.08655006698357107, "target": 0.07439986603285788, "result": {"status": "OPEN", "final_r": null, "mfe_r": 1.279, "mae_r": 0.1679, "tp1_time_ms": null, "outcome_time_ms": null, "ambiguous_reason": null, "last_price": 0.08023, "coverage_complete": true, "history_start_ms": 1791028800000, "history_end_ms": 1791068400000, "candles_checked": 45, "evaluation_version": 2, "observation_start_ms": 1791028800000, "partial_entry_candle_excluded": false}}, {"key": "v2:setup-v1:LITUSDC:SHORT:1791000000000:3.4759", "created_ms": 1791020700001, "signal_candle_ms": 1791019800000, "entry": 3.4647, "stop": 3.5725091485253513, "target": 3.2490817029492978, "result": {"status": "SL", "final_r": -1.0, "mfe_r": 0.0, "mae_r": 1.0324, "tp1_time_ms": null, "outcome_time_ms": 1791045900000, "ambiguous_reason": null, "last_price": 3.5753, "coverage_complete": true, "history_start_ms": 1791020700000, "history_end_ms": 1791045900000, "candles_checked": 29, "evaluation_version": 2, "observation_start_ms": 1791020700000, "partial_entry_candle_excluded": false}}, {"key": "v2:setup-v1:PENGUSDC:LONG:1790956800000:61.03", "created_ms": 1791020700001, "signal_candle_ms": 1791019800000, "entry": 61.51, "stop": 59.64636373711733, "target": 65.23727252576532, "result": {"status": "OPEN", "final_r": null, "mfe_r": 0.0268, "mae_r": 0.7834, "tp1_time_ms": null, "outcome_time_ms": null, "ambiguous_reason": null, "last_price": 61.35, "coverage_complete": true, "history_start_ms": 1791020700000, "history_end_ms": 1791068400000, "candles_checked": 54, "evaluation_version": 2, "observation_start_ms": 1791020700000, "partial_entry_candle_excluded": false}}, {"key": "v2:setup-v1:BANKUSDC:SHORT:1790956800000:0.02996", "created_ms": 1791018000001, "signal_candle_ms": 1791017100000, "entry": 0.02983, "stop": 0.030533770665522753, "target": 0.02842245866895449, "result": {"status": "OPEN", "final_r": null, "mfe_r": 1.222, "mae_r": 0.1279, "tp1_time_ms": null, "outcome_time_ms": null, "ambiguous_reason": null, "last_price": 0.02943, "coverage_complete": true, "history_start_ms": 1791018000000, "history_end_ms": 1791068400000, "candles_checked": 57, "evaluation_version": 2, "observation_start_ms": 1791018000000, "partial_entry_candle_excluded": false}}, {"key": "v2:setup-v1:AAVEUSDC:LONG:1790913600000:177.82", "created_ms": 1791005400001, "signal_candle_ms": 1791004500000, "entry": 178.71, "stop": 173.27775785060538, "target": 189.57448429878926, "result": {"status": "OPEN", "final_r": null, "mfe_r": 0.8431, "mae_r": 0.151, "tp1_time_ms": null, "outcome_time_ms": null, "ambiguous_reason": null, "last_price": 180.58, "coverage_complete": true, "history_start_ms": 1791005400000, "history_end_ms": 1791068400000, "candles_checked": 71, "evaluation_version": 2, "observation_start_ms": 1791005400000, "partial_entry_candle_excluded": false}}, {"key": "v2:setup-v1:PONSUSDC:SHORT:1790985600000:0.4383", "created_ms": 1791000900001, "signal_candle_ms": 1791000000000, "entry": 0.4319, "stop": 0.46288496107277577, "target": 0.3699300778544485, "result": {"status": "OPEN", "final_r": null, "mfe_r": 0.9811, "mae_r": 0.0452, "tp1_time_ms": null, "outcome_time_ms": null, "ambiguous_reason": null, "last_price": 0.4121, "coverage_complete": true, "history_start_ms": 1791000900000, "history_end_ms": 1791068400000, "candles_checked": 76, "evaluation_version": 2, "observation_start_ms": 1791000900000, "partial_entry_candle_excluded": false}}, {"key": "v2:setup-v1:VELVETUSDC:LONG:1790971200000:0.07432", "created_ms": 1790991000001, "signal_candle_ms": 1790990100000, "entry": 0.07817, "stop": 0.07171896075717986, "target": 0.09107207848564029, "result": {"status": "SL", "final_r": -1.0, "mfe_r": 0.8789, "mae_r": 1.6974, "tp1_time_ms": null, "outcome_time_ms": 1791004500000, "ambiguous_reason": null, "last_price": 0.06979, "coverage_complete": true, "history_start_ms": 1790991000000, "history_end_ms": 1791004500000, "candles_checked": 16, "evaluation_version": 2, "observation_start_ms": 1790991000000, "partial_entry_candle_excluded": false}}, {"key": "v2:setup-v1:PDDUSDC:SHORT:1790942400000:75.77", "created_ms": 1790987400001, "signal_candle_ms": 1790986500000, "entry": 75.69, "stop": 76.69119147434694, "target": 73.68761705130612, "result": {"status": "OPEN", "final_r": null, "mfe_r": 0.4195, "mae_r": 0.2297, "tp1_time_ms": null, "outcome_time_ms": null, "ambiguous_reason": null, "last_price": 75.62, "coverage_complete": true, "history_start_ms": 1790987400000, "history_end_ms": 1791068400000, "candles_checked": 91, "evaluation_version": 2, "observation_start_ms": 1790987400000, "partial_entry_candle_excluded": false}}, {"key": "v2:setup-v1:MRVLUSDC:LONG:1790928000000:273.07", "created_ms": 1790985600001, "signal_candle_ms": 1790984700000, "entry": 273.31, "stop": 269.3025281946332, "target": 281.32494361073356, "result": {"status": "OPEN", "final_r": null, "mfe_r": 0.1323, "mae_r": 0.3643, "tp1_time_ms": null, "outcome_time_ms": null, "ambiguous_reason": null, "last_price": 272.83, "coverage_complete": true, "history_start_ms": 1790985600000, "history_end_ms": 1791068400000, "candles_checked": 93, "evaluation_version": 2, "observation_start_ms": 1790985600000, "partial_entry_candle_excluded": false}}, {"key": "v2:setup-v1:SAMSUNGUSDC:LONG:1790942400000:205.74", "created_ms": 1790984700001, "signal_candle_ms": 1790983800000, "entry": 205.97, "stop": 201.61009333951148, "target": 214.68981332097704, "result": {"status": "OPEN", "final_r": null, "mfe_r": 0.117, "mae_r": 0.3349, "tp1_time_ms": null, "outcome_time_ms": null, "ambiguous_reason": null, "last_price": 205.21, "coverage_complete": true, "history_start_ms": 1790984700000, "history_end_ms": 1791068400000, "candles_checked": 94, "evaluation_version": 2, "observation_start_ms": 1790984700000, "partial_entry_candle_excluded": false}}, {"key": "v2:setup-v1:UBUSDC:SHORT:1790956800000:0.13716", "created_ms": 1790984700001, "signal_candle_ms": 1790983800000, "entry": 0.13647, "stop": 0.1420004371893643, "target": 0.1254091256212714, "result": {"status": "OPEN", "final_r": null, "mfe_r": 0.7504, "mae_r": 0.0922, "tp1_time_ms": null, "outcome_time_ms": null, "ambiguous_reason": null, "last_price": 0.13448, "coverage_complete": true, "history_start_ms": 1790984700000, "history_end_ms": 1791068400000, "candles_checked": 94, "evaluation_version": 2, "observation_start_ms": 1790984700000, "partial_entry_candle_excluded": false}}, {"key": "v2:setup-v1:SKHYUSDC:LONG:1790942400000:193.97", "created_ms": 1790984700001, "signal_candle_ms": 1790983800000, "entry": 194.18, "stop": 190.12263776975863, "target": 202.29472446048277, "result": {"status": "OPEN", "final_r": null, "mfe_r": 0.1282, "mae_r": 0.387, "tp1_time_ms": null, "outcome_time_ms": null, "ambiguous_reason": null, "last_price": 194.4, "coverage_complete": true, "history_start_ms": 1790984700000, "history_end_ms": 1791068400000, "candles_checked": 94, "evaluation_version": 2, "observation_start_ms": 1790984700000, "partial_entry_candle_excluded": false}}, {"key": "v2:setup-v1:PIEVERSEUSDC:SHORT:1790942400000:1.3739", "created_ms": 1790984700001, "signal_candle_ms": 1790983800000, "entry": 1.3699, "stop": 1.40033162792759, "target": 1.3090367441448199, "result": {"status": "OPEN", "final_r": null, "mfe_r": 1.0877, "mae_r": 0.4863, "tp1_time_ms": null, "outcome_time_ms": null, "ambiguous_reason": null, "last_price": 1.3576, "coverage_complete": true, "history_start_ms": 1790984700000, "history_end_ms": 1791068400000, "candles_checked": 94, "evaluation_version": 2, "observation_start_ms": 1790984700000, "partial_entry_candle_excluded": false}}, {"key": "v2:setup-v1:XLVUSDC:SHORT:1790884800000:166.7", "created_ms": 1790984700001, "signal_candle_ms": 1790983800000, "entry": 166.25, "stop": 168.01781217676339, "target": 162.71437564647323, "result": {"status": "OPEN", "final_r": null, "mfe_r": 0.1527, "mae_r": 0.6279, "tp1_time_ms": null, "outcome_time_ms": null, "ambiguous_reason": null, "last_price": 166.46, "coverage_complete": true, "history_start_ms": 1790984700000, "history_end_ms": 1791068400000, "candles_checked": 94, "evaluation_version": 2, "observation_start_ms": 1790984700000, "partial_entry_candle_excluded": false}}, {"key": "v2:setup-v1:SKDDUSDC:SHORT:1790942400000:6.353", "created_ms": 1790984700001, "signal_candle_ms": 1790983800000, "entry": 6.325, "stop": 6.614866102198796, "target": 5.745267795602408, "result": {"status": "OPEN", "final_r": null, "mfe_r": 0.0483, "mae_r": 0.2346, "tp1_time_ms": null, "outcome_time_ms": null, "ambiguous_reason": null, "last_price": 6.324, "coverage_complete": true, "history_start_ms": 1790984700000, "history_end_ms": 1791068400000, "candles_checked": 94, "evaluation_version": 2, "observation_start_ms": 1790984700000, "partial_entry_candle_excluded": false}}]'):
+              s = indexed[previous["key"]]
+              for field in ("created_ms", "signal_candle_ms", "entry", "stop", "target"):
+                  assert s[field] == previous[field], (previous["key"], field)
+              prior, result = previous["result"], s.get("result") or {}
+              if prior["status"] not in {"TP", "SL", "AMBIGUOUS"}:
+                  new_observations_due |= tracking["time_ms"] >= prior["history_end_ms"] + 3 * tracking["interval_ms"]
+              assert result.get("evaluation_version") == 2 and result.get("coverage_complete") is True
+              assert result["history_end_ms"] >= prior["history_end_ms"]
+              assert result["candles_checked"] >= prior["candles_checked"]
+              if result["history_end_ms"] > prior["history_end_ms"]:
+                  advanced_since_baseline.append({"ticker": s["ticker"], "prior_end_ms": prior["history_end_ms"], "history_end_ms": result["history_end_ms"], "candles_checked": result["candles_checked"], "status": result["status"]})
+          assert advanced_since_baseline or not new_observations_due, "No progress despite 2+ newly closed bars since baseline"
+          review = results["review"]["review"]
+          screener = results["screener"]
+          stages = screener["summary"]["stage_counts"]
+          funnel = {
+              "scanned": screener["scanned"],
+              "stages": stages,
+              "confirmed_after_retest": review["confirmed_after_retest"],
+              "current_ready": review["current"]["ready_count"],
+              "shadow_v2_ready": review["proposed_v2"]["ready_count"],
+              "shadow_metrics": shadow["metrics"],
+          }
+          blocked = [
+              {k: r.get(k) for k in ("ticker", "stage", "rr", "reason", "shadow_v2_ready", "shadow_v2_room_rr")}
+              for r in screener["results"]
+              if r.get("retest_touched") and r.get("confirmed")
+          ]
+          pullback = results["pullback"]
+          assert pullback["dataset"] == "RETROSPECTIVE"
+          assert pullback["eligible_for_live_promotion"] is False
+          assert pullback["automatic_promotion"] is False
+          assert pullback["decision"] == "KILL"
+          assert [p["role"] for p in pullback["periods"]] == ["REUSED_DEVELOPMENT_HISTORY", "NEW_HISTORICAL_VALIDATION"]
+          import hashlib
+          local_pullback = json.loads(Path("analysis_terminal/pullback_latest.json").read_text())
+          assert pullback == local_pullback
+          assert all(p["eligible_for_live_promotion"] is False and p["automatic_promotion"] is False for p in pullback["periods"])
+          audit = results["outcome_audit"]
+          assert audit == json.loads(Path("analysis_terminal/outcome_audit_latest.json").read_text())
+          assert audit["dataset"] == "LIVE_RECORD_RECONCILIATION"
+          assert all(audit[k] is False for k in ("eligible_for_live_promotion", "automatic_promotion", "changes_live_results"))
+          assert audit["outcome"] == "MATCH"
+          assert audit["models"]["current"]["summary"]["matched"] == 1
+          assert audit["models"]["shadow"]["summary"]["matched"] == 25
+          assert results["shadow_one"]["metrics"] == shadow["metrics"]
+          assert len(results["shadow_one"]["latest"]) == 1
+          assert shadow["metrics"]["unverified_results_basis"] == "all_records_including_legacy"
+          assert shadow["metrics"]["setup_unverified_results"] == comparison["shadow"]["unverified_results"]
+          assert shadow["metrics"]["legacy_unverified_results"] == 13
+          assert shadow["metrics"]["legacy_unidentified_signals"] == 297
+          assert shadow["metrics"]["setup_tracked"] == comparison["shadow"]["signals"]
+          report = {"checked_at_utc": datetime.now(timezone.utc).isoformat(),
+                    "http_200": list(paths), "health": health, "funnel": funnel,
+                    "confirmed_candidates": blocked,
+                    "setup_signals": [{k: s.get(k) for k in ("key", "setup_id", "ticker", "side", "entry", "created_ms")} for s in setup_signals],
+                    "repeat_shadow_metrics": again["metrics"],
+                    "outcome_tracking": tracking,
+                    "tracking_advanced_since_baseline": advanced_since_baseline,
+                    "tracking_new_observations_due": new_observations_due,
+                    "entry_diagnostics": diagnostics,
+                    "chronology_review": chronology,
+                    "pullback_review": results["pullback"],
+                    "outcome_audit": results["outcome_audit"],
+                    "retrospective": {k: replay[k] for k in ("dataset", "eligible_for_live_promotion", "coverage", "comparison", "provenance")},
+                    "strategy_comparison": {k: comparison[k] for k in ("current", "shadow", "exclusions", "groups", "paired")},
+                    "setup_lifecycle_counts": lifecycle["status_counts"],
+                    "setup_market_observed": sum(s["market_observed_ms"] is not None for s in setups.values()),
+                    "ended_with_open_trade": [{k: s.get(k) for k in ("ticker", "setup_id", "status", "end_reason", "ended_ms", "shadow_trade")} for s in setups.values() if s["status"] in {"EXPIRED", "INVALIDATED"} and ((s.get("shadow_trade") or {}).get("result") or {}).get("status") == "OPEN"]}
+          (output / "report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2))
+          print("LIVE_AUDIT_REPORT=" + json.dumps(report, ensure_ascii=False))
+          PY
+      - name: JavaScript syntax on the actual production HTML
+        run: |
+          node - <<'JS'
+          const fs = require('fs');
+          const html = fs.readFileSync('audit-output/index.html', 'utf8');
+          const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)];
+          if (!scripts.length) throw new Error('Missing script');
+          for (const script of scripts) new Function(script[1]);
+          console.log('Production JavaScript syntax: OK');
+          JS
+      - name: Entry freshness regression on the actual production HTML
+        run: node analysis_terminal/test_entry_freshness.js audit-output/index.html
+      - name: Foreground entry-only regression on actual production HTML
+        run: node analysis_terminal/test_notifications.js audit-output/index.html
+      - name: Comparison rendering on actual production HTML
+        run: |
+          cp audit-output/index.html analysis_terminal/index.html
+          python -m unittest analysis_terminal.test_comparison.ComparisonUITests analysis_terminal.test_tracking.TrackingUITests analysis_terminal.test_replay_review.ReplayReviewUITests analysis_terminal.test_entry_diagnostics.EntryDiagnosticsUITests analysis_terminal.test_chronology_review.ChronologyReviewUITests analysis_terminal.test_pullback_review.PullbackReviewUITests analysis_terminal.test_outcome_audit_review.OutcomeQualityUITests analysis_terminal.test_readiness_history.ReadinessHistoryUITests -v
+          node - <<'JS'
+          const fs=require('fs'),assert=require('assert');
+          const html=fs.readFileSync('audit-output/index.html','utf8'),j=JSON.parse(fs.readFileSync('audit-output/comparison.json','utf8'));
+          const elements={};['Summary','Status','Metrics','Notes','Body'].forEach(x=>elements['strategyComparison'+x]={innerHTML:'',textContent:''});
+          const document={getElementById:id=>elements[id]};
+          const fmt=(v,d)=>Number(v).toFixed(d),card=(k,v)=>k+':'+v,directionJa=x=>x,resultJa=x=>x;
+          eval(html.slice(html.indexOf('function renderStrategyComparison('),html.indexOf('function lifecycleReason(')));
+          renderStrategyComparison(j);
+          assert(elements.strategyComparisonSummary.innerHTML.includes('Shadowのみ:'+j.groups.shadow_only.setups));
+          assert(elements.strategyComparisonStatus.textContent.includes(j.shadow.sample_status));
+          assert(elements.strategyComparisonMetrics.innerHTML.includes('全体 / 現行'));
+          assert(elements.strategyComparisonBody.innerHTML.includes(j.latest[0].ticker));
+          console.log('Live comparison payload/render: OK');
+          JS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: edgex-terminal-v19-0-15-audit
+          path: audit-output/
+          retention-days: 7
