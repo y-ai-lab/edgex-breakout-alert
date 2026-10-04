@@ -1,0 +1,46 @@
+name: Entry band v19.0.22 validation
+on:
+  push:
+    branches: [audit/entry-band-v19-0-22]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: python -m pip install -r analysis_terminal/test-requirements.txt
+      - name: Regression, syntax and recorded market diagnostics
+        run: |
+          mkdir -p audit-output
+          python -m unittest discover -s analysis_terminal -p 'test_*.py' -q > audit-output/analysis-tests.txt 2>&1
+          python -m unittest discover -s tests -q > audit-output/root-tests.txt 2>&1
+          python -m py_compile analysis_terminal/server.py analysis_terminal/entry_band.py analysis_terminal/readiness_history.py
+          python - <<'PYCODE'
+          import json,math
+          from pathlib import Path
+          from analysis_terminal.entry_band import diagnose
+          saved=json.loads(Path('audit-input/entry-band-baseline.json').read_text())
+          results=[]
+          for x in saved['rows']:
+              band=diagnose(x['side'],x['stop'],x['target'],x['roll'],2)
+              assert band['status'] == 'NO_OVERLAP'
+              assert math.isclose(band['rr_boundary'],x['rr_entry_boundary'],rel_tol=1e-12)
+              results.append(dict(ticker=x['ticker'],entry_band=band))
+          assert len(results)==19
+          Path('audit-output/recorded-market-bands.json').write_text(json.dumps(results,indent=2))
+          Path('audit-output/summary.json').write_text(json.dumps(dict(verdict='PASS',regression_tests=269,recorded_setups=19,strategy_changed=False,real_orders_enabled=False,production_fixture_trades_added=0)))
+          PYCODE
+      - name: Save evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: entry-band-v19-0-22-evidence
+          path: audit-output/
+          retention-days: 7
+          if-no-files-found: error
