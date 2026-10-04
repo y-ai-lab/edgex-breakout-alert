@@ -1,0 +1,117 @@
+{
+  "dataset": "RETROSPECTIVE_EXECUTION_CHECK",
+  "eligible_for_live_promotion": false,
+  "automatic_promotion": false,
+  "changes_live_results": false,
+  "real_orders_enabled": false,
+  "verdict": "PASS",
+  "source_sha256": "72af6b072eb06c38dc3beb48fbc6744cfadc6dadcf9eb9a1235b4cdce09e80a9",
+  "engine_sha256": "e36555b204c4d7cbaa85af61b0908fcdd60912af256a03ce15f25430a60f4557",
+  "sample_basis": "one recorded CURRENT READY reused in execution-control scenarios; not independent trades",
+  "unique_recorded_ready": 1,
+  "ticker": "VELVETUSDC",
+  "public_bars": 17,
+  "assumptions": [
+    "Detection time is signal close + 1ms; actual first observer time was not stored.",
+    "Quantity rules are public metadata at capture time, not certified historical rules.",
+    "Replays stored current READY; does not reconstruct or validate the entry strategy.",
+    "Public REST history can be revised; preserved artifact provides a reproducible snapshot.",
+    "Not a production order, performance sample, or live promotion evidence."
+  ],
+  "cold_start_baselined": true,
+  "checks": {
+    "nominal": {
+      "backend": "PRODUCTION_ENGINE",
+      "status": "SL",
+      "net_pnl_usdc": -57.75416082454083,
+      "resolved": 1
+    },
+    "missing_bar_recovery": {
+      "backend": "PRODUCTION_ENGINE",
+      "status": "SL",
+      "net_pnl_usdc": -57.75416082454083,
+      "resolved": 1
+    },
+    "detected_30s": {
+      "backend": "PRODUCTION_ENGINE",
+      "status": "SL",
+      "net_pnl_usdc": -57.75416082454083,
+      "resolved": 1
+    },
+    "detected_119999ms": {
+      "backend": "PRODUCTION_ENGINE",
+      "status": "SL",
+      "net_pnl_usdc": -57.75416082454083,
+      "resolved": 1
+    },
+    "stale_120s_rejected": {
+      "backend": "PRODUCTION_ENGINE",
+      "status": "REJECTED",
+      "net_pnl_usdc": 0,
+      "resolved": 0
+    },
+    "server_hook_and_api": {
+      "backend": "SERVER_COLLECTOR_HOOK_AND_API",
+      "status": "SL",
+      "net_pnl_usdc": -57.75416082454083,
+      "resolved": 1
+    }
+  },
+  "nominal_order": {
+    "order_id": "current:setup-v1:VELVETUSDC:LONG:1790971200000:0.07432",
+    "setup_id": "setup-v1:VELVETUSDC:LONG:1790971200000:0.07432",
+    "ticker": "VELVETUSDC",
+    "side": "LONG",
+    "contract_id": "30000085",
+    "created_ms": 1790991000001,
+    "status": "SL",
+    "reason": null,
+    "quality": "TRACKING",
+    "source_candle_ms": 1790990100000,
+    "source_entry": 0.07817,
+    "stop": 0.07171896075717986,
+    "target": 0.09371948037858993,
+    "step_size": 1.0,
+    "min_order_size": 500.0,
+    "quantity": 10000.0,
+    "reserved_risk_usdc": 57.754160824540826,
+    "reserved_notional_usdc": 774.05478,
+    "execute_ms": 1790991900000,
+    "expires_ms": 1790992800001,
+    "fill_price": 0.077405478,
+    "fill_rr": 2.8688917455034835,
+    "filled_ms": 1790991900000,
+    "fill_observed_ms": 1790991900001,
+    "entry_fee_usdc": 0.38702739,
+    "price_risk_usdc": 56.86517242820141,
+    "next_candle_ms": 1791005400000,
+    "mfe_r": 1.1315400490738503,
+    "mae_r": 1.7911627741673155,
+    "last_closed_candle_ms": 1791004500000,
+    "last_price": 0.06979,
+    "exit_candle_ms": 1791004500000,
+    "outcome_observed_ms": 1791005400001,
+    "exit_price": 0.07170461696502843,
+    "gross_pnl_usdc": -57.00861034971569,
+    "exit_fee_usdc": 0.35852308482514217,
+    "net_pnl_usdc": -57.75416082454083,
+    "net_r": -1.0000000000000002
+  },
+  "independent_decimal": {
+    "quantity": 10000.0,
+    "fill_price": 0.077405478,
+    "filled_ms": 1790991900000,
+    "fill_rr": 2.868891745503484,
+    "entry_fee_usdc": 0.38702739,
+    "reserved_risk_usdc": 57.754160824540904,
+    "status": "SL",
+    "exit_candle_ms": 1791004500000,
+    "exit_price": 0.07170461696502843,
+    "gross_pnl_usdc": -57.00861034971576,
+    "exit_fee_usdc": 0.3585230848251421,
+    "net_pnl_usdc": -57.754160824540904,
+    "net_r": -1.0,
+    "final_cash_usdc": 9942.245839175459
+  },
+  "validation_samples_added_to_production": 0
+}
