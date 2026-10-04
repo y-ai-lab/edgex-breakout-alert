@@ -29,6 +29,8 @@
 
 既存collectorの公開WSキャッシュを利用する。履歴回復は公開RESTのfetch_historyだけを1周期最大2要求・各256足に制限。復旧取得は未処理カーソル以降で、実注文APIを呼ばない。エラーは模擬口座を停止し、既存collector・通知の処理を継続する。
 
+v19.0.19では、模擬建玉の履歴回復に渡す公開HTTP callableをCLIENT._get_json_syncへ修正した。クライアント本体を渡すとTypeErrorになり、HISTORY_GAPを公開履歴で回復できなかった。実履歴アダプターを通す回帰テストを追加し、記録済みREADYと公開足の欠測からSLまで復旧すること、不正価格種別・取得失敗ではカーソルと現金を保持することを確認する。上限・期限・足の範囲・戦略条件は変更していない。
+
 GET /api/paper-execution?limit=50 は読取専用。表示件数が集計母集団を変えない。画面はAPIタブ。PAPER ONLY、コスト仮定、試験モデルの制約を常時表示。
 
 ## 観測イベント履歴（v19.0.18）
@@ -58,4 +60,4 @@ python -m analysis_terminal.paper_execution_control resume --db /data/analysis_t
 
 日次現金変化は仮想約定足開始のentry feeと、出口判定足確定時のgross PnL−exit feeをJST日付へ割り当てる。15M足内の正確な出口時刻は推測しない。MFE/MAEは終端足のOHLC範囲を含む境界値で、約定直前・直後の足内順序を再現した値ではない。
 
-検証: python -m unittest analysis_terminal.test_paper_execution analysis_terminal.test_paper_execution_events -v。模擬執行を通して実注文への安全性や収益性が証明されたことにはならない。
+検証: python -m unittest analysis_terminal.test_paper_execution analysis_terminal.test_paper_execution_events analysis_terminal.test_paper_history_recovery -v。模擬執行を通して実注文への安全性や収益性が証明されたことにはならない。

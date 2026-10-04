@@ -3807,7 +3807,7 @@ async def _recover_simulation_history(contracts):
         try:
             start = o["next_candle_ms"]
             end = min(now_ms//900000*900000,start+256*900000)
-            history = await fetch_history(CLIENT,contract,SETTINGS.entry_interval,start,end,size=256,max_pages=1)
+            history = await fetch_history(CLIENT._get_json_sync,contract,SETTINGS.entry_interval,start,end,size=256,max_pages=1)
             # Read-only public history is scoped to the unresolved cursor, never a past entry.
             _simulation_cycle(contracts,[],{o["ticker"]:history})
         except Exception as exc:
@@ -3866,7 +3866,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="EdgeX Analysis Terminal",
-    version="19.0.18",
+    version="19.0.19",
     lifespan=lifespan,
 )
 
