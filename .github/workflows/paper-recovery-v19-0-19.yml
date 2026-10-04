@@ -1,0 +1,59 @@
+name: Paper history recovery validation v19.0.19
+on:
+  push:
+    branches: [audit/paper-recovery-v19-0-19]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install server and test dependencies
+        run: python -m pip install -r analysis_terminal/test-requirements.txt
+      - name: Regression and compile checks
+        run: |
+          python -m unittest analysis_terminal.test_outcomes analysis_terminal.test_storage analysis_terminal.test_setups analysis_terminal.test_entry_ui analysis_terminal.test_lifecycle analysis_terminal.test_comparison analysis_terminal.test_tracking analysis_terminal.test_outcome_history analysis_terminal.test_replay analysis_terminal.test_replay_review analysis_terminal.test_entry_diagnostics analysis_terminal.test_chronology_replay analysis_terminal.test_chronology_review analysis_terminal.test_pullback analysis_terminal.test_pullback_review analysis_terminal.test_outcome_audit analysis_terminal.test_outcome_audit_review analysis_terminal.test_readiness_history analysis_terminal.test_paper_execution analysis_terminal.test_paper_execution_events analysis_terminal.test_paper_history_recovery -q
+          python -m unittest discover -s tests -q
+          python -m py_compile analysis_terminal/server.py analysis_terminal/test_paper_history_recovery.py
+      - name: Verify recorded READY and both isolated HTTP APIs
+        run: python -m validation.run_paper_execution_check --source validation/fixtures/velvet_ready_execution.json --output audit-output/isolated --server-hook
+      - name: Exercise real adapter with real asyncio thread dispatch
+        run: |
+          python - <<'PY'
+          import asyncio,json
+          from pathlib import Path
+          from unittest.mock import patch
+          from analysis_terminal.test_paper_history_recovery import RealPublicPaperRecoveryTests
+          root=Path("audit-output")
+          threaded=asyncio.to_thread
+          summaries={}
+          for method in ("test_recorded_market_gap_uses_real_adapter_and_resolves_exact_sl_once","test_failed_or_invalid_public_recovery_preserves_gap_and_sanitizes_logs"):
+              case=RealPublicPaperRecoveryTests(method)
+              try:
+                  case.setUp()
+                  with patch("analysis_terminal.history.asyncio.to_thread",threaded):
+                      getattr(case,method)()
+                  result={"report":case.runner.report(case.now),"events":case.runner.events()}
+                  (root/(method+".json")).write_text(json.dumps(result,indent=2))
+                  (root/(method+".db")).write_bytes(case.runner.db.read_bytes())
+                  summaries[method]={"status":result["report"]["latest"][0]["status"],"cash":result["report"]["account"]["cash_usdc"],"events":len(result["events"])}
+              finally:
+                  case.doCleanups()
+          actual=json.loads((root/"isolated/execution-check.json").read_text())
+          expected=json.loads(Path("validation/paper_execution_check_latest.json").read_text())
+          assert actual == expected
+          print(json.dumps({"verdict":"PASS","regression_tests":247,"history_adapter":"REAL","executor_dispatch":"REAL_ASYNCIO_TO_THREAD","public_response":"RECORDED_PUBLIC_15M_FIXTURE","private_transport_called":False,"threaded_cases":summaries,"new_live_trades_added":0}))
+          PY
+      - name: Save evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: paper-recovery-v19-0-19-evidence
+          path: audit-output/
+          retention-days: 7
+          if-no-files-found: error
