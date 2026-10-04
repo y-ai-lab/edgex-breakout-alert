@@ -3866,7 +3866,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="EdgeX Analysis Terminal",
-    version="19.0.17",
+    version="19.0.18",
     lifespan=lifespan,
 )
 
@@ -4292,6 +4292,17 @@ async def paper_execution_api(limit: int = Query(default=50, ge=1, le=200)):
     with _db_connect() as conn:
         conn.execute("BEGIN")
         return paper_execution.report(conn,now_ms=int(time.time()*1000),limit=limit)
+
+
+@app.get("/api/paper-execution/events")
+async def paper_execution_events_api(
+    after_id: int = Query(default=0, ge=0),
+    order_id: str | None = Query(default=None, min_length=1, max_length=256),
+    limit: int = Query(default=50, ge=1, le=200),
+):
+    with _db_connect() as conn:
+        conn.execute("BEGIN")
+        return paper_execution.event_report(conn,after_id=after_id,order_id=order_id,limit=limit)
 
 
 @app.get("/api/readiness-history")

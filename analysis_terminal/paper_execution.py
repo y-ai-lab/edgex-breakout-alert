@@ -43,11 +43,37 @@ def outstanding_risk(order):
     return max(0.0,order["reserved_risk_usdc"]-order.get("entry_fee_usdc",0))
 
 
-def _write(conn, order, now_ms):
+def _append_event(conn, order, now_ms, *, origin, previous=None):
+    """Persist observed transitions; market time never replaces observation time."""
+    market_ms = None
+    if order["status"] == "OPEN":
+        market_ms = order.get("filled_ms")
+    elif order["status"] in {"TP", "SL", "AMBIGUOUS"}:
+        candle_ms = order.get("exit_candle_ms")
+        market_ms = candle_ms + STEP if candle_ms is not None else None
+    event = dict(order_id=order["order_id"], setup_id=order["setup_id"],
+                 ticker=order["ticker"], status=order["status"],
+                 quality=order.get("quality"), reason=order.get("reason"),
+                 previous_status=previous.get("status") if previous else None,
+                 previous_quality=previous.get("quality") if previous else None,
+                 observed_ms=now_ms, market_ms=market_ms, origin=origin,
+                 order=dict(order))
+    conn.execute("""INSERT INTO simulated_order_events
+        (order_id,setup_id,status,observed_ms,origin,payload) VALUES(?,?,?,?,?,?)""",
+        (order["order_id"], order["setup_id"], order["status"], now_ms, origin,
+         json.dumps(event, separators=(",", ":"))))
+
+
+def _write(conn, order, now_ms, *, origin="LIVE_CYCLE"):
+    saved = conn.execute("SELECT payload FROM simulated_orders WHERE order_id=?",
+                         (order["order_id"],)).fetchone()
+    previous = json.loads(saved[0]) if saved else None
     conn.execute("""INSERT INTO simulated_orders(order_id,payload,created_ms,updated_ms)
         VALUES(?,?,?,?) ON CONFLICT(order_id) DO UPDATE SET
         payload=excluded.payload, updated_ms=excluded.updated_ms""",
         (order["order_id"], json.dumps(order, separators=(",", ":")), order["created_ms"], now_ms))
+    if previous is None or any(previous.get(k) != order.get(k) for k in ("status", "quality", "reason")):
+        _append_event(conn, order, now_ms, origin=origin, previous=previous)
 
 
 def orders(conn):
@@ -68,16 +94,35 @@ def initialize(conn, *, now_ms, previous_signals, min_rr):
         order_id TEXT PRIMARY KEY, payload TEXT NOT NULL,
         created_ms INTEGER NOT NULL, updated_ms INTEGER NOT NULL)""")
     conn.execute("CREATE TABLE IF NOT EXISTS simulated_account(id INTEGER PRIMARY KEY CHECK(id=1),payload TEXT NOT NULL)")
+    conn.execute("""CREATE TABLE IF NOT EXISTS simulated_order_events(
+        id INTEGER PRIMARY KEY AUTOINCREMENT, order_id TEXT NOT NULL,
+        setup_id TEXT NOT NULL, status TEXT NOT NULL, observed_ms INTEGER NOT NULL,
+        origin TEXT NOT NULL, payload TEXT NOT NULL,
+        FOREIGN KEY(order_id) REFERENCES simulated_orders(order_id))""")
+    conn.execute("""CREATE INDEX IF NOT EXISTS simulated_order_event_order
+        ON simulated_order_events(order_id,id)""")
     state = dict(mode="PAPER_ONLY", policy=dict(POLICY, min_rr=float(min_rr)),
                  activated_ms=now_ms, paused=False, pause_reason=None, pause_ms=None,
-                 last_cycle_ms=None, last_error=None)
+                 last_cycle_ms=None, last_error=None, event_tracking_started_ms=now_ms)
     new = conn.execute("INSERT OR IGNORE INTO simulated_account VALUES(1,?)", (json.dumps(state),)).rowcount
     if new:
         for s in previous_signals:
             identity = setup_identity(dict(s, direction=s.get("side")))
             if identity is not None and s.get("setup_id") == identity:
                 _write(conn, dict(order_id="current:"+identity, setup_id=identity, ticker=s["ticker"],
-                                  created_ms=now_ms, status="BASELINED", reason="PRE_EXISTING_SIGNAL"), now_ms)
+                                  created_ms=now_ms, status="BASELINED", reason="PRE_EXISTING_SIGNAL"),
+                       now_ms, origin="ACTIVATION_BASELINE")
+    else:
+        state = account(conn)
+        if "event_tracking_started_ms" not in state:
+            state["event_tracking_started_ms"] = now_ms
+            _save_account(conn, state)
+        # An old ledger gives only its current state, not an observed transition history.
+        # Import it once, at migration time, without inventing past PENDING/OPEN events.
+        for o in orders(conn):
+            if conn.execute("SELECT 1 FROM simulated_order_events WHERE order_id=? LIMIT 1",
+                            (o["order_id"],)).fetchone() is None:
+                _append_event(conn, o, now_ms, origin="MIGRATION_SNAPSHOT")
 
 
 def cash_view(state, items, now_ms):
@@ -163,7 +208,7 @@ def _evaluate(order, candle, policy, now_ms):
                  net_pnl_usdc=net,net_r=net/order["reserved_risk_usdc"],reason=None)
 
 
-def _advance(order, candles, state, now_ms):
+def _advance(conn, order, candles, state, now_ms):
     if order["status"] not in {"PENDING","OPEN"}:
         return
     policy = state["policy"]
@@ -194,6 +239,9 @@ def _advance(order, candles, state, now_ms):
             order["quality"] = "WAITING_OPEN" if now_ms < order["execute_ms"] else "MISSING_FILL_CANDLE"
             return
         _fill(order,c,policy,now_ms)
+        # A delayed observation can fill and settle in the same cycle. Preserve OPEN
+        # before evaluating any closed foot; both writes share the caller's transaction.
+        _write(conn,order,now_ms)
     if order["status"] != "OPEN":
         return
     while order["next_candle_ms"]+STEP <= now_ms:
@@ -276,7 +324,7 @@ def cycle(conn, *, rows, candles_by_ticker, now_ms, snapshot_age_ms):
     """Caller holds BEGIN IMMEDIATE; account and orders commit atomically."""
     state, items = account(conn), orders(conn)
     for o in items:
-        _advance(o,candles_by_ticker.get(o["ticker"],[]),state,now_ms)
+        _advance(conn,o,candles_by_ticker.get(o["ticker"],[]),state,now_ms)
         if o["status"] == "AMBIGUOUS":
             _pause(state,"AMBIGUOUS_ACCOUNT",now_ms)
         _write(conn,o,now_ms)
@@ -326,8 +374,27 @@ def set_pause(conn, *, paused, now_ms):
     for o in items:
         if paused and o["status"] == "PENDING" and o["execute_ms"] >= now_ms:
             o.update(status="CANCELLED",reason="OPERATOR_STOP")
-            _write(conn,o,now_ms)
+            _write(conn,o,now_ms,origin="OPERATOR_CONTROL")
     _save_account(conn,state)
+
+
+def event_report(conn, *, after_id=0, order_id=None, limit=50):
+    """Read-only ascending cursor; state snapshots do not count as live transitions."""
+    scope = " WHERE order_id=?" if order_id is not None else ""
+    args = (order_id,) if order_id is not None else ()
+    total = conn.execute("SELECT COUNT(*) FROM simulated_order_events"+scope,args).fetchone()[0]
+    origins = dict(conn.execute("SELECT origin,COUNT(*) FROM simulated_order_events"+scope+" GROUP BY origin",args))
+    where = " WHERE id>?" + (" AND order_id=?" if order_id is not None else "")
+    page = conn.execute("SELECT id,payload FROM simulated_order_events"+where+" ORDER BY id LIMIT ?",
+                        (after_id,*args,max(1,min(limit,200))+1)).fetchall()
+    has_more = len(page) > max(1,min(limit,200))
+    page = page[:max(1,min(limit,200))]
+    return dict(mode="PAPER_ONLY", real_orders_enabled=False, eligible_for_live_promotion=False,
+                automatic_promotion=False, source="FORWARD_PAPER_EXECUTION_EVENTS",
+                event_tracking_started_ms=account(conn)["event_tracking_started_ms"],
+                total_count=total, origin_counts=origins, has_more=has_more,
+                next_after_id=page[-1][0] if page else after_id,
+                events=[dict(json.loads(row[1]), id=row[0]) for row in page])
 
 
 def report(conn, *, now_ms, limit=50):

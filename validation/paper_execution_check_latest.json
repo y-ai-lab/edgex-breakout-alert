@@ -6,7 +6,7 @@
   "real_orders_enabled": false,
   "verdict": "PASS",
   "source_sha256": "72af6b072eb06c38dc3beb48fbc6744cfadc6dadcf9eb9a1235b4cdce09e80a9",
-  "engine_sha256": "e36555b204c4d7cbaa85af61b0908fcdd60912af256a03ce15f25430a60f4557",
+  "engine_sha256": "79509ca66018998a768287935791603093d7c39fe29713bced79b1da19e9db7c",
   "sample_basis": "one recorded CURRENT READY reused in execution-control scenarios; not independent trades",
   "unique_recorded_ready": 1,
   "ticker": "VELVETUSDC",
@@ -24,37 +24,73 @@
       "backend": "PRODUCTION_ENGINE",
       "status": "SL",
       "net_pnl_usdc": -57.75416082454083,
-      "resolved": 1
+      "resolved": 1,
+      "events_recorded": 3,
+      "event_statuses": [
+        "PENDING",
+        "OPEN",
+        "SL"
+      ]
     },
     "missing_bar_recovery": {
       "backend": "PRODUCTION_ENGINE",
       "status": "SL",
       "net_pnl_usdc": -57.75416082454083,
-      "resolved": 1
+      "resolved": 1,
+      "events_recorded": 5,
+      "event_statuses": [
+        "PENDING",
+        "OPEN",
+        "OPEN",
+        "OPEN",
+        "SL"
+      ]
     },
     "detected_30s": {
       "backend": "PRODUCTION_ENGINE",
       "status": "SL",
       "net_pnl_usdc": -57.75416082454083,
-      "resolved": 1
+      "resolved": 1,
+      "events_recorded": 3,
+      "event_statuses": [
+        "PENDING",
+        "OPEN",
+        "SL"
+      ]
     },
     "detected_119999ms": {
       "backend": "PRODUCTION_ENGINE",
       "status": "SL",
       "net_pnl_usdc": -57.75416082454083,
-      "resolved": 1
+      "resolved": 1,
+      "events_recorded": 3,
+      "event_statuses": [
+        "PENDING",
+        "OPEN",
+        "SL"
+      ]
     },
     "stale_120s_rejected": {
       "backend": "PRODUCTION_ENGINE",
       "status": "REJECTED",
       "net_pnl_usdc": 0,
-      "resolved": 0
+      "resolved": 0,
+      "events_recorded": 1,
+      "event_statuses": [
+        "REJECTED"
+      ]
     },
     "server_hook_and_api": {
       "backend": "SERVER_COLLECTOR_HOOK_AND_API",
       "status": "SL",
       "net_pnl_usdc": -57.75416082454083,
-      "resolved": 1
+      "resolved": 1,
+      "events_recorded": 3,
+      "event_statuses": [
+        "PENDING",
+        "OPEN",
+        "SL"
+      ]
     }
   },
   "nominal_order": {

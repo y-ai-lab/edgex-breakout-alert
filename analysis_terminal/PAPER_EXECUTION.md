@@ -29,7 +29,22 @@
 
 既存collectorの公開WSキャッシュを利用する。履歴回復は公開RESTのfetch_historyだけを1周期最大2要求・各256足に制限。復旧取得は未処理カーソル以降で、実注文APIを呼ばない。エラーは模擬口座を停止し、既存collector・通知の処理を継続する。
 
-GET /api/paper-execution?limit=50 は読取専用。表示件数が集計母集団を変えない。画面は「検証と改善」冒頭。PAPER ONLY、コスト仮定、試験モデルの制約を常時表示。
+GET /api/paper-execution?limit=50 は読取専用。表示件数が集計母集団を変えない。画面はAPIタブ。PAPER ONLY、コスト仮定、試験モデルの制約を常時表示。
+
+## 観測イベント履歴（v19.0.18）
+
+simulated_order_eventsへ、setup IDに紐づく状態・quality・reasonの変化を追記する。通常周期の無変化ではイベントを増やさない。注文・費用・口座・イベントは同じトランザクションで保存し、失敗時はまとめてロールバックする。同じ周期でPENDING→OPEN→TP/SLになってもOPENを残す。
+
+observed_msは処理が観測した時刻。market_msはOPENでは約定足の開始、TP/SL/AMBIGUOUSでは判定足の確定時刻。過去足の時刻を観測時刻へ置き換えず、足内の決済時刻を推測しない。各イベントに当時の注文スナップショットを保持する。
+
+originのLIVE_CYCLEは模擬処理による変化、OPERATOR_CONTROLは管理CLIの取消、ACTIVATION_BASELINEは初回有効化時の対象外登録。移行前の注文は現在状態のみをMIGRATION_SNAPSHOTとして移行時刻に1度だけ保存し、過去の待機・約定履歴を生成しない。口座の元のactivated_ms・policy・残高・停止状態は保持し、event_tracking_started_msを別に記録する。
+
+```
+GET /api/paper-execution/events?after_id=0&limit=50
+GET /api/paper-execution/events?order_id=current%3Asetup-v1%3A...&after_id=0&limit=50
+```
+
+GETのみ。idの昇順で最大200件、has_more・next_after_idで続きへ進む。order_idでsetupを絞る。total_countとorigin_countsはページ件数やカーソルで変えず、移行スナップショットを新規約定と区別する。読取によるスキャン・通知・DB更新は行わない。イベント件数を取引数・戦略昇格標本へ加算しない。新しいUIタブは追加しない。
 
 停止・再開は認証されたサーバー管理環境からのみ実行する。公開書込APIは追加しない。
 
@@ -43,4 +58,4 @@ python -m analysis_terminal.paper_execution_control resume --db /data/analysis_t
 
 日次現金変化は仮想約定足開始のentry feeと、出口判定足確定時のgross PnL−exit feeをJST日付へ割り当てる。15M足内の正確な出口時刻は推測しない。MFE/MAEは終端足のOHLC範囲を含む境界値で、約定直前・直後の足内順序を再現した値ではない。
 
-検証: python -m unittest analysis_terminal.test_paper_execution -v。模擬執行を通して実注文への安全性や収益性が証明されたことにはならない。
+検証: python -m unittest analysis_terminal.test_paper_execution analysis_terminal.test_paper_execution_events -v。模擬執行を通して実注文への安全性や収益性が証明されたことにはならない。

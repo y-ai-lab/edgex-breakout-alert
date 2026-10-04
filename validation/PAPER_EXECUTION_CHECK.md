@@ -14,6 +14,8 @@ analysis_terminal/test-requirements.txtを導入した環境では`--server-hook
 
 検証対象はPENDING→OPEN→SL、独立したDecimal計算による約定価格・数量刻み・数量上限・手数料・損益・現金残高の一致、signal candleの除外、形成中high/lowの除外、欠測時の保留と復旧、同じsetupの再入力と再初期化による二重決済防止、読取APIの無変更、検知120秒の鮮度境界、初回有効化時の過去シグナルBASELINED。
 
+v19.0.18では状態変化のイベント保存も照合する。PENDING・OPEN・SL、欠測時のHISTORY_GAP、market_msとobserved_msの区別、再起動／重複入力によるイベント重複防止、GET /api/paper-execution/eventsを確認する。各ケースのevent_historyは隔離DBの過去再現であり、本番の新規約定履歴へ投入しない。
+
 データは保存済み実シグナル、2026-10-04に再取得したEdgeX公開履歴と数量ルール。15M足17本は既存の結果照合用保存データとも全件一致した。取得元と入力はfixtureに保持し、実行報告に入力・エンジンのSHA256を保存する。
 
 検知時刻はsignal close+1msを仮定する。実際の初回観測時刻と当時の数量ルールは保存されていない。30秒・119,999msの検知遅延も確認し、120秒は拒否される。費用は本番模擬モデルと同じ仮定（片道5bps、滑り2bps）であり、実際のEdgeX手数料ではない。

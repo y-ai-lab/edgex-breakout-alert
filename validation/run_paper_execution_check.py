@@ -159,6 +159,18 @@ class Runner:
         with sqlite3.connect(self.db) as conn:
             return paper.report(conn, now_ms=now_ms, limit=limit)
 
+    def events(self):
+        if self.server:
+            import httpx
+            async def request():
+                async with httpx.AsyncClient(transport=httpx.ASGITransport(app=self.server.app), base_url="http://isolated-check") as client:
+                    response = await client.get("/api/paper-execution/events", params={"limit":200})
+                    require(response.status_code == 200, "Isolated event GET failed")
+                    return response.json()["events"]
+            return asyncio.run(request())
+        with sqlite3.connect(self.db) as conn:
+            return paper.event_report(conn,limit=200)["events"]
+
     def tick(self, now_ms, bars, *, rows=(), age_ms=0):
         if self.server:
             cache = {(self.contract.contract_id, "MINUTE_15"): bars}
@@ -220,16 +232,25 @@ def scenario(folder, capture, contract, bars, row, *, server_hook=False, gap=Fal
                 require(abs(order[key]-value) < 1e-8, "Independent Decimal mismatch: "+key)
             require(abs(result["account"]["cash_usdc"]-oracle["final_cash_usdc"]) < 1e-8, "Cash mismatch")
             before = json.dumps(order, sort_keys=True)
+            events_before = runner.events()
             runner.initialize(final_now+1, previous=[capture["signal"]])
             duplicate = runner.tick(final_now+1000, visible_bars(bars, final_now+1000), rows=[row, row])
             require(json.dumps(duplicate["latest"][0], sort_keys=True) == before, "Restart/repetition changed settlement")
             require(duplicate["account"]["cash_usdc"] == result["account"]["cash_usdc"], "Fee or settlement counted twice")
+            require(runner.events() == events_before, "Restart/repetition duplicated an observed event")
             raw_db = runner.db.read_bytes()
             require(runner.report(final_now+1000, limit=1)["metrics"] == duplicate["metrics"], "Read limit changed cohort")
             require(runner.db.read_bytes() == raw_db, "Read-only report changed SQLite")
+        events = runner.events()
+        statuses = list(dict.fromkeys(e["status"] for e in events))
+        require(statuses == (["REJECTED"] if stale else ["PENDING", "OPEN", oracle["status"]]), "Execution event sequence missing")
+        require(all(e["order_id"] == result["latest"][0]["order_id"] and e["origin"] == "LIVE_CYCLE" for e in events), "Event identity or provenance mismatch")
+        require(all(e["market_ms"] is None or e["observed_ms"] >= e["market_ms"] for e in events), "Event observation precedes market availability")
+        if gap:
+            require(any(e["quality"] == "HISTORY_GAP" for e in events), "Gap observation not persisted")
         payload = dict(backend="SERVER_COLLECTOR_HOOK_AND_API" if server_hook else "PRODUCTION_ENGINE",
             detected_ms=observed, detection_latency_ms=latency_ms, gap_control=gap,
-            trace=runner.trace, independent_decimal=oracle, final=result)
+            trace=runner.trace, event_history=events, independent_decimal=oracle, final=result)
         (folder / "report.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2, allow_nan=False))
         return payload
     finally:
@@ -260,7 +281,8 @@ def run(source, output, *, server_hook=False):
         sample_basis="one recorded CURRENT READY reused in execution-control scenarios; not independent trades",
         unique_recorded_ready=1, ticker=row["ticker"], public_bars=len(bars), assumptions=capture["assumptions"],
         cold_start_baselined=True, checks={k:{"backend":v["backend"], "status":v["final"]["latest"][0]["status"],
-            "net_pnl_usdc":v["final"]["metrics"]["net_pnl_usdc"], "resolved":v["final"]["metrics"]["resolved"]} for k,v in checks.items()},
+            "net_pnl_usdc":v["final"]["metrics"]["net_pnl_usdc"], "resolved":v["final"]["metrics"]["resolved"],
+            "events_recorded":len(v["event_history"]), "event_statuses":[e["status"] for e in v["event_history"]]} for k,v in checks.items()},
         nominal_order=checks["nominal"]["final"]["latest"][0], independent_decimal=checks["nominal"]["independent_decimal"],
         validation_samples_added_to_production=0)
     (root / "execution-check.json").write_text(json.dumps(report, ensure_ascii=False, indent=2, allow_nan=False))
