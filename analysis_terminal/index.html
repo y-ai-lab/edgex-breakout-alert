@@ -860,6 +860,25 @@ async function renderQuickRisk(r){
  var lev=r.direction==="LONG"?r.max_long_leverage:r.max_short_leverage;if(lev)p.leverage=lev;
  try{var x=await jf("/api/risk",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(p)});renderReadyActionCard(r,x);out.innerHTML='<div class="section"><h2>このシナリオの資金計算</h2><div class="grid">'+card("資金",fmt(equity,2)+" USDC")+card("許容損失",fmt(x.risk_budget,2)+" USDC ("+fmt(riskPct,2)+"%)")+card("注文数量",fmt(x.size,8))+card("想定建玉",fmt(x.notional,2)+" USDC")+card("最大損失",fmt(x.max_loss,2)+" USDC")+card("目標利益",x.target_profit==null?"—":fmt(x.target_profit,2)+" USDC")+card("RR",fmt(x.rr,2))+'</div></div>'}catch(e){out.innerHTML='<div class="status error">資金計算: '+e.message+'</div>'}
 }
+function renderEntryBand(r){
+ var b=r.entry_band;
+ if(!b)return '';
+ var header='<div class="section"><h2>確認価格とRRの両立</h2>';
+ var positive=function(v){return Number.isFinite(v)&&v>0};
+ if(b.version!==1||!['LONG','SHORT'].includes(b.direction)||b.direction!==r.direction||!['COMPATIBLE','NO_OVERLAP'].includes(b.status)||![b.min_rr,b.structural_stop,b.structural_target,b.confirmation_level,b.rr_boundary].every(positive))return header+'<div class="warn">価格帯を計算できません。4HのSL・TP構造を確認してください。</div></div>';
+ var long=b.direction==='LONG',rrBand=b.rr_entry_band;
+ if(!rrBand||!positive(rrBand.lower)||!positive(rrBand.upper)||rrBand.lower>=rrBand.upper)return header+'<div class="warn">価格帯を確認できません。</div></div>';
+ var confirmation=fmt(b.confirmation_level,8)+(long?'超':'未満');
+ var rr=long?fmt(b.structural_stop,8)+'超〜'+fmt(b.rr_boundary,8)+'以下':fmt(b.rr_boundary,8)+'以上〜'+fmt(b.structural_stop,8)+'未満';
+ var title=b.status==='NO_OVERLAP'?'今の4H構造では確認価格とRRが両立しません':'確認価格とRRが両立する範囲があります';
+ var detail='確認終値: '+confirmation+' / RR≥'+fmt(b.min_rr,2)+'のEntry: '+rr;
+ var band=b.compatible_entry_band;
+ if(b.status==='COMPATIBLE'){
+  if(!band||!positive(band.lower)||!positive(band.upper)||band.lower>=band.upper)return header+'<div class="warn">価格帯を確認できません。</div></div>';
+  detail+=' / 両立範囲: '+fmt(band.lower,8)+(long?'超':'以上')+'〜'+fmt(band.upper,8)+(long?'以下':'未満');
+ }
+ return header+'<div class="'+(b.status==='NO_OVERLAP'?'warn':'muted')+'">'+title+'</div><div class="muted">'+detail+'</div><div class="muted">取得した4H構造での価格条件です。足の方向・リテスト・鮮度を含むエントリー可否は上の状態を確認してください。</div></div>';
+}
 async function analyze(){
  var t=document.getElementById("ticker").value.trim(),s=document.getElementById("analysisStatus"),o=document.getElementById("analysisOut"),a=document.getElementById("actionOut");
  s.textContent="分析・チャート取得中…";o.innerHTML="";a.innerHTML="";document.getElementById("readyActionCard").innerHTML="";
@@ -869,6 +888,7 @@ async function analyze(){
   a.innerHTML='<div class="actionBox"><div><div class="k">いまの判断</div><div class="actionMain '+actionClass(r.action)+'">'+actionJa(r.action)+'</div></div><div class="pill">スコア '+fmt(r.score,1)+'/100</div><div class="pill">RR '+fmt(r.rr,2)+'</div><div class="pill">'+directionJa(r.direction)+'</div></div>';
   renderReadyActionCard(r,null);
   o.innerHTML='<div class="section"><h2>Entry / SL / TP</h2><div class="grid">'+card("Entry目安",fmt(r.entry_reference,8))+card("損切り SL",fmt(r.stop_loss,8))+card("利確 TP",fmt(r.take_profit,8))+card("RR",fmt(r.rr,2))+'</div></div><details class="dashboardDrawer"><summary>指標・取引条件</summary><div class="drawerBody grid">'+card("現在価格",fmt(r.current_price,8))+card("24時間変化",pct(r.change_24h_pct))+card("4Hの方向",trendJa(r.trend))+card("データ鮮度",fmt(r.data_age_seconds,0)+"秒前")+card("EMA20 / EMA50",fmt(r.ema20_4h,8)+" / "+fmt(r.ema50_4h,8))+card("ATR 4H / 15M",fmt(r.atr_4h,8)+" / "+fmt(r.atr_15m,8))+card("出来高比",fmt(r.volume_ratio,2)+"倍")+card("ブレイク基準",fmt(r.breakout_level,8))+card("4Hサポート",fmt(r.support_4h,8))+card("4Hレジスタンス",fmt(r.resistance_4h,8))+card("注文刻み",fmt(r.step_size,8))+card("最小 / 最大注文量",fmt(r.min_order_size,8)+" / "+fmt(r.max_order_size,8))+card("最大ロング / ショート倍率",fmt(r.max_long_leverage,2)+" / "+fmt(r.max_short_leverage,2))+'</div></details>';
+  o.innerHTML+=renderEntryBand(r);
   if(r.entry_reference&&r.stop_loss){document.getElementById("entry").value=r.entry_reference;document.getElementById("stop").value=r.stop_loss;document.getElementById("target").value=r.take_profit||"";document.getElementById("step").value=r.step_size||"";document.getElementById("minOrder").value=r.min_order_size||"";document.getElementById("maxOrder").value=r.max_order_size||"";var lev=r.direction==="LONG"?r.max_long_leverage:r.max_short_leverage;if(lev)document.getElementById("lev").value=lev}
   renderQuickRisk(r);updateUrl("analysis",r.ticker);requestAnimationFrame(function(){drawChart("chart4h",pack.series.HOUR_4,pack.levels,"4H");drawChart("chart15m",pack.series.MINUTE_15,pack.levels,"15M")});
  }catch(e){s.innerHTML='<span class="error">'+e.message+'</span>'}

@@ -30,6 +30,7 @@ from analysis_terminal.setups import first_per_setup, later_ready_time, ready_ti
 from analysis_terminal.lifecycle import ENDED, current_observation, new_setup, observe_setup
 from analysis_terminal.comparison import cohort, strategy_comparison
 from analysis_terminal.readiness_history import daily_readiness, shadow_observation
+from analysis_terminal.entry_band import diagnose as diagnose_entry_band, observation as entry_band_observation
 from analysis_terminal import paper_execution
 from analysis_terminal.tracking import tracking_summary
 from analysis_terminal.history import fetch_history
@@ -2527,6 +2528,7 @@ def analyze_contract(
         "take_profit": target if structure_ok else None,
         "tp1_2r": tp1,
         "rr": rr,
+        "entry_band": diagnose_entry_band(direction, stop, target, roll_level, SETTINGS.min_rr),
         "current_structural_target": target,
         "stop_valid": stop_valid,
         "shadow_stop_loss": stop if stop_valid else None,
@@ -2791,6 +2793,7 @@ def _readiness_review(
 
     return {
         "confirmed_after_retest": len(touched_confirmed),
+        "entry_bands": entry_band_observation(rows, observed_ms=int(time.time() * 1000)),
         "current": {
             "ready_count": len(current_ready),
             "items": pack(
@@ -3722,6 +3725,7 @@ def _persist_scan_result(
         "neutral": summary["direction_counts"].get("NEUTRAL", 0),
         "stages": summary["stage_counts"],
         "readiness_shadow": shadow_observation(rows),
+        "entry_bands": entry_band_observation(rows, observed_ms=now_ms),
         "top_ready": summary["top_ready"],
         "top_near": summary["top_near"],
         "top_qualified_near": summary["top_qualified_near"],
@@ -3870,7 +3874,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="EdgeX Analysis Terminal",
-    version="19.0.21",
+    version="19.0.22",
     lifespan=lifespan,
 )
 

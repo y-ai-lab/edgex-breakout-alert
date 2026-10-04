@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from analysis_terminal.comparison import cohort, metrics
+from analysis_terminal.entry_band import history_summary as entry_band_history
 
 STEP = 900_000
 JST = ZoneInfo("Asia/Tokyo")
@@ -68,6 +69,7 @@ def summarize(observations):
     coverage = [x for x in observations if count(x.get("universe")) is not None
                 and count(x.get("scanned")) is not None and x["scanned"] <= x["universe"]]
     result = funnel(stages)
+    result["entry_bands"] = entry_band_history(observations)
     result.update(observations=len(observations), funnel_observations=len(valid),
                   missing_funnel_observations=len(observations)-len(valid),
                   observed_ready_buckets=sum(x["stages"].get("READY", 0) > 0 for x in valid),

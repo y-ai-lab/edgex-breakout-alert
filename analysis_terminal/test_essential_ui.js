@@ -27,6 +27,7 @@ assert.deepEqual(all.filter(x=>x.dataset.tab).map(x=>x.dataset.tab),['dashboard'
 for(const id of ['compare','journal','savePlan','compareSelected','strategyComparisonStatus','readinessHistoryStatus'])assert(!nodes[id],id);
 for(const id of ['entryNowZone','nearCandidates','paperExecutionBody','apiCheckResults','backgroundPush','equity','riskPct'])assert(nodes[id],id);
 const ready={ticker:'TESTUSDC',stage:'READY',direction:'LONG',score:90,rr:2.5,entry_reference:100,stop_loss:90,take_profit:125,latest_15m_time_ms:900000,setup_id:'ready',action:'ENTER',data_age_seconds:0};
+ready.entry_band={version:1,status:'COMPATIBLE',direction:'LONG',min_rr:2,structural_stop:90,structural_target:125,confirmation_level:99,rr_boundary:90+35/3,rr_entry_band:{lower:90,upper:90+35/3},compatible_entry_band:{lower:99,upper:90+35/3}};
 const near={...ready,ticker:'NEXTUSDC',stage:'CONFIRMATION_WAIT',setup_id:'next',reason:'retest seen; waiting for 15M confirmation'};
 const market={universe:2,scanned:2,coverage_pct:100,matched:2,snapshot_age_seconds:0,results:[ready,near],ready_candidates:[ready],qualified_near_candidates:[near],summary:{ready_count:1,qualified_near_count:1,near_signal_count:1,direction_counts:{LONG:2},average_score:90}};
 const paper={mode:'PAPER_ONLY',real_orders_enabled:false,eligible_for_live_promotion:false,automatic_promotion:false,source:'CURRENT_READY_ONLY',account:{last_cycle_ms:clock,paused:false,collector_stale:false,cash_usdc:10000,policy:{}},tracking:{state:'WAITING_READY',active_status_counts:{PENDING:0,OPEN:0,AMBIGUOUS:0},data_issue_count:0,data_issue_counts:{}},metrics:{resolved:0,status_counts:{},sample_status:'INSUFFICIENT SAMPLE'},latest:[]};
@@ -94,6 +95,7 @@ async function settle(){for(let i=0;i<8;i++)await new Promise(setImmediate)}
  const button=nodes.nearCandidates.querySelectorAll('.nearCandidateCard')[0];clock+=120000;button.click();assert(nodes.nearCandidates.innerHTML.includes('データ鮮度を確認'));assert(!requests.some(r=>r.url.startsWith('/api/chart')));
  context.refreshGlobalEntryAge();assert(nodes.dashSummary.innerHTML.includes('鮮度を確認'));assert(!nodes.dashSummary.innerHTML.includes('エントリー可能'));
  await context.scan(false);assert(nodes.nearCandidates.innerHTML.includes('NEXTUSDC'));const fresh=nodes.nearCandidates.querySelectorAll('.nearCandidateCard')[0];fresh.click();await settle();assert(nodes.analysis.classList.contains('active'));assert(nodes.analysisStatus.innerHTML.includes('エントリー可能'));
+ assert(nodes.analysisOut.innerHTML.includes('確認価格とRRの両立'));assert(nodes.analysisOut.innerHTML.includes('両立する範囲'));assert(nodes.analysisOut.innerHTML.includes('エントリー可否は上の状態'));
  context.openRiskCalculator();assert(nodes.risk.open);assert(nodes.analysis.classList.contains('active'));
  context.tab('journal');assert(nodes.dashboard.classList.contains('active'));context.tab('compare');assert(nodes.dashboard.classList.contains('active'));
  // Market-derived strings are escaped, including candidate HTML attributes.
