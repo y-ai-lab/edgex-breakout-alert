@@ -1,0 +1,124 @@
+{
+  "health": {
+    "ok": true,
+    "service": "edgex-analysis-terminal",
+    "version": "19.0.18",
+    "time_ms": 1791115112830,
+    "storage": {
+      "market_snapshots_48h": 192,
+      "paper_signals": 1,
+      "db_exists": true
+    },
+    "push": {
+      "enabled": true,
+      "subscribers": 1,
+      "daily_summary_hour_jst": 8,
+      "notification_policy": "READY_ONLY",
+      "daily_summary_enabled": false
+    }
+  },
+  "paper": {
+    "mode": "PAPER_ONLY",
+    "real_orders_enabled": false,
+    "eligible_for_live_promotion": false,
+    "automatic_promotion": false,
+    "source": "CURRENT_READY_ONLY",
+    "fill_model": "NEXT_15M_OPEN",
+    "costs_model": "ASSUMED_FEES_SLIPPAGE_NO_FUNDING",
+    "time_ms": 1791115113146,
+    "account": {
+      "mode": "PAPER_ONLY",
+      "policy": {
+        "version": 1,
+        "initial_cash_usdc": 10000,
+        "risk_pct": 1,
+        "max_positions": 3,
+        "max_total_risk_pct": 3,
+        "max_notional_multiple": 1,
+        "daily_loss_pct": 3,
+        "fee_bps": 5,
+        "slippage_bps": 2,
+        "freshness_ms": 120000,
+        "pending_ttl_ms": 1800000,
+        "min_rr": 2
+      },
+      "activated_ms": 1791088062844,
+      "paused": false,
+      "pause_reason": null,
+      "pause_ms": null,
+      "last_cycle_ms": 1791114423857,
+      "last_error": null,
+      "event_tracking_started_ms": 1791114415787,
+      "known_cash_usdc": 10000,
+      "daily_start_cash_usdc": 10000,
+      "daily_cash_change_usdc": 0,
+      "fees_paid_usdc": 0,
+      "gross_realized_pnl_usdc": 0,
+      "equity_known": true,
+      "cash_usdc": 10000,
+      "cycle_age_seconds": 689.289,
+      "collector_stale": false,
+      "active_positions": 0,
+      "reserved_risk_usdc": 0,
+      "reserved_notional_usdc": 0
+    },
+    "metrics": {
+      "records": 1,
+      "status_counts": {
+        "BASELINED": 1
+      },
+      "resolved": 0,
+      "net_pnl_usdc": 0,
+      "sample_status": "INSUFFICIENT SAMPLE"
+    },
+    "latest": [
+      {
+        "order_id": "current:setup-v1:VELVETUSDC:LONG:1790971200000:0.07432",
+        "setup_id": "setup-v1:VELVETUSDC:LONG:1790971200000:0.07432",
+        "ticker": "VELVETUSDC",
+        "created_ms": 1791088062844,
+        "status": "BASELINED",
+        "reason": "PRE_EXISTING_SIGNAL"
+      }
+    ]
+  },
+  "events": {
+    "mode": "PAPER_ONLY",
+    "real_orders_enabled": false,
+    "eligible_for_live_promotion": false,
+    "automatic_promotion": false,
+    "source": "FORWARD_PAPER_EXECUTION_EVENTS",
+    "event_tracking_started_ms": 1791114415787,
+    "total_count": 1,
+    "origin_counts": {
+      "MIGRATION_SNAPSHOT": 1
+    },
+    "has_more": false,
+    "next_after_id": 1,
+    "events": [
+      {
+        "order_id": "current:setup-v1:VELVETUSDC:LONG:1790971200000:0.07432",
+        "setup_id": "setup-v1:VELVETUSDC:LONG:1790971200000:0.07432",
+        "ticker": "VELVETUSDC",
+        "status": "BASELINED",
+        "quality": null,
+        "reason": "PRE_EXISTING_SIGNAL",
+        "previous_status": null,
+        "previous_quality": null,
+        "observed_ms": 1791114415787,
+        "market_ms": null,
+        "origin": "MIGRATION_SNAPSHOT",
+        "order": {
+          "order_id": "current:setup-v1:VELVETUSDC:LONG:1790971200000:0.07432",
+          "setup_id": "setup-v1:VELVETUSDC:LONG:1790971200000:0.07432",
+          "ticker": "VELVETUSDC",
+          "created_ms": 1791088062844,
+          "status": "BASELINED",
+          "reason": "PRE_EXISTING_SIGNAL"
+        },
+        "id": 1
+      }
+    ]
+  },
+  "source": "Read-only v19.0.18 production baseline before recovery fix"
+}
