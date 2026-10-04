@@ -1,0 +1,99 @@
+name: Paper execution end-to-end check
+on:
+  push:
+    branches: [audit/paper-execution-e2e]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install real server and test dependencies
+        run: python -m pip install -r analysis_terminal/test-requirements.txt
+      - name: Full regression tests
+        run: |
+          python -m unittest analysis_terminal.test_outcomes analysis_terminal.test_storage analysis_terminal.test_setups analysis_terminal.test_entry_ui analysis_terminal.test_lifecycle analysis_terminal.test_comparison analysis_terminal.test_tracking analysis_terminal.test_outcome_history analysis_terminal.test_replay analysis_terminal.test_replay_review analysis_terminal.test_entry_diagnostics analysis_terminal.test_chronology_replay analysis_terminal.test_chronology_review analysis_terminal.test_pullback analysis_terminal.test_pullback_review analysis_terminal.test_outcome_audit analysis_terminal.test_outcome_audit_review analysis_terminal.test_readiness_history analysis_terminal.test_paper_execution -q
+          python -m unittest discover -s tests -q
+          python -m py_compile validation/run_paper_execution_check.py tests/test_paper_execution_check.py
+      - name: Isolated execution through real collector hook and HTTP API
+        run: |
+          python -m validation.run_paper_execution_check --source validation/fixtures/velvet_ready_execution.json --output audit-output/isolated --server-hook
+      - name: Refetch public market data and verify production remains separate
+        run: |
+          python - <<'PY'
+          import json, urllib.request, time
+          from pathlib import Path
+          from dataclasses import asdict
+          import app as scanner
+          
+          out=Path("audit-output")
+          out.mkdir(exist_ok=True)
+          fixture=json.loads(Path("validation/fixtures/velvet_ready_execution.json").read_text())
+          report=json.loads((out/"isolated/execution-check.json").read_text())
+          expected=json.loads(Path("validation/paper_execution_check_latest.json").read_text())
+          assert report == expected, "Independent CI report differs from saved execution result"
+          assert report["eligible_for_live_promotion"] is False and report["validation_samples_added_to_production"] == 0
+          def get(url):
+              last=None
+              for attempt in range(3):
+                  try:
+                      req=urllib.request.Request(url,headers={"User-Agent":"EdgeX-read-only-execution-check"})
+                      with urllib.request.urlopen(req,timeout=60) as res:
+                          assert res.status == 200
+                          return json.loads(res.read())
+                  except Exception as exc:
+                      last=exc
+                      if attempt < 2: time.sleep(2)
+              raise last
+          history=get(fixture["history_source"])
+          assert history["code"] == "SUCCESS" and not history["data"].get("nextPageOffsetData")
+          normalize=lambda values: sorted([asdict(scanner.Candle.from_payload(v)) for v in values],key=lambda v:v["time_ms"])
+          assert all(v["priceType"] == "LAST_PRICE" for v in history["data"]["dataList"])
+          assert normalize(history["data"]["dataList"]) == normalize(fixture["kline_response"]["data"]["dataList"]), "Public market history revised"
+          (out/"refetched-public-candles.json").write_text(json.dumps(history,indent=2))
+          meta=get(fixture["contract_source"])
+          assert meta["code"] == "SUCCESS"
+          contract=next(c for c in meta["data"]["contractList"] if str(c["contractId"]) == fixture["contract"]["contractId"])
+          selected={k:contract.get(k) for k in fixture["contract"]}
+          assert selected == fixture["contract"], "Public quantity rules changed"
+          (out/"refetched-contract-rules.json").write_text(json.dumps(selected,indent=2))
+          base="https://edgex-analysis-terminal-production.up.railway.app"
+          live={}
+          for name,path in {"health":"/health","paper-execution":"/api/paper-execution?limit=200","server-paper-signals":"/api/server-paper-signals?limit=1000","push-config":"/api/push/config","screener":"/api/screener","analyze":"/api/analyze?ticker=BTCUSDC"}.items():
+              body=get(base+path)
+              if name == "push-config": body.pop("public_key",None)
+              live[name]=body
+          with urllib.request.urlopen(base,timeout=60) as response:
+              assert response.status == 200
+              html=response.read().decode()
+          assert "ENTRY NOW" in html
+          (out/"production-live.json").write_text(json.dumps(live,ensure_ascii=False,indent=2))
+          h,p=live["health"],live["paper-execution"]
+          assert h["ok"] and h["version"] == "19.0.17" and h["storage"]["db_exists"]
+          assert h["storage"]["market_snapshots_48h"] > 0 and h["storage"]["paper_signals"] >= 1
+          assert h["push"]["enabled"] and h["push"]["subscribers"] >= 1 and h["push"]["notification_policy"] == "READY_ONLY"
+          assert not h["push"]["daily_summary_enabled"]
+          assert p["mode"] == "PAPER_ONLY" and not p["real_orders_enabled"] and not p["automatic_promotion"]
+          assert p["account"]["activated_ms"] == 1791088062844 and not p["account"]["paused"] and p["account"]["last_error"] is None
+          assert p["account"]["last_cycle_ms"] >= 1791104413914
+          baseline=next(v for v in p["latest"] if v["order_id"] == fixture["signal"]["key"])
+          assert baseline["status"] == "BASELINED" and "filled_ms" not in baseline, "Historical validation entered live results"
+          signal=next(v for v in live["server-paper-signals"]["signals"] if v["key"] == fixture["signal"]["key"])
+          for key in ["setup_id","ticker","side","stage","source_candle_ms","created_ms","entry","stop","target"]:
+              assert signal[key] == fixture["signal"][key], "Recorded source changed: "+key
+          assert signal["result"]["status"] == "SL"
+          print(json.dumps({"verdict":"PASS","unique_recorded_ready":1,"server_hook_and_http_api":report["checks"]["server_hook_and_api"],"production_version":h["version"],"baseline_preserved":True,"snapshots_48h":h["storage"]["market_snapshots_48h"],"push_subscribers":h["push"]["subscribers"],"live_resolved":p["metrics"]["resolved"],"live_pnl":p["metrics"]["net_pnl_usdc"]}))
+          PY
+      - name: Save execution and read-only live evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: paper-execution-e2e-evidence
+          path: audit-output/
+          retention-days: 7
+          if-no-files-found: error
