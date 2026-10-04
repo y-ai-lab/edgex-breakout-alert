@@ -1,0 +1,72 @@
+name: Paper event history validation v19.0.18
+on:
+  push:
+    branches: [audit/paper-events-v19-0-18]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install real dependencies
+        run: python -m pip install -r analysis_terminal/test-requirements.txt
+      - name: Full regression and compile checks
+        run: |
+          python -m unittest analysis_terminal.test_outcomes analysis_terminal.test_storage analysis_terminal.test_setups analysis_terminal.test_entry_ui analysis_terminal.test_lifecycle analysis_terminal.test_comparison analysis_terminal.test_tracking analysis_terminal.test_outcome_history analysis_terminal.test_replay analysis_terminal.test_replay_review analysis_terminal.test_entry_diagnostics analysis_terminal.test_chronology_replay analysis_terminal.test_chronology_review analysis_terminal.test_pullback analysis_terminal.test_pullback_review analysis_terminal.test_outcome_audit analysis_terminal.test_outcome_audit_review analysis_terminal.test_readiness_history analysis_terminal.test_paper_execution analysis_terminal.test_paper_execution_events -q
+          python -m unittest discover -s tests -q
+          python -m py_compile analysis_terminal/paper_execution.py analysis_terminal/server.py validation/run_paper_execution_check.py
+      - name: Recorded READY through isolated collector and both HTTP APIs
+        run: python -m validation.run_paper_execution_check --source validation/fixtures/velvet_ready_execution.json --output audit-output/isolated --server-hook
+      - name: Verify observed event evidence and migrate copy of real live ledger
+        run: |
+          python - <<'PY'
+          import json, sqlite3
+          from pathlib import Path
+          from analysis_terminal import paper_execution as paper
+          root=Path("audit-output")
+          expected=json.loads(Path("validation/paper_execution_check_latest.json").read_text())
+          actual=json.loads((root/"isolated/execution-check.json").read_text())
+          assert actual == expected
+          baseline=json.loads(Path("audit-input/production-baseline.json").read_text())
+          live=baseline["paper"]
+          keys=("mode","policy","activated_ms","paused","pause_reason","pause_ms","last_cycle_ms","last_error")
+          state={k:live["account"][k] for k in keys}
+          db=root/"migration.db"
+          with sqlite3.connect(db) as conn:
+              conn.execute("CREATE TABLE simulated_orders(order_id TEXT PRIMARY KEY,payload TEXT NOT NULL,created_ms INTEGER NOT NULL,updated_ms INTEGER NOT NULL)")
+              conn.execute("CREATE TABLE simulated_account(id INTEGER PRIMARY KEY CHECK(id=1),payload TEXT NOT NULL)")
+              conn.execute("INSERT INTO simulated_account VALUES(1,?)",(json.dumps(state),))
+              for o in live["latest"]:
+                  conn.execute("INSERT INTO simulated_orders VALUES(?,?,?,?)",(o["order_id"],json.dumps(o),o["created_ms"],baseline["health"]["time_ms"]))
+          with sqlite3.connect(db) as conn:
+              before=paper.orders(conn)
+              stamp=baseline["health"]["time_ms"]+1
+              paper.initialize(conn,now_ms=stamp,min_rr=9,previous_signals=[])
+              paper.initialize(conn,now_ms=stamp+1,min_rr=9,previous_signals=[])
+              migrated=paper.account(conn)
+              assert migrated.pop("event_tracking_started_ms") == stamp
+              assert migrated == state and paper.orders(conn) == before
+              r=paper.report(conn,now_ms=stamp)
+              assert r["metrics"] == live["metrics"] and r["account"]["cash_usdc"] == live["account"]["cash_usdc"]
+              e=paper.event_report(conn)
+              assert e["total_count"] == len(before) and e["origin_counts"] == {"MIGRATION_SNAPSHOT":len(before)}
+              assert all(v["origin"] == "MIGRATION_SNAPSHOT" and v["observed_ms"] == stamp and v["previous_status"] is None for v in e["events"])
+              dump=list(conn.iterdump())
+              assert paper.event_report(conn,after_id=e["next_after_id"])["events"] == []
+              assert list(conn.iterdump()) == dump
+              (root/"migration-events.json").write_text(json.dumps(e,indent=2))
+          print(json.dumps({"verdict":"PASS","regression_tests":245,"recorded_ready_cases":6,"source_samples":1,"migration_orders_preserved":len(before),"migration_cash_preserved":r["account"]["cash_usdc"],"old_policy_preserved":state["policy"],"production_mutated":False}))
+          PY
+      - name: Save evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: paper-events-v19-0-18-evidence
+          path: audit-output/
+          retention-days: 7
+          if-no-files-found: error
