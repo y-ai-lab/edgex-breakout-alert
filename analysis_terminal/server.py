@@ -29,6 +29,7 @@ from analysis_terminal.outcomes import evaluate_paper_signal, verified_result
 from analysis_terminal.setups import first_per_setup, later_ready_time, ready_times_by_setup, setup_identity
 from analysis_terminal.lifecycle import ENDED, current_observation, new_setup, observe_setup
 from analysis_terminal.comparison import cohort, strategy_comparison
+from analysis_terminal.readiness_history import daily_readiness, shadow_observation
 from analysis_terminal.tracking import tracking_summary
 from analysis_terminal.history import fetch_history
 from analysis_terminal.outcome_history import BACKFILL_BARS, BACKFILL_REQUESTS, consecutive_window, merge_candles
@@ -3714,6 +3715,7 @@ def _persist_scan_result(
         "short": summary["direction_counts"].get("SHORT", 0),
         "neutral": summary["direction_counts"].get("NEUTRAL", 0),
         "stages": summary["stage_counts"],
+        "readiness_shadow": shadow_observation(rows),
         "top_ready": summary["top_ready"],
         "top_near": summary["top_near"],
         "top_qualified_near": summary["top_qualified_near"],
@@ -3812,7 +3814,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="EdgeX Analysis Terminal",
-    version="19.0.14",
+    version="19.0.15",
     lifespan=lifespan,
 )
 
@@ -4231,6 +4233,21 @@ async def strategy_comparison_api(limit: int = Query(default=50, ge=1, le=500)):
         shadow = [json.loads(row["payload"]) for row in conn.execute(
             "SELECT payload FROM shadow_v2_signals ORDER BY created_ms, signal_key")]
     return strategy_comparison(current, shadow, limit)
+
+
+@app.get("/api/readiness-history")
+async def readiness_history_api(days: int = Query(default=7, ge=1, le=30)):
+    now_ms = int(time.time() * 1000)
+    with _db_connect() as conn:
+        conn.execute("BEGIN")
+        snapshots = [json.loads(row["payload"]) for row in conn.execute(
+            "SELECT payload FROM market_snapshots WHERE bucket_ms >= ? ORDER BY bucket_ms",
+            (now_ms - (days + 1) * 86400000,))]
+        current = [json.loads(row["payload"]) for row in conn.execute(
+            "SELECT payload FROM paper_signals ORDER BY created_ms, signal_key")]
+        shadow = [json.loads(row["payload"]) for row in conn.execute(
+            "SELECT payload FROM shadow_v2_signals ORDER BY created_ms, signal_key")]
+    return daily_readiness(snapshots, current, shadow, now_ms=now_ms, days=days)
 
 
 @app.get("/api/readiness-review")
