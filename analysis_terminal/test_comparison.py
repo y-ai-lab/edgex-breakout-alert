@@ -153,7 +153,9 @@ assert(elements.strategyComparisonMetrics.innerHTML.includes('INSUFFICIENT SAMPL
 assert(elements.strategyComparisonBody.innerHTML.includes('&lt;script&gt;bad&lt;/script&gt;'));
 assert(!elements.strategyComparisonBody.innerHTML.includes('<script>'));
 assert(elements.strategyComparisonNotes.textContent.includes('TP設計だけの効果とは断定'));
-assert(html.includes('loadShadowV2();loadStrategyComparison();loadSetupLifecycles();'));
+assert(!html.includes('loadShadowV2();loadStrategyComparison();loadSetupLifecycles();'));
+assert(!html.includes('data-tab="compare"'));
+assert(!html.includes('data-tab="journal"')); // Research renderer remains available without a user-facing tab.
 console.log('comparison UI syntax/render/escaping passed');
 '''
         p = subprocess.run(["node", "-e", script], input=json.dumps(dict(html=html, j=j)),

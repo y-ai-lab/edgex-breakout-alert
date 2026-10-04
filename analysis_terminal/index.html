@@ -24,7 +24,7 @@ button{-webkit-tap-highlight-color:transparent}
  .analyticsGrid{grid-template-columns:1fr}.analyticsBox{padding:10px}.chart{height:240px}.chartWrap{padding:6px}
  .actionBox{align-items:flex-start}.actionMain{font-size:17px}.legend{font-size:11px}
  table{font-size:12px;min-width:760px}th,td{padding:8px 7px}.scroll{margin-left:-2px;margin-right:-2px}
- #screen .scroll td:nth-child(1),#screen .scroll th:nth-child(1),#screen .scroll td:nth-child(2),#screen .scroll th:nth-child(2){display:none}
+ #screen .scroll table{min-width:720px}
  #screen .scroll table{min-width:900px}
  #journal .scroll table{min-width:1100px}
  .pill{font-size:12px;padding:7px 9px}.status{font-size:13px;line-height:1.55}
@@ -84,7 +84,7 @@ button{-webkit-tap-highlight-color:transparent}
 @media(max-width:720px){
  .appHeader{align-items:flex-start}.headerChips{display:none}.appHeader h1{font-size:22px}
  main{padding-top:12px;padding-bottom:94px}.panel{background:transparent;border:0;padding:4px 0;box-shadow:none}
- .tabs{position:fixed;left:0;right:0;bottom:0;top:auto;z-index:80;margin:0;padding:7px 6px calc(7px + env(safe-area-inset-bottom));display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:3px;background:rgba(11,13,18,.96);border-top:1px solid var(--line);border-bottom:0;backdrop-filter:blur(14px)}
+ .tabs{position:fixed;left:0;right:0;bottom:0;top:auto;z-index:80;margin:0;padding:7px 6px calc(7px + env(safe-area-inset-bottom));display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px;background:rgba(11,13,18,.96);border-top:1px solid var(--line);border-bottom:0;backdrop-filter:blur(14px)}
  .tab{min-width:0;min-height:52px;padding:5px 2px;border:0;background:transparent;border-radius:10px;display:flex;flex-direction:column;justify-content:center;gap:2px;font-size:10px;color:var(--muted)}
  .tab.active{background:var(--accentSoft);color:var(--accent);border:0}.navIcon{font-size:16px}
  .dashboardHero{align-items:flex-start}.dashboardHero h2{font-size:22px}.heroActions{justify-content:flex-end}.heroActions .primary{padding:9px 11px;min-height:40px}.heroActions .pill{display:none}
@@ -94,9 +94,18 @@ button{-webkit-tap-highlight-color:transparent}
  .dashboardDrawer{margin-top:9px}.dashboardDrawer>summary{padding:12px}.drawerHint{display:none}.drawerBody{padding:9px}
  .analyticsBox{border-radius:11px}.pickCard{padding:11px;min-height:0}.priorityRow,.approachCard{padding:9px}
  #screen .filters{padding:8px}.screenToolbar{position:sticky;top:0}
- #screen .scroll td:nth-child(3),#screen .scroll th:nth-child(3){position:sticky;left:0;z-index:2;background:var(--panel)}
+ #screen .scroll td:nth-child(2),#screen .scroll th:nth-child(2){position:sticky;left:0;z-index:2;background:var(--panel)}
  #analysis>.row:first-of-type,#risk>.row{padding:8px}
 }
+
+/* Essential workflow: entry, symbols, analysis, API. */
+.nearCandidateCard{border:1px solid rgba(250,204,21,.28);border-radius:13px;background:#15150f;padding:13px;text-align:left;color:var(--text);cursor:pointer}
+.nearCandidateCard .entryDirection{color:var(--warn);border-color:rgba(250,204,21,.28)}
+.nearCandidateCard .entryTicker{font-size:18px}.nearCandidateCard .pickReason{margin-top:10px}
+.apiCheckGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:9px}
+.apiCheckRow{padding:12px;border:1px solid var(--line);border-radius:11px;background:var(--panel2)}
+.apiCheckRow .sub{margin-top:5px;overflow-wrap:anywhere}.apiCheckRow b{display:block;margin-bottom:5px}
+@media(max-width:720px){.entryReadyGrid{grid-template-columns:1fr}.nearCandidateCard{padding:11px}.apiCheckGrid{grid-template-columns:1fr}.tab{font-size:11px}}
 </style>
 </head>
 <body><main>
@@ -116,94 +125,80 @@ button{-webkit-tap-highlight-color:transparent}
   <button id="globalEntryAction" class="globalEntryAction" type="button">今日を見る</button>
 </div>
 <div class="tabs" aria-label="主要ナビゲーション">
-<button class="tab active" data-tab="dashboard"><span class="navIcon">⌂</span><span>今日</span></button>
-<button class="tab" data-tab="screen"><span class="navIcon">⌕</span><span>スキャン</span></button>
+<button class="tab active" data-tab="dashboard"><span class="navIcon">⌂</span><span>エントリー</span></button>
+<button class="tab" data-tab="screen"><span class="navIcon">⌕</span><span>銘柄一覧</span></button>
 <button class="tab" data-tab="analysis"><span class="navIcon">◎</span><span>分析</span></button>
-<button class="tab" data-tab="compare"><span class="navIcon">⇄</span><span>比較</span></button>
-<button class="tab" data-tab="journal"><span class="navIcon">✓</span><span>検証</span></button>
-<button class="tab" data-tab="risk"><span class="navIcon">¥</span><span>資金</span></button>
+<button class="tab" data-tab="api"><span class="navIcon">⌁</span><span>API</span></button>
 </div>
 
 <section id="dashboard" class="panel active">
 <div class="dashboardHero">
-  <div>
-    <div class="eyebrow">MARKET NOW</div>
-    <h2>今日の判断</h2>
-    <div class="sub">最初に見る情報だけを上に集約しています。</div>
-  </div>
+  <div><div class="eyebrow">ENTRY NOW</div><h2>いまのエントリー候補</h2><div class="sub">エントリー可能と、まだ待つ候補を確認できます。</div></div>
   <div class="heroActions"><button class="primary" id="dashScan">最新に更新</button><span id="dashUpdated" class="pill">未更新</span></div>
 </div>
-
 <div id="entryNowZone" class="entryNowZone">
-  <div class="entryNowHead">
-    <div><div class="eyebrow">ENTRY NOW</div><h3>いまエントリー条件を満たしている銘柄</h3></div>
-    <div id="entryNowBadge" class="entryNowBadge">確認中</div>
-  </div>
-  <div id="entryNowContent" class="entryNowContent"><span class="muted">最新スキャン後に表示します。</span></div>
+  <div class="entryNowHead"><div><div class="eyebrow">ENTRY NOW</div><h3>エントリー可能</h3></div><div id="entryNowBadge" class="entryNowBadge">確認中</div></div>
+  <div id="entryNowContent" class="entryNowContent"><span class="muted">最新データを取得しています。</span></div>
 </div>
-
 <div id="dashSummary" class="summary executiveSummary"></div>
-
-<div class="decisionGrid">
-  <div class="analyticsBox keyBox">
-    <div class="boxLabel">市場レジーム</div>
-    <div id="marketRegime" class="regimeBox"><span class="muted">スキャン後に表示</span></div>
-  </div>
-  <div class="analyticsBox keyBox">
-    <div class="boxLabel">次の15分足確定まで</div>
-    <div id="candleCountdown" class="countdown">--:--</div>
-    <div class="sub">確定後に条件が変わる可能性があります。</div>
-  </div>
-  <div class="analyticsBox keyBox">
-    <div class="boxLabel">バックグラウンド通知</div>
-    <div id="pushStatus" class="status compactStatus">確認中…</div>
-    <button class="ghost compactButton" id="backgroundPush">バックグラウンド通知 OFF</button>
-    <div id="pushGuide" class="sub compactHelp"></div>
-  </div>
-</div>
-
 <div class="focusSection">
-  <div class="sectionHeading"><div><div class="eyebrow">FIRST LOOK</div><h3>まず見る3銘柄</h3></div><div class="sub">総合優先度順。勝率予測ではありません。</div></div>
-  <div id="dailyPicks" class="pickList"><span class="muted">スキャン後に表示</span></div>
+  <div class="sectionHeading"><div><div class="eyebrow">WATCH NEXT</div><h3>次に監視する候補</h3></div><div class="sub">条件成立前です。カードをタップして分析。</div></div>
+  <div id="nearCandidates" class="entryReadyGrid"><span class="muted">最新データを取得しています。</span></div>
 </div>
-
-<div class="focusGrid">
-  <div class="analyticsBox">
-    <div class="boxLabel">前回からの変化</div>
-    <div id="sinceLastChanges" class="status">初回比較の準備中です。</div>
-  </div>
-  <div class="analyticsBox">
-    <div class="boxLabel">候補の変化</div>
-    <div id="candidateAlerts" class="alertList"><span class="muted">変化はまだありません</span></div>
-  </div>
-</div>
-
-<div class="focusSection">
-  <div class="sectionHeading"><div><div class="eyebrow">EARLY WATCH</div><h3>急接近候補</h3></div><div class="sub">TOP3外で有力化している候補。</div></div>
-  <div id="earlyWatch" class="priorityList"><span class="muted">スキャン後に表示</span></div>
-</div>
-
 <div class="quickAccessGrid">
   <div class="analyticsBox"><div class="boxLabel">★ お気に入り</div><div id="dashWatch" class="status">まだありません</div></div>
   <div class="analyticsBox"><div class="boxLabel">最近見た銘柄</div><div id="recentTickers" class="status">まだありません</div></div>
 </div>
+<div class="row compactRow"><span class="sub">次の15分足確定まで</span><span id="candleCountdown" class="pill">--:--</span><button class="ghost" id="openNotifications">通知設定</button></div>
+</section>
 
-<details class="dashboardDrawer" open>
-  <summary><span>順位と市場変化</span><span class="drawerHint">ランキング・急上昇・履歴</span></summary>
-  <div class="drawerBody">
-    <div class="analyticsBox"><div class="boxLabel">今見るべき銘柄ランキング</div><div class="sub">優先度は「今確認する順番」であり、勝率や将来利益の予測ではありません。</div><div id="priorityRanking" class="priorityList"><span class="muted">スキャン後に表示</span></div></div>
-    <div class="drawerGrid">
-      <div class="analyticsBox"><div class="boxLabel">ランキング急上昇</div><div class="sub">TOP3新規入り・5順位以上の急上昇。</div><div id="priorityEvents" class="alertList"><span class="muted">変化を蓄積中です。</span></div></div>
-      <div class="analyticsBox"><div class="boxLabel">急接近度 70点クロス</div><div class="sub">前回70点未満 → 今回70点以上。</div><div id="approachEvents" class="alertList"><span class="muted">変化を蓄積中です。</span></div></div>
-    </div>
-    <div class="analyticsBox"><div class="boxLabel">サーバー候補履歴</div><div class="sub">アプリを閉じていた時間の変化も保存します。</div><div id="serverCandidateEvents" class="alertList"><span class="muted">履歴を読み込みます</span></div></div>
-  </div>
-</details>
+<section id="screen" class="panel">
+<h2>銘柄スキャン</h2>
+<div class="filters">
+<div class="field small"><label>銘柄検索</label><input id="q" placeholder="BTC / HYPE"></div>
+<div class="field small"><label>状態</label><select id="stage"><option value="ALL">すべて</option><option value="READY">エントリー可能</option><option value="NEAR">直前候補</option><option value="CONFIRMATION_WAIT">15分足確認待ち</option><option value="RETEST_WAIT">リテスト待ち</option><option value="RR_WAIT">RR不足</option><option value="BREAKOUT_WAIT">ブレイク待ち</option><option value="TREND_WAIT">方向感待ち</option></select></div>
+<div class="field small"><label>方向</label><select id="direction"><option value="ALL">すべて</option><option value="LONG">ロング</option><option value="SHORT">ショート</option><option value="NEUTRAL">中立</option></select></div>
+</div>
+<details class="dashboardDrawer"><summary>絞り込み</summary><div class="drawerBody filters">
+<div class="field small"><label>最低スコア</label><input id="minScore" type="number" min="0" max="100" value="0"></div>
+<div class="field small"><label>最低RR</label><input id="minRR" type="number" min="0" step="0.1" placeholder="指定なし"></div>
+</div></details>
+<div class="row" style="margin-top:10px"><button class="primary" id="scan">スキャン</button><button class="ghost" id="force">強制更新</button><button class="ghost" id="autoScan">自動更新 OFF</button><button class="ghost" id="presetNear">直前候補</button><button class="ghost" id="presetReady">エントリー可能</button><button class="ghost" id="presetReset">リセット</button><button class="ghost" id="watchOnly">★のみ</button><span id="lastScan" class="pill">未更新</span></div>
+<div id="summary" class="summary"></div>
+<div id="screenStatus" class="status">4H→15Mで全取引可能銘柄を確認します。</div>
+<div class="scroll"><table><thead><tr><th>★</th><th>銘柄</th><th>状態</th><th>方向</th><th>スコア</th><th>価格</th><th>24h</th><th>出来高比</th><th>RR</th><th>次の行動</th><th>データ鮮度</th><th>状態</th></tr></thead><tbody id="screenBody"></tbody></table></div>
+</section>
 
-<details class="dashboardDrawer">
-  <summary><span>検証と改善</span><span class="drawerHint">確認条件・機会損失・急接近度</span></summary>
-  <div class="drawerBody">
-    <div class="analyticsBox">
+<section id="analysis" class="panel">
+<h2>銘柄分析</h2>
+<div class="row"><div class="field"><label>銘柄</label><input id="ticker" value="BTCUSDC"></div><button class="primary" id="analyze">分析</button><button class="ghost" id="toRisk">資金・数量</button><button class="ghost" id="copyPlan">プランをコピー</button><button class="ghost" id="sharePlan">共有</button></div>
+<div id="analysisStatus" class="status">BTC のような短縮入力でも検索します。</div>
+<div id="actionOut"></div>
+<div id="readyActionCard"></div>
+<div id="quickRiskOut"></div>
+<div id="analysisOut"></div>
+<div class="section"><h2>値動き</h2><div class="legend"><span class="good">TP</span><span style="color:#7dd3fc">エントリー / ブレイク</span><span class="bad">SL</span><span style="color:#c4b5fd">EMA20</span><span style="color:#f9a8d4">EMA50</span></div><div class="chartGrid"><div class="chartWrap"><div class="chartTitle"><b>4H</b><span class="muted">大局</span></div><canvas id="chart4h" class="chart"></canvas></div><div class="chartWrap"><div class="chartTitle"><b>15M</b><span class="muted">エントリー</span></div><canvas id="chart15m" class="chart"></canvas></div></div></div>
+<details id="risk" class="dashboardDrawer">
+<summary>資金・数量の計算</summary><div class="drawerBody">
+<div class="row">
+<div class="field"><label>資金 USDC</label><input id="equity" type="number" value="1000"></div><div class="field"><label>1回の許容損失 %</label><input id="riskPct" type="number" value="5"></div>
+<div class="field"><label>エントリー価格</label><input id="entry" type="number" step="any"></div><div class="field"><label>損切り価格</label><input id="stop" type="number" step="any"></div>
+<div class="field"><label>利確価格</label><input id="target" type="number" step="any"></div><div class="field"><label>注文刻み</label><input id="step" type="number" step="any"></div>
+<div class="field"><label>最小注文量</label><input id="minOrder" type="number" step="any"></div><div class="field"><label>最大注文量</label><input id="maxOrder" type="number" step="any"></div>
+<div class="field"><label>レバレッジ</label><input id="lev" type="number" step="any"></div><button class="primary" id="calc">計算</button>
+</div>
+<div id="riskStatus" class="status">損切りに到達したときの最大損失から、注文数量を逆算します。</div><div id="riskOut" class="grid"></div><details class="help"><summary>資金管理の考え方</summary><div>「1回の許容損失 %」を先に決め、エントリー価格と損切り価格の距離から注文数量を計算します。注文刻み・最小注文量・最大注文量・レバレッジ上限も反映します。</div></details>
+</div></details>
+</section>
+
+
+
+<section id="api" class="panel">
+<div class="dashboardHero"><div><div class="eyebrow">API STATUS</div><h2>APIの動作確認</h2><div class="sub">市場データと模擬執行の状態を確認します。実注文の送信はありません。</div></div><button class="primary" id="checkApi">再確認</button></div>
+<div id="apiCheckStatus" class="status" role="status" aria-live="polite">APIタブを開くと接続を確認します。</div>
+<div id="apiCheckResults" class="apiCheckGrid"></div>
+<details class="dashboardDrawer" id="paperExecutionDetails" open><summary>模擬執行 — PAPER ONLY</summary><div class="drawerBody">
+<div class="analyticsBox">
       <div class="boxLabel">模擬執行 — PAPER ONLY</div>
       <div class="sub">現行READYから仮想注文を作り、次の15M足の始値で約定を模擬します。仮想USDC口座の検証です。</div>
       <div id="paperExecutionStatus" class="status">模擬口座を読み込み中です。</div>
@@ -212,125 +207,19 @@ button{-webkit-tap-highlight-color:transparent}
       <div class="scroll"><table><thead><tr><th>銘柄 / 方向</th><th>仮想注文の状態</th><th>検知時刻</th><th>約定対象の足</th><th>数量 / 仮想Entry</th><th>SL / TP</th><th>手数料込み損益 / R</th><th>データ状態 / 理由</th></tr></thead><tbody id="paperExecutionBody"></tbody></table></div>
       <div class="sub">次の15M始値を用いる粗い約定モデルです。板の厚さ、部分約定、Funding、実際の注文遅延は未計上。未実現損益は仮想現金に含めません。同一足でTP・SLの両方に触れた場合はAMBIGUOUSとして口座を停止し、損益を確定しません。SLを飛び越える窓開けでは、想定損失予算を超えることがあります。</div>
     </div>
-    <div class="analyticsBox">
-      <div class="boxLabel">READYの日別ファネルと成立頻度</div>
-      <div class="row"><label>集計期間 <select id="readinessHistoryDays"><option value="7">7日</option><option value="14">14日</option><option value="30">30日</option></select></label></div>
-      <div id="readinessHistoryStatus" class="status">保存済みの観測データを読み込み中です。</div>
-      <div id="readinessHistorySummary" class="summary"></div>
-      <div class="sub">条件未達の件数は「銘柄 × 15分ごとの観測回数」です。同じsetupの反復を含みます。成立頻度はsetupごとの初回シグナルを数え、反復観測をエントリー回数に加えません。</div>
-      <div class="scroll"><table><thead><tr><th>日付 JST</th><th>観測 / 予定枠</th><th>市場取得率</th><th>データ不足</th><th>トレンド未達</th><th>ブレイク未達</th><th>リテスト未達</th><th>15M確認未達</th><th>構造無効</th><th>RR不足</th><th>READY観測</th></tr></thead><tbody id="readinessHistoryFunnel"></tbody></table></div>
-      <div class="scroll"><table><thead><tr><th>日付 JST</th><th>現行 新規setup</th><th>Shadow 新規setup</th><th>現行READYの観測枠</th><th>Shadow READYの観測枠</th><th>Shadow記録枠 / 全観測</th><th>15M確認通過率</th><th>確認後の構造・RR脱落率</th><th>現行 / Shadow 確定数</th><th>サンプル</th></tr></thead><tbody id="readinessHistoryFrequency"></tbody></table></div>
-      <div id="readinessHistoryNotes" class="status"></div>
-      <div class="sub">当日は途中集計です。欠測はゼロ件と解釈しません。新規setup数は保存された成立履歴のみで、アプリ起動回数や銘柄数とは別です。過去に未保存のShadow観測値は「—」と表示します。割合は保存された観測に限る記述統計で、勝率ではありません。</div>
-    </div>
-    <div class="analyticsBox">
-      <div class="boxLabel">現行READY / Shadow v2 成績比較</div>
-      <div class="sub">保存済み履歴全体から、各setupの初回エントリーを比較。Shadowは検証用です。自動昇格・注文執行は行いません。</div>
-      <div id="strategyComparisonSummary" class="summary"></div>
-      <div id="strategyComparisonStatus" class="status">比較データを読み込み中です。</div>
-      <details><summary>結果データの収集状況</summary><div id="outcomeTrackingSummary" class="summary"></div><div id="outcomeTrackingStatus" class="status">追跡状況を読み込み中です。</div><div class="sub">遅延は未処理の確定足が2本以上の場合。履歴不足は未処理遅延と別に表示します。欠測のTP／SLは推測せず、監視終了後も保存済み取引の追跡を続けます。</div></details>
-      <details><summary>保存結果と公開実足の照合</summary>
-        <div id="outcomeAuditStatus" class="status">結果監査を読み込み中です。</div>
-        <div id="outcomeAuditSummary" class="summary"></div>
-        <div class="scroll"><table><thead><tr><th>戦略 / 銘柄</th><th>保存結果</th><th>照合</th><th>判定済み最終足</th><th>差異 / 欠測</th></tr></thead><tbody id="outcomeAuditBody"></tbody></table></div>
-        <div class="sub">表示した監査時点の保存済みEntry・SL・TPを使い、確認足の確定後から判定済み最終足までの公開15M足で結果を再計算します。保存結果を再計算の入力には使いません。OPENの一致は利益確定ではありません。公開履歴は後から修正され得るため、差異は調査対象とし、保存結果の自動上書きや昇格標本の追加は行いません。</div>
-      </details>
-      <div class="scroll"><table><thead><tr><th>母集団 / 戦略</th><th>signals</th><th>resolved</th><th>TP / SL</th><th>OPEN / 曖昧</th><th>勝率</th><th>Avg R</th><th>PF</th><th>MFE / MAE (R)</th><th>最大連敗</th><th>Expectancy (R)</th><th>サンプル</th></tr></thead><tbody id="strategyComparisonMetrics"></tbody></table></div>
-      <details><summary>集計方法・除外データ</summary><div id="strategyComparisonNotes" class="status"></div></details>
-      <div class="sub">成立したsetupの履歴（ENTRY NOWの現在判定とは別）。時刻は各戦略の記録時刻です。</div>
-      <div class="scroll"><table><thead><tr><th>銘柄 / 方向</th><th>成立区分</th><th>現行 時刻 / Entry / 結果</th><th>Shadow 時刻 / Entry / 結果</th></tr></thead><tbody id="strategyComparisonBody"></tbody></table></div>
-    </div>
-    <details class="analyticsBox">
-      <summary>REPLAY — 過去市場データによる検証</summary>
-      <div class="sub">ライブShadowと分離した固定期間の過去検証。本番昇格サンプルには加算しません。</div>
-      <div id="replayReviewStatus" class="status">過去検証を読み込み中です。</div>
-      <div id="replayReviewSummary" class="summary"></div>
-      <div class="scroll"><table><thead><tr><th>戦略</th><th>signals / resolved</th><th>TP / SL / 曖昧</th><th>OPEN</th><th>勝率</th><th>Avg R / Expectancy</th><th>PF</th><th>MFE / MAE (R)</th><th>最大連敗</th></tr></thead><tbody id="replayReviewBody"></tbody></table></div>
-      <div id="replayReviewNotes" class="status"></div>
-      <details><summary>Entry時点の損失要因 — 記述分析</summary>
-        <div id="entryDiagnosticsStatus" class="status">Entry分析を読み込み中です。</div>
-        <div class="scroll"><table><thead><tr><th>比較項目 / 区分</th><th>signals / resolved</th><th>TP / SL / OPEN</th><th>Avg R</th><th>PF</th><th>サンプル</th></tr></thead><tbody id="entryDiagnosticsBody"></tbody></table></div>
-        <div class="sub">同じ過去7日間の事後分析です。4Hブレイク確定後に始まる15M足だけを「確定後のretest」と分類します。足内順序は推測しません。OPENを表示し、収益指標は検証済み確定結果のみです。区分は最適化した閾値ではありません。前のEntryを除外すると後のEntryが成立し得るため、この表は新ルールの検証結果ではありません。本番条件・昇格集計は変更しません。</div>
-      </details>
-      <details><summary>別Shadow — ブレイク確定後retestの時間順REPLAY</summary>
-        <div id="chronologyReviewStatus" class="status">別Shadowの結果を読み込み中です。</div>
-        <div class="scroll"><table><thead><tr><th>期間 / 戦略</th><th>signals / resolved</th><th>TP / SL / OPEN / 曖昧</th><th>Avg R</th><th>PF</th><th>最大連敗</th><th>サンプル</th></tr></thead><tbody id="chronologyReviewBody"></tbody></table></div>
-        <div id="chronologyReviewChanges" class="status"></div>
-        <div class="sub">追加条件は、同じ直近4本の中に4Hブレイク確定後に始まるretest足があることだけ。確認足自身のretestは許容します。各戦略の初回Entryを時間順に再計算し、価格・SL・TPもその時点で算出します。未見期間も過去履歴・現在の銘柄集合による検証で、将来のライブ成績を保証しません。ライブ昇格サンプルへ加算せず、本番条件・既存Shadow・通知を変更しません。</div>
-      </details>
-      <details><summary>機会数を増やす案 — EMA20押し目Shadowの検証</summary>
-        <div id="pullbackReviewStatus" class="status">押し目Shadowの検証結果を読み込み中です。</div>
-        <div class="scroll"><table><thead><tr><th>期間 / 戦略</th><th>signals / resolved</th><th>TP / SL / OPEN / 曖昧</th><th>勝率</th><th>Avg R / Expectancy</th><th>PF</th><th>MFE / MAE (R)</th><th>最大連敗</th><th>サンプル</th></tr></thead><tbody id="pullbackReviewBody"></tbody></table></div>
-        <div id="pullbackReviewNotes" class="status"></div>
-        <div class="sub">4Hトレンド中のEMA20への押し目・戻りを別setupとして追跡し、4H確定後の15Mリテストと方向＋水準の確認を要求します。4H構造SL＋既存ATRバッファを使い、事前の20本の構造高値・安値まで2R以上の余地がある場合だけ第一TPを2Rにします。ルール・2期間を結果を見る前に固定しました。過去検証のみで、ENTRY NOW・通知・ライブ昇格サンプルには加算しません。</div>
-      </details>
-    </details>
-    <div class="analyticsBox">
-      <div class="boxLabel">READY v2 — 検証中</div>
-      <div class="sub">4H構造ストップは維持。ブレイク前レンジのMeasured Moveで2R以上の余地がある場合だけ候補化し、第一TPは2R。現行シグナルにはまだ使用しません。</div>
-      <div id="shadowV2Summary" class="summary"></div>
-      <div id="shadowV2Status" class="status">検証データを読み込み中です。</div>
-      <div id="shadowV2Current" class="priorityList"></div>
-      <div class="scroll"><table><thead><tr><th>日時</th><th>銘柄</th><th>方向</th><th>Entry</th><th>SL</th><th>2R TP</th><th>余地RR</th><th>結果</th><th>R</th></tr></thead><tbody id="shadowV2Body"></tbody></table></div>
-    </div>
-    <div class="analyticsBox">
-      <div class="boxLabel">setupの監視履歴</div>
-      <div class="sub">現在のENTRY判定は上部で確認してください。監視終了後も、記録済みシグナルのTP／SL検証は継続します。</div>
-      <div id="setupLifecycleSummary" class="summary"></div>
-      <div id="setupLifecycleStatus" class="status">履歴を読み込み中です。</div>
-      <div class="scroll"><table><thead><tr><th>銘柄 / 方向</th><th>監視状態</th><th>最終市場確認</th><th>終了理由 / 確認時刻</th><th>現行の結果</th><th>Shadowの結果</th></tr></thead><tbody id="setupLifecycleBody"></tbody></table></div>
-      <div id="setupLifecycleEvents" class="status"></div>
-    </div>
-    <div class="analyticsBox">
-      <div class="boxLabel">15分足確認ボトルネック</div>
-      <div class="sub">「ローソク足の方向」と「ロール水準」を分解。条件は自動変更しません。</div>
-      <div id="confirmationDiagSummary" class="summary"></div>
-      <div id="confirmationDiagStatus" class="status">診断データを読み込み中です。</div>
-      <div id="confirmationDiagHistory"></div>
-      <div class="scroll"><table><thead><tr><th>銘柄</th><th>方向</th><th>スコア</th><th>RR</th><th>足方向</th><th>水準</th><th>Body/ATR</th><th>水準余白/ATR</th></tr></thead><tbody id="confirmationDiagBody"></tbody></table></div>
-    </div>
-    <div class="analyticsBox">
-      <div class="boxLabel">確認待ちの効果</div>
-      <div class="sub">NEAR時点のEntry / SL / TPを固定して仮想追跡します。</div>
-      <div id="opportunitySummary" class="summary"></div>
-      <div id="opportunityStatus" class="status">候補データを蓄積中です。</div>
-      <div class="scroll"><table><thead><tr><th>日時</th><th>銘柄</th><th>候補</th><th>READY昇格</th><th>仮想結果</th><th>R</th><th>MFE</th><th>MAE</th><th>RR</th><th>スコア</th></tr></thead><tbody id="opportunityBody"></tbody></table></div>
-    </div>
-    <div class="analyticsBox">
-      <div class="boxLabel">急接近度の実績検証</div>
-      <div class="sub">70点クロス後48時間を仮想追跡します。</div>
-      <div id="approachValidationSummary" class="summary"></div>
-      <div id="approachValidationStatus" class="status">検証データを蓄積中です。</div>
-      <div id="approachValidationBands"></div>
-      <div class="scroll"><table><thead><tr><th>日時</th><th>銘柄</th><th>急接近度</th><th>READY</th><th>時間</th><th>仮想結果</th><th>R</th><th>MFE</th><th>MAE</th></tr></thead><tbody id="approachValidationBody"></tbody></table></div>
-    </div>
-    <div class="chartWrap"><div class="chartTitle"><b>市場の推移</b><span class="muted">直近48時間</span></div><canvas id="marketHistoryChart" class="chart"></canvas></div>
-    <div class="analyticsBox"><div class="boxLabel">戦略の改善候補</div><div class="sub">検証実績から抽出。戦略条件は自動変更しません。</div><div id="strategyHypotheses" class="status"></div></div>
-  </div>
-</details>
-
-<details class="dashboardDrawer">
-  <summary><span>市場データとレポート</span><span class="drawerHint">24h・方向感・日次・データ状態</span></summary>
-  <div class="drawerBody">
-    <div class="drawerGrid">
-      <div class="analyticsBox"><div class="boxLabel">24時間の変化</div><div id="dashChange" class="summary"></div></div>
-      <div class="analyticsBox"><div class="boxLabel">市場の方向感</div><div id="dashBreadth" class="summary"></div></div>
-      <div class="analyticsBox"><div class="boxLabel">注目候補</div><div id="dashTop" class="status"></div></div>
-      <div class="analyticsBox"><div class="boxLabel">データ状態</div><div id="dashHealth" class="status"></div></div>
-    </div>
-    <div class="analyticsBox"><div class="boxLabel">日次レポート</div><div class="sub">前日分を自動生成して最大45日保存します。</div><div id="dailyReports" class="status">読み込み中…</div></div>
-  </div>
-</details>
-
-<details class="dashboardDrawer">
-  <summary><span>通知とアプリ設定</span><span class="drawerHint">Push・静音・同期・バックアップ</span></summary>
+</div></details>
+<details class="dashboardDrawer" id="notificationSettings"><summary>エントリー通知</summary><div class="drawerBody">
+<div class="analyticsBox">
+  <div class="boxLabel">エントリー通知</div>
+  <div id="pushStatus" class="status compactStatus">確認中…</div>
+  <button class="ghost compactButton" id="backgroundPush">バックグラウンド通知 OFF</button>
+  <div id="pushGuide" class="sub compactHelp"></div>
+</div><details class="dashboardDrawer">
+  <summary><span>通知と端末設定</span><span class="drawerHint">エントリー可能のみ通知</span></summary>
   <div class="drawerBody">
     <div class="settingsActions">
       <button class="ghost" id="candidateNotify">画面内通知 OFF</button>
       <button class="ghost" id="installApp">ホーム画面に追加</button>
-      <button class="ghost" id="autoJournalReady">READY自動記録 ON</button>
-      <button class="ghost" id="exportAll">全データ保存</button>
-      <label class="ghost fileButton">保存データ読込<input id="importAll" type="file" accept="application/json" hidden></label>
     </div>
     <div class="drawerGrid">
       <div class="analyticsBox">
@@ -345,7 +234,6 @@ button{-webkit-tap-highlight-color:transparent}
         <div id="pushPrefStatus" class="sub"></div>
         <div id="pushEvents" class="alertList"><span class="muted">配信履歴を読み込みます</span></div>
       </div>
-      <div class="analyticsBox"><div class="boxLabel">条件アラート</div><div class="sub">エントリー可能のみ通知するため、保存済みの条件アラートは停止中です。</div><div id="customAlerts" class="status">保存済みの条件アラートを表示します。</div></div>
     </div>
     <div class="analyticsBox">
       <div class="boxLabel">お気に入りの端末間同期</div>
@@ -354,62 +242,7 @@ button{-webkit-tap-highlight-color:transparent}
       <div id="watchSyncStatus" class="sub"></div>
     </div>
   </div>
-</details>
-</section>
-
-<section id="screen" class="panel">
-<h2>銘柄スキャン</h2>
-<div class="filters">
-<div class="field small"><label>銘柄検索</label><input id="q" placeholder="BTC / HYPE"></div>
-<div class="field small"><label>状態</label><select id="stage"><option value="ALL">すべて</option><option value="READY">エントリー可能</option><option value="NEAR">直前候補</option><option value="CONFIRMATION_WAIT">15分足確認待ち</option><option value="RETEST_WAIT">リテスト待ち</option><option value="RR_WAIT">RR不足</option><option value="BREAKOUT_WAIT">ブレイク待ち</option><option value="TREND_WAIT">方向感待ち</option></select></div>
-<div class="field small"><label>方向</label><select id="direction"><option value="ALL">すべて</option><option value="LONG">ロング</option><option value="SHORT">ショート</option><option value="NEUTRAL">中立</option></select></div>
-<div class="field small"><label>最低スコア</label><input id="minScore" type="number" min="0" max="100" value="0"></div>
-<div class="field small"><label>最低RR</label><input id="minRR" type="number" min="0" step="0.1" placeholder="any"></div>
-</div>
-<div class="row" style="margin-top:10px"><button class="primary" id="scan">スキャン</button><button class="ghost" id="force">強制更新</button><button class="ghost" id="autoScan">自動更新 OFF</button><button class="ghost" id="presetNear">直前候補</button><button class="ghost" id="presetReady">READY</button><button class="ghost" id="presetHigh">スコア70+</button><button class="ghost" id="presetReset">リセット</button><button class="ghost" id="watchOnly">★のみ</button><button class="ghost" id="compareSelected">比較</button><button class="ghost" id="csv">CSV保存</button><span id="lastScan" class="pill">未更新</span></div>
-<div id="summary" class="summary"></div>
-<div id="screenStatus" class="status">4H→15Mで全取引可能銘柄を確認します。</div>
-<div class="scroll"><table><thead><tr><th>★</th><th>選択</th><th>銘柄</th><th>状態</th><th>方向</th><th>スコア</th><th>価格</th><th>24h</th><th>出来高比</th><th>RR</th><th>次の行動</th><th>データ鮮度</th><th>状態</th></tr></thead><tbody id="screenBody"></tbody></table></div>
-</section>
-
-<section id="analysis" class="panel">
-<h2>銘柄分析</h2>
-<div class="row"><div class="field"><label>銘柄</label><input id="ticker" value="BTCUSDC"></div><button class="primary" id="analyze">分析</button><button class="ghost" id="savePlan">検証記録へ保存</button><button class="ghost" id="toRisk">資金管理へ</button><button class="ghost" id="copyPlan">プランをコピー</button><button class="ghost" id="sharePlan">共有</button></div>
-<div id="analysisStatus" class="status">BTC のような短縮入力でも検索します。</div>
-<div id="actionOut"></div>
-<div id="readyActionCard"></div>
-<div id="quickRiskOut"></div>
-<div id="analysisOut"></div>
-<div class="section" style="display:none"><h2>この銘柄を条件監視</h2><div class="sub">通知は現行READYのエントリー可能のみです。条件アラートは停止中です。</div>
-<div class="row"><div class="field small"><label>条件</label><select id="customAlertCondition" disabled><option value="PRICE_ABOVE">価格が以上</option><option value="PRICE_BELOW">価格が以下</option><option value="ENTRY_NEAR">Entryまでの距離 %以下</option><option value="RR_ABOVE">RRが以上</option></select></div><div class="field small"><label>しきい値</label><input id="customAlertThreshold" disabled type="number" step="any" placeholder="例 0.5"></div><button class="ghost" id="createCustomAlert" disabled>アラート追加</button></div>
-<div id="customAlertStatus" class="sub" style="margin-top:8px"></div></div>
-<div class="section"><h2>値動き</h2><div class="legend"><span class="good">TP</span><span style="color:#7dd3fc">エントリー / ブレイク</span><span class="bad">SL</span><span style="color:#c4b5fd">EMA20</span><span style="color:#f9a8d4">EMA50</span></div><div class="chartGrid"><div class="chartWrap"><div class="chartTitle"><b>4H</b><span class="muted">大局</span></div><canvas id="chart4h" class="chart"></canvas></div><div class="chartWrap"><div class="chartTitle"><b>15M</b><span class="muted">エントリー</span></div><canvas id="chart15m" class="chart"></canvas></div></div></div>
-</section>
-
-<section id="compare" class="panel">
-<h2>銘柄比較</h2><div class="sub">銘柄スキャンで2〜6銘柄を選ぶと、条件を横並びで比較できます。</div><div id="compareOut" class="scroll" style="margin-top:14px"></div>
-</section>
-
-<section id="journal" class="panel">
-<h2>検証記録</h2>
-<div class="sub">分析シナリオと結果を保存します。サーバー側にも同期されるため再デプロイ後も残ります。</div>
-<div class="row" style="margin-top:10px"><button class="primary" id="refreshJournal">結果を再確認</button><button class="ghost" id="exportJournal">記録を保存</button><label class="ghost" style="cursor:pointer">記録を読込<input id="importJournal" type="file" accept="application/json" style="display:none"></label></div>
-<div id="journalSummary" class="summary"></div>
-<div class="section"><h2>成績分析</h2><details class="help"><summary>成績指標の見方</summary><div><b>R</b>＝1回の許容損失を1とした損益。+2Rなら許容損失の2倍の利益です。<br><b>PF</b>＝利益合計 ÷ 損失合計。1を超えるほど利益側が大きいことを示します。<br><b>MFE</b>＝エントリー後にどこまで有利に進んだか。<br><b>MAE</b>＝エントリー後にどこまで逆行したか。<br>10件未満の条件はサンプル不足として判断対象外にします。</div></details><div id="journalEvidence" class="summary"></div><div id="journalAnalytics"></div><div class="chartWrap"><div class="chartTitle"><b>正式シグナルの累積R</b><span class="muted">累積R</span></div><canvas id="equityCurve" class="chart"></canvas></div></div>
-<div id="journalStatus" class="status">保存したシナリオはまだありません。</div>
-<div class="scroll"><table><thead><tr><th>日時</th><th>銘柄</th><th>方向</th><th>判断</th><th>エントリー</th><th>SL</th><th>TP</th><th>RR</th><th>スコア</th><th>結果</th><th>MFE</th><th>MAE</th><th>R</th><th>履歴</th><th>操作</th></tr></thead><tbody id="journalBody"></tbody></table></div>
-</section>
-
-<section id="risk" class="panel">
-<h2>資金管理</h2>
-<div class="row">
-<div class="field"><label>資金 USDC</label><input id="equity" type="number" value="1000"></div><div class="field"><label>1回の許容損失 %</label><input id="riskPct" type="number" value="5"></div>
-<div class="field"><label>エントリー価格</label><input id="entry" type="number" step="any"></div><div class="field"><label>損切り価格</label><input id="stop" type="number" step="any"></div>
-<div class="field"><label>利確価格</label><input id="target" type="number" step="any"></div><div class="field"><label>注文刻み</label><input id="step" type="number" step="any"></div>
-<div class="field"><label>最小注文量</label><input id="minOrder" type="number" step="any"></div><div class="field"><label>最大注文量</label><input id="maxOrder" type="number" step="any"></div>
-<div class="field"><label>レバレッジ</label><input id="lev" type="number" step="any"></div><button class="primary" id="calc">計算</button>
-</div>
-<div id="riskStatus" class="status">損切りに到達したときの最大損失から、安全な注文数量を逆算します。</div><div id="riskOut" class="grid"></div><details class="help"><summary>資金管理の考え方</summary><div>「1回の許容損失 %」を先に決め、エントリー価格と損切り価格の距離から注文数量を計算します。注文刻み・最小注文量・最大注文量・レバレッジ上限も反映します。</div></details>
+</details></div></details>
 </section>
 </main>
 <script>
@@ -418,6 +251,30 @@ function fmt(x,d){return x==null?"—":Number(x).toLocaleString("ja-JP",{maximum
 function pct(x){return x==null?"—":(x>=0?"+":"")+Number(x).toFixed(2)+"%"}
 function card(k,v){return '<div class="card"><div class="k">'+k+'</div><div class="v">'+v+'</div></div>'}
 async function jf(url,opt){var r=await fetch(url,opt),j={};try{j=await r.json()}catch(e){}if(!r.ok)throw new Error(j.detail||("HTTP "+r.status));return j}
+var apiCheckRequest=0;
+async function checkApiConnections(){
+ var st=document.getElementById('apiCheckStatus'),out=document.getElementById('apiCheckResults'),button=document.getElementById('checkApi');if(!st||!out||!button)return;
+ var version=++apiCheckRequest;button.disabled=true;st.textContent='APIを確認中…';out.innerHTML='';
+ var checks=[
+  {label:'サーバー・保存DB',url:'/health',validate:function(j){if(j.ok!==true||!j.storage||j.storage.db_exists!==true)throw new Error();return {text:'v'+j.version+' / 保存DBあり'}}},
+  {label:'市場スキャン',url:'/api/screener?limit=3',validate:function(j){if(!Array.isArray(j.results)||!Number.isFinite(j.scanned))throw new Error();var age=j.snapshot_age_seconds;return {warn:!Number.isFinite(age)||age<0||age>=120,text:j.scanned+'銘柄評価 / '+(Number.isFinite(age)?Math.round(age)+'秒前':'鮮度不明')}}},
+  {label:'銘柄分析',url:'/api/analyze?ticker=BTCUSDC',validate:function(j){if(j.ticker!=='BTCUSDC'||!j.stage)throw new Error();var age=j.data_age_seconds;return {warn:!Number.isFinite(age)||age<0||age>=900,text:j.ticker+' / '+stageJa(j.stage)+' / '+(Number.isFinite(age)?'確定足 '+Math.round(age)+'秒前':'鮮度不明')}}},
+  {label:'エントリー通知',url:'/api/push/config',validate:function(j){if(typeof j.enabled!=='boolean'||j.notification_policy!=='READY_ONLY'||j.daily_summary_enabled!==false)throw new Error();return {warn:!j.enabled,text:j.enabled?'通知サーバー有効 / エントリー可能のみ':'通知サーバー未設定'}}},
+  {label:'模擬執行',url:'/api/paper-execution?limit=1',validate:function(j){if(j.mode!=='PAPER_ONLY'||j.real_orders_enabled!==false||j.eligible_for_live_promotion!==false||j.automatic_promotion!==false||j.source!=='CURRENT_READY_ONLY'||!j.account)throw new Error();var a=j.account;return {warn:a.paused||a.collector_stale||!Number.isFinite(a.last_cycle_ms)||a.last_cycle_ms<=0,text:a.paused?'模擬口座停止':a.collector_stale?'模擬データの更新を確認':'PAPER ONLY / 実注文なし'}}}
+ ];
+ var results=await Promise.all(checks.map(async function(c){
+  var controller=new AbortController(),timeout=setTimeout(function(){controller.abort()},15000);
+  try{var j=await jf(c.url,{signal:controller.signal}),r=c.validate(j);return {label:c.label,state:r.warn?'warn':'good',text:r.text}}
+  catch(e){return {label:c.label,state:'bad',text:'取得・応答内容を確認できません。再確認してください。'}}
+  finally{clearTimeout(timeout)}
+ }));
+ if(version!==apiCheckRequest)return;
+ out.innerHTML=results.map(function(r){return '<div class="apiCheckRow"><b>'+lifecycleEscape(r.label)+'</b><span class="'+r.state+'">'+({good:'正常',warn:'要確認',bad:'失敗'}[r.state])+'</span><div class="sub">'+lifecycleEscape(r.text)+'</div></div>'}).join('');
+ st.textContent='正常 '+results.filter(function(r){return r.state==='good'}).length+' / 要確認 '+results.filter(function(r){return r.state==='warn'}).length+' / 失敗 '+results.filter(function(r){return r.state==='bad'}).length+' — 確認 '+new Date().toLocaleTimeString('ja-JP')+'時点。現在の状態は再確認してください。';button.disabled=false;
+}
+function openRiskCalculator(){tab('analysis');var el=document.getElementById('risk');if(el){el.open=true;el.scrollIntoView({behavior:'smooth',block:'start'})}}
+document.getElementById('checkApi').onclick=function(){checkApiConnections();loadPaperExecution()};
+document.getElementById('openNotifications').onclick=function(){tab('api');var el=document.getElementById('notificationSettings');el.open=true;el.scrollIntoView({behavior:'smooth',block:'start'})};
 function saveWatch(){localStorage.setItem("edgexWatch",JSON.stringify(Array.from(watch)));renderQuickAccess();saveWatchToServer()}
 function newSyncKey(){var a=new Uint32Array(4);crypto.getRandomValues(a);return Array.from(a).map(x=>x.toString(16).padStart(8,"0")).join("")}
 function showWatchSyncStatus(msg,cls){var e=document.getElementById("watchSyncStatus");if(e)e.innerHTML='<span class="'+(cls||"muted")+'">'+msg+'</span>'}
@@ -428,9 +285,9 @@ async function loadWatchFromServer(key,replaceLocal){
  }catch(e){showWatchSyncStatus("同期失敗: "+e.message,"error")}
 }
 async function initWatchSync(){if(!watchSyncKey){watchSyncKey=newSyncKey();localStorage.setItem("edgexWatchSyncKey",watchSyncKey)}document.getElementById("watchSyncKey").value=watchSyncKey;await loadWatchFromServer(watchSyncKey,false)}
-function tab(name){var b=document.querySelector('[data-tab="'+name+'"]');if(b)b.click()}
+function tab(name){if(name==="risk"){openRiskCalculator();return}if(name==="compare"||name==="journal")name="dashboard";var b=document.querySelector('[data-tab="'+name+'"]');if(b)b.click()}
 function updateUrl(tabName,ticker){var u=new URL(location.href);u.searchParams.set("tab",tabName);if(tabName==="analysis"&&ticker)u.searchParams.set("ticker",ticker);else u.searchParams.delete("ticker");history.replaceState(null,"",u)}
-document.querySelectorAll("[data-tab]").forEach(function(b){b.onclick=function(){document.querySelectorAll("[data-tab]").forEach(x=>x.classList.remove("active"));document.querySelectorAll(".panel").forEach(x=>x.classList.remove("active"));b.classList.add("active");document.getElementById(b.dataset.tab).classList.add("active");updateUrl(b.dataset.tab,b.dataset.tab==="analysis"?document.getElementById("ticker").value.trim():"")}});
+document.querySelectorAll("[data-tab]").forEach(function(b){b.onclick=function(){document.querySelectorAll("[data-tab]").forEach(x=>x.classList.remove("active"));document.querySelectorAll(".panel").forEach(x=>x.classList.remove("active"));b.classList.add("active");document.getElementById(b.dataset.tab).classList.add("active");updateUrl(b.dataset.tab,b.dataset.tab==="analysis"?document.getElementById("ticker").value.trim():"");if(b.dataset.tab==="api"){checkApiConnections();loadPaperExecution()}}});
 
 function candidateLike(x){if(!x)return false;var rr=Number(x.rr||0);return x.stage==="READY"||((x.stage==="CONFIRMATION_WAIT"||x.stage==="RETEST_WAIT")&&rr>=2)}
 function makeVisitSnapshot(j){var map={};(j.results||[]).forEach(function(r){map[r.ticker]={stage:r.stage,score:Number(r.score||0),rr:r.rr,direction:r.direction}});return {time_ms:Date.now(),rows:map}}
@@ -707,7 +564,7 @@ function renderDailyReports(reports){
  el.innerHTML=reports.slice(0,7).map(function(r){var m=r.last_market||{};return '<div class="reportItem"><b>'+r.date+'</b><div class="pickMeta"><span class="pill">NEAR発生 '+r.near_events+'</span><span class="pill">READY発生 '+r.ready_events+'</span><span class="pill">ピーク有力候補 '+r.peak_qualified_near+'</span><span class="pill">平均 '+fmt(m.avg_score,1)+'点</span></div><div class="pickReason">主なNEAR: '+((r.top_near_tickers||[]).join(", ")||"なし")+'</div></div>'}).join("")
 }
 async function loadDailyReports(){try{var j=await jf("/api/daily-reports?limit=30");renderDailyReports(j.reports||[])}catch(e){document.getElementById("dailyReports").innerHTML='<span class="error">'+e.message+'</span>'}}
-async function loadNotificationCenter(){await Promise.all([loadPushPreferences(),loadPushEvents(),loadCustomAlerts()])}
+async function loadNotificationCenter(){await Promise.all([loadPushPreferences(),loadPushEvents()])}
 async function syncBackgroundPushButton(){
  var b=document.getElementById("backgroundPush"),s=document.getElementById("pushStatus");if(!b||!s)return;renderPushGuide();var compat=pushCompatibility();
  if(compat.ios&&!compat.standalone){b.textContent="iPhone: ホーム画面追加後にON";s.innerHTML='<span class="warn">Safariの通常タブではバックグラウンドPushを有効化できません。</span>';return}
@@ -820,12 +677,12 @@ function renderGlobalEntryBar(j){
 }
 function refreshGlobalEntryAge(){
  if(!globalEntrySnapshot)return;
- renderGlobalEntryBar(globalEntrySnapshot);if(entryFreshness(globalEntrySnapshot).stale)renderEntryNow(globalEntrySnapshot)
+ renderGlobalEntryBar(globalEntrySnapshot);if(entryFreshness(globalEntrySnapshot).stale)renderEntryNow(globalEntrySnapshot);if(typeof renderNearCandidates==="function")renderNearCandidates(globalEntrySnapshot);if(typeof renderDashboard==="function")renderDashboard()
 }
 async function refreshEntryHeartbeat(){
  if(entryHeartbeatBusy||document.visibilityState==="hidden")return;entryHeartbeatBusy=true;
  try{
-  var j=await jf("/api/screener?limit=3");j._client_rendered_ms=Date.now();globalEntrySnapshot=j;renderGlobalEntryBar(j);renderEntryNow(j)
+  var j=await jf("/api/screener?limit=3");j._client_rendered_ms=Date.now();globalEntrySnapshot=j;renderGlobalEntryBar(j);renderEntryNow(j);if(typeof renderNearCandidates==="function")renderNearCandidates(j);if(typeof renderDashboard==="function")renderDashboard()
  }catch(e){
   refreshGlobalEntryAge()
  }finally{entryHeartbeatBusy=false}
@@ -866,11 +723,14 @@ async function renderEntryNow(j){
  }
 }
 
-function renderDailyConvenience(j){
- renderEntryNow(j);
- var re=document.getElementById("marketRegime"),pe=document.getElementById("dailyPicks"),r=j&&j.market_regime,picks=(j&&j.daily_picks)||[];renderWatchStatus((j&&j.watch_status)||[]);renderPriorityRanking((j&&j.priority_ranking)||[]);renderEarlyWatch((j&&j.early_watch)||[]);
- if(re){re.innerHTML=r?'<span class="pill"><b>'+regimeBiasJa(r.bias)+'</b></span><span class="pill">'+regimeActivityJa(r.activity)+'</span><span class="pill">偏り '+fmt(Math.abs(r.bias_pct||0),1)+'%</span><span class="pill">平均 '+fmt(r.average_score,1)+'点</span>':'<span class="muted">データ待ち</span>'}
- if(pe){pe.innerHTML=picks.length?picks.map(function(p,i){return '<button class="pickCard" data-ticker="'+p.ticker+'"><div class="k">確認優先 '+(i+1)+' / 総合 '+fmt(p.priority_score,1)+'点</div><b>'+p.ticker+'</b><div class="pickMeta"><span class="badge '+p.stage+'">'+stageJa(p.stage)+'</span><span class="pill">'+directionJa(p.direction)+'</span><span class="pill">セットアップ '+fmt(p.score,1)+'</span><span class="pill">RR '+fmt(p.rr,2)+'</span></div><div class="pickReason">'+reasonJa(p.reason)+'</div></button>'}).join(""):'<span class="muted">候補なし</span>';pe.querySelectorAll(".pickCard").forEach(function(b){b.onclick=function(){document.getElementById("ticker").value=this.dataset.ticker;tab("analysis");analyze()}})}
+function renderDailyConvenience(j){renderEntryNow(j);renderNearCandidates(j);renderDashboard()}
+function renderNearCandidates(j){
+ var el=document.getElementById("nearCandidates");if(!el)return;
+ if(entryFreshness(j).stale){el.innerHTML='<span class="warn">データ鮮度を確認 — 更新後に候補を表示します。</span>';return}
+ var near=(j.qualified_near_candidates||[]).filter(function(r){return r.stage!=="READY"}).slice(0,6);
+ if(!near.length){el.innerHTML='<span class="muted">有力な直前候補はありません。</span>';return}
+ el.innerHTML=near.map(function(r){var e=lifecycleEscape;return '<button class="nearCandidateCard" data-ticker="'+e(r.ticker)+'"><div class="entryReadyTop"><b class="entryTicker">'+e(r.ticker)+'</b><span class="entryDirection">'+e(directionJa(r.direction))+'</span><span class="badge warn">まだ待つ</span></div><div class="pickMeta"><span class="warn">'+e(stageJa(r.stage))+'</span><span class="pill">RR '+fmt(r.rr,2)+'</span></div><div class="entryNumbers">'+entryMetric("Entry目安",fmt(r.entry_reference,8))+entryMetric("SL",fmt(r.stop_loss,8))+entryMetric("TP",fmt(r.take_profit,8))+'</div><div class="pickReason">'+e(reasonJa(r.reason))+'</div></button>'}).join("");
+ el.querySelectorAll(".nearCandidateCard").forEach(function(b){b.onclick=function(){if(entryFreshness(j).stale){renderNearCandidates(j);return}document.getElementById("ticker").value=this.dataset.ticker;tab("analysis");analyze()}});
 }
 function stageJa(v){return ({READY:"エントリー可能",CONFIRMATION_WAIT:"15分足の確認待ち",RETEST_WAIT:"リテスト待ち",RR_WAIT:"RR不足",BREAKOUT_WAIT:"ブレイク待ち",TREND_WAIT:"方向感待ち",STRUCTURE_WAIT:"価格構造待ち",DATA_WAIT:"データ待ち",NEAR:"直前候補"}[v]||v||"—")}
 function directionJa(v){return ({LONG:"ロング",SHORT:"ショート",NEUTRAL:"中立",UP:"上昇",DOWN:"下降"}[v]||v||"—")}
@@ -916,20 +776,14 @@ function buildHypotheses(){
  return out;
 }
 function renderDashboard(){
- var latest=marketHistory.length?marketHistory[marketHistory.length-1]:null,old=latest?nearestSnapshot(latest.time_ms-24*60*60*1000):null;
- var sum=document.getElementById("dashSummary"),chg=document.getElementById("dashChange"),breadth=document.getElementById("dashBreadth"),top=document.getElementById("dashTop"),health=document.getElementById("dashHealth"),hyp=document.getElementById("strategyHypotheses"),upd=document.getElementById("dashUpdated");
- if(!sum)return;
- if(!latest){sum.innerHTML=card("状態","初回スキャン待ち");chg.innerHTML=card("24時間","データなし");breadth.innerHTML=card("方向感","データなし");top.textContent="スキャン後に表示";health.textContent="保存履歴 0件";hyp.textContent="検証記録を蓄積すると改善候補を表示します。";drawMarketHistory();return}
- sum.innerHTML=card("エントリー可能",latest.ready)+card("有力な直前候補",latest.qualified_near||0)+card("直前候補 合計",latest.near)+card("平均スコア",fmt(latest.avg_score,1))+card("データ取得率",fmt(latest.coverage_pct,1)+"%")+card("ロング",latest.long)+card("ショート",latest.short);
- chg.innerHTML=card("エントリー可能",deltaText(latest,old,"ready"))+card("有力候補",deltaText(latest,old,"qualified_near"))+card("直前候補",deltaText(latest,old,"near"))+card("平均スコア",deltaText(latest,old,"avg_score"))+card("ロング",deltaText(latest,old,"long"))+card("ショート",deltaText(latest,old,"short"));
- var total=(latest.long||0)+(latest.short||0);var bias=total?((latest.long-latest.short)/total*100):0,biasLabel=Math.abs(bias)<5?"ほぼ均衡":bias>0?"ロング優勢 "+fmt(Math.abs(bias),1)+"%":"ショート優勢 "+fmt(Math.abs(bias),1)+"%";breadth.innerHTML=card("市場の偏り",biasLabel)+card("中立",latest.neutral||0)+card("全銘柄",latest.universe||0)+card("評価済み",latest.scanned||0);
- function cb(arr){return arr&&arr.length?arr.map(t=>"<button class=\"ghost dashTicker\" data-ticker=\""+t+"\">"+t+"</button>").join(" "):"なし"}top.innerHTML="<b>エントリー可能:</b> "+cb(latest.top_ready)+"<br><b>有力な直前候補:</b> "+cb(latest.top_qualified_near)+"<br><b>直前候補:</b> "+cb(latest.top_near);top.querySelectorAll(".dashTicker").forEach(b=>b.onclick=function(){document.getElementById("ticker").value=this.dataset.ticker;tab("analysis");analyze()});
- var partial=journal.filter(x=>x.result&&x.result.coverage_complete===false).length,st=journalStats();health.innerHTML="市場履歴: <b>"+marketHistory.length+"件</b> / 最古: "+new Date(marketHistory[0].time_ms).toLocaleString("ja-JP")+"<br>検証記録: <b>"+journal.length+"件</b> / 正式シグナル: "+st.signals+" / 結果確定: "+st.resolved+" / 履歴不足: "+partial+"<br>READY自動記録: <b>"+(autoJournalReady?"ON":"OFF")+"</b><br>サーバー保存: <b>"+(serverSync.ok?"同期済み":"端末のみ")+"</b>"+(serverSync.ok?" / 履歴 "+serverSync.history+" / 自動検証 "+serverSync.paper:"");
- hyp.innerHTML=buildHypotheses().map(x=>"• "+x).join("<br>");upd.textContent="更新 "+new Date(latest.time_ms).toLocaleString("ja-JP");drawMarketHistory();
+ var sum=document.getElementById("dashSummary"),upd=document.getElementById("dashUpdated"),j=globalEntrySnapshot||lastMarketPayload;if(!sum||!upd)return;
+ if(!j||entryFreshness(j).stale){sum.innerHTML=card("データ","鮮度を確認");upd.textContent="更新待ち";return}
+ sum.innerHTML=card("エントリー可能",(j.ready_candidates||[]).length)+card("次の監視候補",(j.qualified_near_candidates||[]).length)+card("評価済み",j.scanned||0)+card("データ取得率",fmt(j.coverage_pct,1)+"%");
+ upd.textContent="更新 "+new Date(j._client_rendered_ms).toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit"});
 }
 function summaryView(s){var el=document.getElementById("summary");if(!s){el.innerHTML="";return}el.innerHTML=card("エントリー可能",s.ready_count)+card("有力な直前候補",s.qualified_near_count||0)+card("直前候補 合計",s.near_signal_count)+card("ロング",s.direction_counts.LONG||0)+card("ショート",s.direction_counts.SHORT||0)+card("平均スコア",fmt(s.average_score,1))+card("有力候補",(s.top_qualified_near||[]).join(", ")||"—")}
-function renderRows(){var body=document.getElementById("screenBody");body.innerHTML="";var filtered=showWatch?rows.filter(r=>watch.has(r.ticker)):rows;filtered.forEach(function(r){var tr=document.createElement("tr");tr.innerHTML='<td class="star">'+(watch.has(r.ticker)?"★":"☆")+'</td><td><input class="check" type="checkbox" data-ticker="'+r.ticker+'"></td><td><b>'+r.ticker+'</b></td><td><span class="badge '+r.stage+'">'+stageJa(r.stage)+'</span></td><td>'+directionJa(r.direction)+'</td><td>'+fmt(r.score,1)+'</td><td>'+fmt(r.current_price,8)+'</td><td>'+pct(r.change_24h_pct)+'</td><td>'+fmt(r.volume_ratio,2)+'x</td><td>'+fmt(r.rr,2)+'</td><td>'+stageAction(r.stage)+'</td><td>'+fmt(r.data_age_seconds,0)+'s</td><td>'+reasonJa(r.reason)+'</td>';
- var tds=tr.children;tds[0].onclick=function(e){e.stopPropagation();watch.has(r.ticker)?watch.delete(r.ticker):watch.add(r.ticker);saveWatch();renderRows()};tds[2].onclick=function(){document.getElementById("ticker").value=r.ticker;tab("analysis");analyze()};body.appendChild(tr)})}
+function renderRows(){var body=document.getElementById("screenBody");body.innerHTML="";var filtered=showWatch?rows.filter(r=>watch.has(r.ticker)):rows;filtered.forEach(function(r){var tr=document.createElement("tr");tr.innerHTML='<td class="star">'+(watch.has(r.ticker)?"★":"☆")+'</td><td><b>'+r.ticker+'</b></td><td><span class="badge '+r.stage+'">'+stageJa(r.stage)+'</span></td><td>'+directionJa(r.direction)+'</td><td>'+fmt(r.score,1)+'</td><td>'+fmt(r.current_price,8)+'</td><td>'+pct(r.change_24h_pct)+'</td><td>'+fmt(r.volume_ratio,2)+'x</td><td>'+fmt(r.rr,2)+'</td><td>'+stageAction(r.stage)+'</td><td>'+fmt(r.data_age_seconds,0)+'s</td><td>'+reasonJa(r.reason)+'</td>';
+ var tds=tr.children;tds[0].onclick=function(e){e.stopPropagation();watch.has(r.ticker)?watch.delete(r.ticker):watch.add(r.ticker);saveWatch();renderRows()};tds[1].onclick=function(){document.getElementById("ticker").value=r.ticker;tab("analysis");analyze()};body.appendChild(tr)})}
 function syncAutoJournalButton(){var b=document.getElementById("autoJournalReady");if(b)b.textContent="READY自動記録 "+(autoJournalReady?"ON":"OFF")}
 function autoJournalReadyCandidates(items){
  if(!autoJournalReady||!Array.isArray(items)||!items.length)return 0;var added=0;
@@ -943,19 +797,14 @@ function autoJournalReadyCandidates(items){
  });
  if(added)saveJournalStore();return added;
 }
-async function scan(force){var s=document.getElementById("screenStatus");s.textContent="EdgeX全銘柄を取得中…";try{var u="/api/screener?limit=200&force="+force+"&stage="+encodeURIComponent(document.getElementById("stage").value)+"&direction="+encodeURIComponent(document.getElementById("direction").value)+"&min_score="+(+document.getElementById("minScore").value||0);var rr=document.getElementById("minRR").value,q=document.getElementById("q").value.trim();if(rr)u+="&min_rr="+encodeURIComponent(rr);if(q)u+="&q="+encodeURIComponent(q);if(watch.size)u+="&watch="+encodeURIComponent(Array.from(watch).join(","));var j=await jf(u);j._client_rendered_ms=Date.now();lastMarketPayload=j;rows=j.results;summaryView(j.summary);renderGlobalEntryBar(j);renderDailyConvenience(j);loadPriorityEvents();loadApproachEvents();loadApproachValidation();renderSinceLastChanges(j);processCandidateTransitions(j);loadServerCandidateEvents();loadShadowV2();loadStrategyComparison();loadSetupLifecycles();loadOutcomeTracking();loadReplayReview();loadConfirmationDiagnostics();loadReadinessHistory();loadPaperExecution();loadOpportunityAnalysis();recordMarketSnapshot(j);var autoAdded=autoJournalReadyCandidates(j.ready_candidates||[]);s.textContent=j.matched+"件表示 / "+j.scanned+"/"+j.universe+"銘柄評価 / 取得率 "+fmt(j.coverage_pct,1)+"% / データ "+(j.snapshot_age_seconds||0)+"秒前"+(autoAdded?" / READY自動記録 "+autoAdded+"件":"");document.getElementById("lastScan").textContent="更新 "+new Date().toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit",second:"2-digit"});renderRows()}catch(e){s.innerHTML='<span class="error">'+e.message+'</span>'}}
+async function scan(force){var s=document.getElementById("screenStatus");s.textContent="EdgeX全銘柄を取得中…";try{var u="/api/screener?limit=200&force="+force+"&stage="+encodeURIComponent(document.getElementById("stage").value)+"&direction="+encodeURIComponent(document.getElementById("direction").value)+"&min_score="+(+document.getElementById("minScore").value||0);var rr=document.getElementById("minRR").value,q=document.getElementById("q").value.trim();if(rr)u+="&min_rr="+encodeURIComponent(rr);if(q)u+="&q="+encodeURIComponent(q);if(watch.size)u+="&watch="+encodeURIComponent(Array.from(watch).join(","));var j=await jf(u);j._client_rendered_ms=Date.now();lastMarketPayload=j;rows=j.results;summaryView(j.summary);renderGlobalEntryBar(j);renderDailyConvenience(j);processCandidateTransitions(j);s.textContent=j.matched+"件表示 / "+j.scanned+"/"+j.universe+"銘柄評価 / 取得率 "+fmt(j.coverage_pct,1)+"% / データ "+(j.snapshot_age_seconds||0)+"秒前";document.getElementById("lastScan").textContent="更新 "+new Date().toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit",second:"2-digit"});renderRows()}catch(e){s.innerHTML='<span class="error">'+e.message+'</span>'}}
 document.getElementById("scan").onclick=()=>scan(false);document.getElementById("force").onclick=()=>scan(true);document.getElementById("autoScan").onclick=function(){var b=this;if(autoScanTimer){clearInterval(autoScanTimer);autoScanTimer=null;b.textContent="自動更新 OFF"}else{autoScanTimer=setInterval(function(){scan(false)},240000);b.textContent="自動更新 ON (4分)";scan(false)}};
 document.getElementById("presetNear").onclick=function(){document.getElementById("stage").value="NEAR";document.getElementById("minScore").value=0;document.getElementById("minRR").value="";scan(false)};
 document.getElementById("presetReady").onclick=function(){document.getElementById("stage").value="READY";document.getElementById("minScore").value=0;document.getElementById("minRR").value="";scan(false)};
-document.getElementById("presetHigh").onclick=function(){document.getElementById("stage").value="ALL";document.getElementById("minScore").value=70;document.getElementById("minRR").value="";scan(false)};
 document.getElementById("presetReset").onclick=function(){document.getElementById("q").value="";document.getElementById("stage").value="ALL";document.getElementById("direction").value="ALL";document.getElementById("minScore").value=0;document.getElementById("minRR").value="";scan(false)};
 document.getElementById("watchOnly").onclick=function(){showWatch=!showWatch;this.textContent=showWatch?"全件表示":"★のみ";renderRows()};
 
-function selected(){return Array.from(document.querySelectorAll(".check:checked")).map(x=>x.dataset.ticker)}
-async function compareTickers(tickers){var out=document.getElementById("compareOut");if(tickers.length<2){out.innerHTML='<span class="error">2銘柄以上選択してください</span>';tab("compare");return}tab("compare");out.textContent="比較中…";try{var j=await jf("/api/compare?tickers="+encodeURIComponent(tickers.join(",")));var h='<table><thead><tr><th>銘柄</th><th>状態</th><th>方向</th><th>スコア</th><th>価格</th><th>24h</th><th>出来高比</th><th>RR</th><th>エントリー</th><th>SL</th><th>TP</th></tr></thead><tbody>';j.results.forEach(r=>h+='<tr><td><b>'+r.ticker+'</b></td><td>'+stageJa(r.stage)+'</td><td>'+directionJa(r.direction)+'</td><td>'+fmt(r.score,1)+'</td><td>'+fmt(r.current_price,8)+'</td><td>'+pct(r.change_24h_pct)+'</td><td>'+fmt(r.volume_ratio,2)+'x</td><td>'+fmt(r.rr,2)+'</td><td>'+fmt(r.entry_reference,8)+'</td><td>'+fmt(r.stop_loss,8)+'</td><td>'+fmt(r.take_profit,8)+'</td></tr>');out.innerHTML=h+'</tbody></table>'}catch(e){out.innerHTML='<span class="error">'+e.message+'</span>'}}
-document.getElementById("compareSelected").onclick=()=>compareTickers(selected());
 
-document.getElementById("csv").onclick=function(){if(!rows.length)return;var cols=["ticker","stage","direction","score","current_price","change_24h_pct","volume_ratio","rr","entry_reference","stop_loss","take_profit","reason"];var csv=[cols.join(",")].concat(rows.map(r=>cols.map(c=>'"'+String(r[c]??"").replaceAll('"','""')+'"').join(","))).join("\\n");var a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));a.download="edgex-screener.csv";a.click();URL.revokeObjectURL(a.href)};
 
 function actionClass(action){return action==="ENTER"?"good":(action.indexOf("WAIT")===0?"warn":"muted")}
 function drawChart(id,series,levels,title){
@@ -984,7 +833,7 @@ function renderReadyActionCard(r,risk){
  el.innerHTML='<div class="readyActionCard"><h2>エントリー候補 — '+r.ticker+'</h2><div class="sub">現在の戦略条件をすべて満たしています。注文は自動送信しません。数値を確認して利用してください。</div><div class="grid">'+card("方向",directionJa(r.direction))+card("RR",fmt(r.rr,2))+card("注文数量",qty)+card("最大損失",loss)+card("目標利益",profit)+'</div><div class="copyGrid"><button class="copyTile readyCopy" data-value="'+r.entry_reference+'"><div class="k">Entry</div><div class="v">'+fmt(r.entry_reference,8)+'</div></button><button class="copyTile readyCopy" data-value="'+r.stop_loss+'"><div class="k">SL</div><div class="v">'+fmt(r.stop_loss,8)+'</div></button><button class="copyTile readyCopy" data-value="'+r.take_profit+'"><div class="k">TP</div><div class="v">'+fmt(r.take_profit,8)+'</div></button></div><div class="row" style="margin-top:10px"><button class="primary" id="copyReadyPlan">プラン全体をコピー</button><button class="ghost" id="readyRiskTab">資金管理を開く</button></div></div>';
  el.querySelectorAll(".readyCopy").forEach(function(b){b.onclick=function(){copyTextValue(this.dataset.value,this)}});
  var all=document.getElementById("copyReadyPlan");if(all)all.onclick=function(){copyTextValue(planText(r),this)};
- var rt=document.getElementById("readyRiskTab");if(rt)rt.onclick=function(){tab("risk")};
+ var rt=document.getElementById("readyRiskTab");if(rt)rt.onclick=function(){openRiskCalculator()};
 }
 async function renderQuickRisk(r){
  var out=document.getElementById("quickRiskOut");if(!out)return;out.innerHTML="";
@@ -1003,19 +852,17 @@ async function analyze(){
   s.innerHTML='<span class="badge '+r.stage+'">'+stageJa(r.stage)+'</span> '+directionJa(r.direction)+' — '+reasonJa(r.reason);
   a.innerHTML='<div class="actionBox"><div><div class="k">いまの判断</div><div class="actionMain '+actionClass(r.action)+'">'+actionJa(r.action)+'</div></div><div class="pill">スコア '+fmt(r.score,1)+'/100</div><div class="pill">RR '+fmt(r.rr,2)+'</div><div class="pill">'+directionJa(r.direction)+'</div></div>';
   renderReadyActionCard(r,null);
-  o.innerHTML='<div class="grid">'+card("現在価格",fmt(r.current_price,8))+card("24時間変化",pct(r.change_24h_pct))+card("4時間足の方向",trendJa(r.trend))+card("データ鮮度",fmt(r.data_age_seconds,0)+"秒前")+card("EMA20 / EMA50",fmt(r.ema20_4h,8)+" / "+fmt(r.ema50_4h,8))+card("ATR 4H / 15M",fmt(r.atr_4h,8)+" / "+fmt(r.atr_15m,8))+card("出来高比",fmt(r.volume_ratio,2)+"倍")+card("総合スコア",fmt(r.score,1))+'</div><div class="section"><h2>スコア内訳</h2><div class="grid">'+card("出来高",fmt(b.volume,1)+" /10")+card("トレンド",fmt(b.trend,1)+" /20")+card("ブレイク",fmt(b.breakout,1)+" /20")+card("リテスト",fmt(b.retest,1)+" /20")+card("15分足確認",fmt(b.confirmation,1)+" /15")+card("RR",fmt(b.rr,1)+" /15")+'</div></div><div class="section"><h2>売買シナリオ</h2><div class="grid">'+card("ブレイク基準",fmt(r.breakout_level,8))+card("エントリー目安",fmt(r.entry_reference,8))+card("損切り SL",fmt(r.stop_loss,8))+card("第1利確 TP1 (2R)",fmt(r.tp1_2r,8))+card("最終利確 TP",fmt(r.take_profit,8))+card("RR",fmt(r.rr,2))+card("4H サポート",fmt(r.support_4h,8))+card("4H レジスタンス",fmt(r.resistance_4h,8))+'</div></div><div class="section"><h2>EdgeX 注文条件</h2><div class="grid">'+card("注文刻み",fmt(r.step_size,8))+card("最小注文量",fmt(r.min_order_size,8))+card("最大注文量",fmt(r.max_order_size,8))+card("最大ロング倍率",fmt(r.max_long_leverage,2))+card("最大ショート倍率",fmt(r.max_short_leverage,2))+'</div></div>';
+  o.innerHTML='<div class="section"><h2>Entry / SL / TP</h2><div class="grid">'+card("Entry目安",fmt(r.entry_reference,8))+card("損切り SL",fmt(r.stop_loss,8))+card("利確 TP",fmt(r.take_profit,8))+card("RR",fmt(r.rr,2))+'</div></div><details class="dashboardDrawer"><summary>指標・取引条件</summary><div class="drawerBody grid">'+card("現在価格",fmt(r.current_price,8))+card("24時間変化",pct(r.change_24h_pct))+card("4Hの方向",trendJa(r.trend))+card("データ鮮度",fmt(r.data_age_seconds,0)+"秒前")+card("EMA20 / EMA50",fmt(r.ema20_4h,8)+" / "+fmt(r.ema50_4h,8))+card("ATR 4H / 15M",fmt(r.atr_4h,8)+" / "+fmt(r.atr_15m,8))+card("出来高比",fmt(r.volume_ratio,2)+"倍")+card("ブレイク基準",fmt(r.breakout_level,8))+card("4Hサポート",fmt(r.support_4h,8))+card("4Hレジスタンス",fmt(r.resistance_4h,8))+card("注文刻み",fmt(r.step_size,8))+card("最小 / 最大注文量",fmt(r.min_order_size,8)+" / "+fmt(r.max_order_size,8))+card("最大ロング / ショート倍率",fmt(r.max_long_leverage,2)+" / "+fmt(r.max_short_leverage,2))+'</div></details>';
   if(r.entry_reference&&r.stop_loss){document.getElementById("entry").value=r.entry_reference;document.getElementById("stop").value=r.stop_loss;document.getElementById("target").value=r.take_profit||"";document.getElementById("step").value=r.step_size||"";document.getElementById("minOrder").value=r.min_order_size||"";document.getElementById("maxOrder").value=r.max_order_size||"";var lev=r.direction==="LONG"?r.max_long_leverage:r.max_short_leverage;if(lev)document.getElementById("lev").value=lev}
-  renderQuickRisk(r);prefillCustomAlert();updateUrl("analysis",r.ticker);requestAnimationFrame(function(){drawChart("chart4h",pack.series.HOUR_4,pack.levels,"4H");drawChart("chart15m",pack.series.MINUTE_15,pack.levels,"15M")});
+  renderQuickRisk(r);updateUrl("analysis",r.ticker);requestAnimationFrame(function(){drawChart("chart4h",pack.series.HOUR_4,pack.levels,"4H");drawChart("chart15m",pack.series.MINUTE_15,pack.levels,"15M")});
  }catch(e){s.innerHTML='<span class="error">'+e.message+'</span>'}
 }
 function planText(r){return [r.ticker+" — "+actionJa(r.action),"方向: "+directionJa(r.direction),"状態: "+stageJa(r.stage),"エントリー: "+fmt(r.entry_reference,8),"損切り SL: "+fmt(r.stop_loss,8),"第1利確 TP1: "+fmt(r.tp1_2r,8),"最終利確 TP: "+fmt(r.take_profit,8),"RR: "+fmt(r.rr,2),"理由: "+reasonJa(r.reason)].join("\n")}
-document.getElementById("analyze").onclick=analyze;document.getElementById("ticker").addEventListener("keydown",function(e){if(e.key==="Enter")analyze()});document.getElementById("toRisk").onclick=function(){if(!lastAnalysis||!lastAnalysis.entry_reference||!lastAnalysis.stop_loss)return;tab("risk")};document.getElementById("copyPlan").onclick=async function(){if(!lastAnalysis)return;var txt=planText(lastAnalysis);try{await navigator.clipboard.writeText(txt);this.textContent="コピー済み";var b=this;setTimeout(()=>b.textContent="プランをコピー",1200)}catch(e){alert(txt)}};
+document.getElementById("analyze").onclick=analyze;document.getElementById("ticker").addEventListener("keydown",function(e){if(e.key==="Enter")analyze()});document.getElementById("toRisk").onclick=openRiskCalculator;document.getElementById("copyPlan").onclick=async function(){if(!lastAnalysis)return;var txt=planText(lastAnalysis);try{await navigator.clipboard.writeText(txt);this.textContent="コピー済み";var b=this;setTimeout(()=>b.textContent="プランをコピー",1200)}catch(e){alert(txt)}};
 document.getElementById("sharePlan").onclick=async function(){if(!lastAnalysis)return;updateUrl("analysis",lastAnalysis.ticker);var data={title:lastAnalysis.ticker+" EdgeX分析",text:planText(lastAnalysis),url:location.href};if(navigator.share){try{await navigator.share(data);return}catch(e){if(e.name==="AbortError")return}}try{await navigator.clipboard.writeText(data.text+"\n"+data.url);this.textContent="共有内容をコピー済み";var b=this;setTimeout(()=>b.textContent="共有",1500)}catch(e){alert(data.text+"\n"+data.url)}};
 
 
-document.getElementById("dashScan").onclick=function(){scan(true)};document.getElementById("autoJournalReady").onclick=function(){autoJournalReady=!autoJournalReady;localStorage.setItem("edgexAutoJournalReady",String(autoJournalReady));syncAutoJournalButton();renderDashboard()};
-document.getElementById("exportAll").onclick=function(){var payload={version:1,exported_ms:Date.now(),watch:Array.from(watch),journal:journal,marketHistory:marketHistory};var a=document.createElement("a"),blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});a.href=URL.createObjectURL(blob);a.download="edgex-terminal-backup.json";a.click();URL.revokeObjectURL(a.href)};
-document.getElementById("importAll").onchange=function(e){var file=e.target.files&&e.target.files[0];if(!file)return;var reader=new FileReader();reader.onload=function(){try{var p=JSON.parse(reader.result);if(p.watch)watch=new Set(p.watch);if(Array.isArray(p.journal))journal=p.journal;if(Array.isArray(p.marketHistory))marketHistory=p.marketHistory;saveWatch();saveJournalStore();saveMarketHistory();renderJournal();renderDashboard();document.getElementById("dashUpdated").textContent="Backup読込完了"}catch(err){document.getElementById("dashUpdated").textContent="読込失敗: "+err.message}};reader.readAsText(file)};
+document.getElementById("dashScan").onclick=function(){scan(true)};
 function saveJournalStore(){localStorage.setItem("edgexJournal",JSON.stringify(journal));renderDashboard()}
 function journalResultClass(s){return s==="TP"?"resultTP":s==="SL"?"resultSL":s==="TP1"?"resultTP1":s==="AMBIGUOUS"?"resultAMBIGUOUS":"muted"}
 function journalStats(){
@@ -1061,6 +908,7 @@ function renderAnalytics(){
 }
 
 function renderJournal(){
+ if(!document.getElementById("journalBody"))return;
  var body=document.getElementById("journalBody"),sum=document.getElementById("journalSummary"),status=document.getElementById("journalStatus");
  if(!body)return;body.innerHTML="";var st=journalStats();
  sum.innerHTML=card("保存件数",st.total)+card("正式シグナル",st.signals)+card("結果確定",st.resolved)+card("勝率",st.winRate==null?"—":fmt(st.winRate,1)+"%")+card("累積R",fmt(st.totalR,2))+card("平均R",st.avgR==null?"—":fmt(st.avgR,2))+card("継続中 / TP1",st.open);
@@ -1107,26 +955,15 @@ async function refreshJournal(){
  for(var i=0;i<journal.length;i++){try{await updateJournalOne(i)}catch(e){journal[i].refresh_error=e.message;saveJournalStore()}}
  renderJournal();s.textContent="更新完了。";
 }
-document.getElementById("savePlan").onclick=function(){
- var s=document.getElementById("analysisStatus");if(!lastAnalysis||!lastAnalysis.direction||!lastAnalysis.entry_reference||!lastAnalysis.stop_loss||!lastAnalysis.take_profit){s.innerHTML='<span class="error">保存できるEntry/SL/TPシナリオがありません。</span>';return}
- var key=lastAnalysis.ticker+"|"+String(lastAnalysis.latest_15m_time_ms||"")+"|"+lastAnalysis.direction;if(journal.some(x=>x.key===key)){s.innerHTML='<span class="warn">同じ15Mシナリオは保存済みです。</span>';return}
- journal.push({key:key,ticker:lastAnalysis.ticker,side:lastAnalysis.direction,action:lastAnalysis.action||lastAnalysis.stage,stage:lastAnalysis.stage,entry:lastAnalysis.entry_reference,stop:lastAnalysis.stop_loss,tp1:lastAnalysis.tp1_2r,target:lastAnalysis.take_profit,rr:lastAnalysis.rr,score:lastAnalysis.score,source_candle_ms:lastAnalysis.latest_15m_time_ms,created_ms:Date.now(),eligible:lastAnalysis.action==="ENTER"});
- saveJournalStore();renderJournal();s.innerHTML='<span class="good">Journalに保存しました。</span>';
-};
-document.getElementById("refreshJournal").onclick=refreshJournal;
-document.getElementById("exportJournal").onclick=function(){var a=document.createElement("a"),blob=new Blob([JSON.stringify({version:1,exported_ms:Date.now(),records:journal},null,2)],{type:"application/json"});a.href=URL.createObjectURL(blob);a.download="edgex-journal.json";a.click();URL.revokeObjectURL(a.href)};
-document.getElementById("importJournal").onchange=function(e){var file=e.target.files&&e.target.files[0];if(!file)return;var reader=new FileReader();reader.onload=function(){try{var j=JSON.parse(reader.result),records=Array.isArray(j)?j:j.records;if(!Array.isArray(records))throw new Error("records not found");journal=records;saveJournalStore();renderJournal();document.getElementById("journalStatus").textContent="JSONを読み込みました。"}catch(err){document.getElementById("journalStatus").innerHTML='<span class="error">'+err.message+'</span>'}};reader.readAsText(file)};
 function loadRiskProfile(){try{var p=JSON.parse(localStorage.getItem("edgexRiskProfile")||"{}");if(p.equity)document.getElementById("equity").value=p.equity;if(p.riskPct)document.getElementById("riskPct").value=p.riskPct}catch(e){}}
 function saveRiskProfile(){localStorage.setItem("edgexRiskProfile",JSON.stringify({equity:Number(document.getElementById("equity").value)||0,riskPct:Number(document.getElementById("riskPct").value)||0}))}
 document.getElementById("equity").addEventListener("change",function(){saveRiskProfile();if(lastAnalysis)renderQuickRisk(lastAnalysis);if(globalEntrySnapshot||lastMarketPayload)renderEntryNow(globalEntrySnapshot||lastMarketPayload)});document.getElementById("riskPct").addEventListener("change",function(){saveRiskProfile();if(lastAnalysis)renderQuickRisk(lastAnalysis);if(globalEntrySnapshot||lastMarketPayload)renderEntryNow(globalEntrySnapshot||lastMarketPayload)});
-function applyDeepLink(){var u=new URL(location.href),tabName=u.searchParams.get("tab"),ticker=u.searchParams.get("ticker");if(ticker)document.getElementById("ticker").value=ticker.toUpperCase();if(tabName&&document.getElementById(tabName))tab(tabName);if((tabName==="analysis"||ticker)&&ticker)analyze()}
-loadRiskProfile();document.getElementById("globalEntryAction").onclick=function(){tab("dashboard")};renderQuickAccess();renderCandidateAlerts();loadServerCandidateEvents();loadShadowV2();loadStrategyComparison();loadSetupLifecycles();loadOutcomeTracking();loadReplayReview();loadConfirmationDiagnostics();loadReadinessHistory();loadPaperExecution();loadOpportunityAnalysis();loadPriorityEvents();loadApproachEvents();loadApproachValidation();initWatchSync();loadDailyReports();syncCandidateNotifyButton();renderPushGuide();syncBackgroundPushButton();loadNotificationCenter();updateCandleCountdown();setInterval(updateCandleCountdown,1000);setInterval(refreshGlobalEntryAge,10000);setInterval(refreshEntryHeartbeat,60000);document.addEventListener("visibilitychange",function(){if(document.visibilityState==="visible"){refreshGlobalEntryAge();refreshEntryHeartbeat()}});
-syncAutoJournalButton();renderJournal();renderDashboard();
+function applyDeepLink(){var u=new URL(location.href),tabName=u.searchParams.get("tab"),ticker=u.searchParams.get("ticker");if(ticker)document.getElementById("ticker").value=ticker.toUpperCase();if(tabName)tab(tabName);if((tabName==="analysis"||ticker)&&ticker)analyze()}
+loadRiskProfile();document.getElementById("globalEntryAction").onclick=function(){tab("dashboard")};renderQuickAccess();initWatchSync();syncCandidateNotifyButton();renderPushGuide();syncBackgroundPushButton();loadNotificationCenter();updateCandleCountdown();setInterval(updateCandleCountdown,1000);setInterval(refreshGlobalEntryAge,10000);setInterval(refreshEntryHeartbeat,60000);document.addEventListener("visibilitychange",function(){if(document.visibilityState==="visible"){refreshGlobalEntryAge();refreshEntryHeartbeat()}});
+renderDashboard();
 window.addEventListener("beforeinstallprompt",function(e){e.preventDefault();deferredInstallPrompt=e;document.getElementById("installApp").classList.add("good")});
 document.getElementById("copyWatchSync").onclick=async function(){var key=document.getElementById("watchSyncKey").value.trim();try{await navigator.clipboard.writeText(key);showWatchSyncStatus("同期コードをコピーしました","good")}catch(e){alert(key)}};
 document.getElementById("loadWatchSync").onclick=function(){var key=document.getElementById("watchSyncKey").value.trim();if(key.length<24){showWatchSyncStatus("同期コードが短すぎます","warn");return}loadWatchFromServer(key,true)};
-document.getElementById("createCustomAlert").onclick=createCustomAlert;
-document.getElementById("customAlertCondition").onchange=prefillCustomAlert;
 document.getElementById("pushCandidatePref").onchange=savePushPreferences;
 document.getElementById("pushDailyPref").onchange=savePushPreferences;
 document.getElementById("snooze30").onclick=function(){setPushSnooze("30")};
@@ -1140,7 +977,7 @@ document.getElementById("backgroundPush").onclick=toggleBackgroundPush;
 document.getElementById("candidateNotify").onclick=toggleCandidateNotify;
 document.getElementById("installApp").onclick=async function(){if(deferredInstallPrompt){deferredInstallPrompt.prompt();await deferredInstallPrompt.userChoice;deferredInstallPrompt=null;this.textContent="ホーム画面追加済み/確認"}else{var ios=/iphone|ipad|ipod/i.test(navigator.userAgent);alert(ios?"Safariで開く → 共有 →「ホーム画面に追加」→「ウェブアプリとして開く」をON → 追加。ホーム画面のEdgeX分析アイコンから起動してください。":"ブラウザのメニューから「アプリをインストール」または「ホーム画面に追加」を選んでください。")}};
 if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("/sw.js").then(function(){syncBackgroundPushButton()}).catch(function(){syncBackgroundPushButton()})})}else{syncBackgroundPushButton()}
-hydrateServerState().finally(function(){applyDeepLink();setTimeout(function(){scan(false)},80)});
+applyDeepLink();setTimeout(function(){scan(false)},80);
 
 document.getElementById("calc").onclick=async function(){function v(id){return document.getElementById(id).value}var p={equity:+v("equity"),risk_pct:+v("riskPct"),entry:+v("entry"),stop:+v("stop")};if(v("target"))p.target=+v("target");if(v("step"))p.step_size=+v("step");if(v("minOrder"))p.min_order_size=+v("minOrder");if(v("maxOrder"))p.max_order_size=+v("maxOrder");if(v("lev"))p.leverage=+v("lev");var s=document.getElementById("riskStatus"),o=document.getElementById("riskOut");try{var r=await jf("/api/risk",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(p)});s.innerHTML="計算完了 — <b>"+directionJa(r.side)+"</b>"+(r.below_min_order?' <span class="bad">最小注文量未満</span>':'')+(r.margin_capped?' <span class="warn">証拠金上限で調整</span>':'')+(r.max_order_capped?' <span class="warn">最大注文量で調整</span>':'');o.innerHTML=card("許容損失額",fmt(r.risk_budget,4)+" USDC")+card("注文数量",fmt(r.size,8))+card("想定建玉",fmt(r.notional,2)+" USDC")+card("最大損失",fmt(r.max_loss,4)+" USDC")+card("実際のリスク率",pct(r.actual_risk_pct))+card("RR",fmt(r.rr,2))+card("目標利益",r.target_profit==null?"—":fmt(r.target_profit,4)+" USDC")}catch(e){s.innerHTML='<span class="error">'+e.message+'</span>'}};
 </script></body></html>

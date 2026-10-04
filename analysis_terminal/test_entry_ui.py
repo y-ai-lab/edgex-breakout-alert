@@ -7,6 +7,13 @@ ROOT = Path(__file__).resolve().parent
 
 
 class EntryFreshnessTests(unittest.TestCase):
+    def test_essential_layout_full_boot_and_api_checks(self):
+        result = subprocess.run(
+            ["node", str(ROOT / "test_essential_ui.js"), str(ROOT / "index.html")],
+            capture_output=True, text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_foreground_notifications_only_allow_fresh_ready(self):
         result = subprocess.run(
             ["node", str(ROOT / "test_notifications.js"), str(ROOT / "index.html")],
