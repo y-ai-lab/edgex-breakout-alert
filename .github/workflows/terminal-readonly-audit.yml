@@ -130,8 +130,10 @@ jobs:
               for stage, count in d["dropped"].items():
                   assert count == sum(x["stages"].get(stage, 0) for x in source), (d["date"],stage)
               assert d["passed"]["ready"] == sum(x["stages"].get("READY",0) for x in source)
-          assert 'id="readinessHistoryFunnel"' in results["index"]
-          assert 'id="readinessHistoryFrequency"' in results["index"]
+          assert 'id="readinessHistoryFunnel"' not in results["index"]
+          assert 'id="readinessHistoryFrequency"' not in results["index"]
+          assert 'data-tab="api"' in results["index"] and 'id="nearCandidates"' in results["index"]
+          assert 'data-tab="compare"' not in results["index"] and 'data-tab="journal"' not in results["index"]
           sim = results["simulation"]
           assert sim["mode"] == "PAPER_ONLY" and sim["real_orders_enabled"] is False
           assert sim["eligible_for_live_promotion"] is False and sim["automatic_promotion"] is False
