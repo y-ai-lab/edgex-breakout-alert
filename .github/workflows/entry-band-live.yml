@@ -1,0 +1,136 @@
+name: Terminal v19.0.22 live read-only smoke
+on:
+  push:
+    branches: [audit/terminal-v19-0-22-live]
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Live HTTP, migration provenance, Push and shipped JavaScript
+        run: |
+          python - <<'PY'
+          import json,re,subprocess,time,urllib.request,urllib.error
+          from pathlib import Path
+          base="https://edgex-analysis-terminal-production.up.railway.app"
+          out=Path("live-output")
+          out.mkdir()
+          baseline=json.loads(Path("audit-input/production-baseline.json").read_text())
+          checks=[]
+          def fetch(path,expected=200,as_json=True):
+              req=urllib.request.Request(base+path,headers={"User-Agent":"EdgeX-read-only-smoke"})
+              try:
+                  with urllib.request.urlopen(req,timeout=60) as r:
+                      code,raw=r.status,r.read().decode()
+              except urllib.error.HTTPError as exc:
+                  code,raw=exc.code,exc.read().decode()
+              assert code == expected, (path,code)
+              checks.append({"path":path,"http_status":code})
+              return json.loads(raw) if as_json else raw
+          h=fetch("/health")
+          assert h["ok"] and h["version"] == "19.0.22" and h["storage"]["db_exists"]
+          assert h["storage"]["market_snapshots_48h"] >= 1 and h["storage"]["paper_signals"] >= 1
+          assert h["push"]["enabled"] and h["push"]["subscribers"] == baseline["health"]["push"]["subscribers"]
+          assert h["push"]["notification_policy"] == "READY_ONLY" and not h["push"]["daily_summary_enabled"]
+          p=fetch("/api/paper-execution?limit=200")
+          assert p["mode"] == "PAPER_ONLY" and not p["real_orders_enabled"] and not p["automatic_promotion"] and not p["eligible_for_live_promotion"]
+          assert p["account"]["activated_ms"] == baseline["paper"]["account"]["activated_ms"]
+          assert p["account"]["policy"] == baseline["paper"]["account"]["policy"]
+          assert not p["account"]["paused"] and p["account"]["last_error"] is None
+          assert p["account"]["last_cycle_ms"] >= baseline["paper"]["account"]["last_cycle_ms"]
+          assert p["account"]["event_tracking_started_ms"] == baseline["paper"]["account"]["event_tracking_started_ms"]
+          t=p["tracking"]
+          assert t["state"] in {"WAITING_READY","WAITING_FILL","TRACKING","DATA_INCOMPLETE","PAUSED","AMBIGUOUS","NOT_STARTED","COLLECTOR_STALE"}
+          assert set(t["active_status_counts"]) == {"PENDING","OPEN","AMBIGUOUS"}
+          assert sum(t["active_status_counts"].values()) == p["account"]["active_positions"]
+          assert t["data_issue_count"] == sum(t["data_issue_counts"].values())
+          short=fetch("/api/paper-execution?limit=1")
+          assert short["tracking"] == t
+          e=fetch("/api/paper-execution/events?limit=200")
+          assert e["event_tracking_started_ms"] == p["account"]["event_tracking_started_ms"]
+          assert not e["real_orders_enabled"] and not e["eligible_for_live_promotion"] and not e["automatic_promotion"]
+          assert e["origin_counts"]["MIGRATION_SNAPSHOT"] == len(baseline["paper"]["latest"])
+          for old in baseline["paper"]["latest"]:
+              preserved=next(x for x in p["latest"] if x["order_id"] == old["order_id"])
+              assert preserved == old, "Existing order changed on migration"
+              imports=[x for x in e["events"] if x["order_id"] == old["order_id"] and x["origin"] == "MIGRATION_SNAPSHOT"]
+              assert len(imports) == 1 and imports[0]["order"] == old
+              assert imports[0]["status"] == "BASELINED" and imports[0]["previous_status"] is None
+              assert imports[0]["observed_ms"] == p["account"]["event_tracking_started_ms"]
+              query=urllib.parse.urlencode({"order_id":old["order_id"],"limit":1})
+              scoped=fetch("/api/paper-execution/events?"+query)
+              assert scoped["total_count"] >= 1 and scoped["events"][0]["order_id"] == old["order_id"]
+          first=fetch("/api/paper-execution/events?limit=1")
+          continuation=fetch("/api/paper-execution/events?after_id="+str(first["next_after_id"])+"&limit=200")
+          assert all(x["id"] > first["next_after_id"] for x in continuation["events"])
+          assert len({x["id"] for x in e["events"]}) == len(e["events"])
+          for event in e["events"]:
+              assert event["market_ms"] is None or event["observed_ms"] >= event["market_ms"]
+          fetch("/api/paper-execution/events?after_id=-1",expected=422)
+          fetch("/api/paper-execution/events?limit=201",expected=422)
+          live={"health":h,"paper":p,"paper-events":e}
+          for name,path in {"push-config":"/api/push/config","push-events":"/api/push/events","screener":"/api/screener","analyze":"/api/analyze?ticker=BTCUSDC","server-history":"/api/server-history?hours=48","server-paper-signals":"/api/server-paper-signals?limit=1000","readiness-review":"/api/readiness-review","readiness-history":"/api/readiness-history?days=7","shadow-v2":"/api/shadow-v2"}.items():
+              v=fetch(path)
+              v.pop("public_key",None)
+              live[name]=v
+          assert live["push-config"]["subscribers"] == baseline["health"]["push"]["subscribers"]
+          assert len(live["server-history"]["snapshots"]) >= 1
+          from analysis_terminal.entry_band import diagnose,valid_observation
+          diagnostic=live['readiness-review']['review']['entry_bands']
+          assert valid_observation(diagnostic)
+          assert diagnostic['evaluated'] == len(diagnostic['items'])
+          for item in diagnostic['items']:
+              band=item['entry_band']
+              assert band == diagnose(item['direction'],band['structural_stop'],band['structural_target'],band['confirmation_level'],band['min_rr'])
+          snapshots=live['server-history']['snapshots']
+          recorded=[s for s in snapshots if 'entry_bands' in s]
+          assert recorded and all(valid_observation(s['entry_bands']) for s in recorded)
+          assert all(s['time_ms'] <= s['entry_bands']['observed_ms'] < s['time_ms']+900000 for s in recorded)
+          historical=live['readiness-history']['summary']['entry_bands']
+          assert historical['observations'] >= 1
+          assert historical['missing_observations'] >= 1, 'Old observations must remain missing'
+          # One identified setup's shipped chart/analyze responses both carry diagnostics.
+          if diagnostic['items']:
+              ticker=diagnostic['items'][0]['ticker']
+              analysis=fetch('/api/analyze?ticker='+urllib.parse.quote(ticker))
+              chart=fetch('/api/chart?ticker='+urllib.parse.quote(ticker))
+              assert analysis['entry_band']['version'] == chart['analysis']['entry_band']['version'] == 1
+              live['band-analysis']=analysis
+              live['band-chart']=chart
+          html=fetch("/",as_json=False)
+          assert "ENTRY NOW" in html and "v19.0.22" in html
+          scripts=re.findall(r"<script\b[^>]*>([\s\S]*?)</script>",html)
+          assert scripts
+          code="const fs=require('fs');const s=JSON.parse(fs.readFileSync(0,'utf8'));for(const x of s)new Function(x);"
+          subprocess.run(["node","-e",code],input=json.dumps(scripts),text=True,check=True)
+          assert '確認価格とRRの両立' in html
+          view_code="const fs=require('fs'),vm=require('vm'),assert=require('assert');const x=JSON.parse(fs.readFileSync(0,'utf8'));const ctx={fmt:(n,d)=>Number(n).toFixed(d)};vm.createContext(ctx);vm.runInContext(x.html.slice(x.html.indexOf('function renderEntryBand('),x.html.indexOf('async function analyze(')),ctx);const views=x.items.map(r=>({ticker:r.ticker,status:r.entry_band.status,html:ctx.renderEntryBand(r)}));for(const v of views){assert(!v.html.includes('エントリー可能'));if(v.status==='NO_OVERLAP')assert(v.html.includes('両立しません'));}console.log(JSON.stringify(views));"
+          views=subprocess.run(['node','-e',view_code],input=json.dumps(dict(html=html,items=diagnostic['items'])),text=True,capture_output=True,check=True)
+          (out/'entry-band-views.json').write_text(views.stdout)
+          (out/"index.html").write_text(html)
+          subprocess.run(["node","analysis_terminal/test_essential_ui.js",str(out/"index.html")],check=True)
+          subprocess.run(["node","analysis_terminal/test_notifications.js",str(out/"index.html")],check=True)
+          for case in ("boundaries","unknown","ageing","expired_calculation","expiry_timer","superseded_calculation","heartbeat_failure","clicks","visibility"):
+              subprocess.run(["node","analysis_terminal/test_entry_freshness.js",str(out/"index.html"),case],check=True)
+          view_script="const fs=require('fs'),vm=require('vm'),assert=require('assert');const x=JSON.parse(fs.readFileSync(0,'utf8'));const context={};vm.createContext(context);vm.runInContext(x.html.slice(x.html.indexOf('function paperTrackingStatus('),x.html.indexOf('function renderPaperExecution(')),context);const view=context.paperTrackingStatus(x.paper);assert(view.counts);assert(view.issues===x.paper.tracking.data_issue_count);console.log(JSON.stringify(view));"
+          rendered=subprocess.run(["node","-e",view_script],input=json.dumps({"html":html,"paper":p}),text=True,capture_output=True,check=True)
+          (out/"paper-view.json").write_text(rendered.stdout)
+          (out/"production-live.json").write_text(json.dumps(live,ensure_ascii=False,indent=2))
+          summary={"verdict":"PASS","production_version":h["version"],"javascript_syntax":"PASS","http_checks":checks,"storage":h["storage"],"push_subscribers":h["push"]["subscribers"],"paper_activated_ms":p["account"]["activated_ms"],"event_tracking_started_ms":p["account"]["event_tracking_started_ms"],"event_origins":e["origin_counts"],"paper_metrics":p["metrics"],"paper_tracking":p["tracking"],"live_ui_regressions":"PASS","ready_count":live["screener"]["summary"]["ready_count"],"readonly_requests_only":True,"entry_band_counts":diagnostic["counts"],"entry_band_history":historical}
+          (out/"smoke-summary.json").write_text(json.dumps(summary,indent=2))
+          print(json.dumps(summary))
+          PY
+      - name: Save live evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: terminal-v19-0-22-live
+          path: live-output/
+          retention-days: 7
+          if-no-files-found: error
