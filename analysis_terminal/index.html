@@ -260,7 +260,7 @@ async function checkApiConnections(){
   {label:'市場スキャン',url:'/api/screener?limit=3',validate:function(j){if(!Array.isArray(j.results)||!Number.isFinite(j.scanned))throw new Error();var age=j.snapshot_age_seconds;return {warn:!Number.isFinite(age)||age<0||age>=120,text:j.scanned+'銘柄評価 / '+(Number.isFinite(age)?Math.round(age)+'秒前':'鮮度不明')}}},
   {label:'銘柄分析',url:'/api/analyze?ticker=BTCUSDC',validate:function(j){if(j.ticker!=='BTCUSDC'||!j.stage)throw new Error();var age=j.data_age_seconds;return {warn:!Number.isFinite(age)||age<0||age>=900,text:j.ticker+' / '+stageJa(j.stage)+' / '+(Number.isFinite(age)?'確定足 '+Math.round(age)+'秒前':'鮮度不明')}}},
   {label:'エントリー通知',url:'/api/push/config',validate:function(j){if(typeof j.enabled!=='boolean'||j.notification_policy!=='READY_ONLY'||j.daily_summary_enabled!==false)throw new Error();return {warn:!j.enabled,text:j.enabled?'通知サーバー有効 / エントリー可能のみ':'通知サーバー未設定'}}},
-  {label:'模擬執行',url:'/api/paper-execution?limit=1',validate:function(j){if(j.mode!=='PAPER_ONLY'||j.real_orders_enabled!==false||j.eligible_for_live_promotion!==false||j.automatic_promotion!==false||j.source!=='CURRENT_READY_ONLY'||!j.account)throw new Error();var a=j.account;return {warn:a.paused||a.collector_stale||!Number.isFinite(a.last_cycle_ms)||a.last_cycle_ms<=0,text:a.paused?'模擬口座停止':a.collector_stale?'模擬データの更新を確認':'PAPER ONLY / 実注文なし'}}}
+  {label:'模擬執行',url:'/api/paper-execution?limit=1',validate:function(j){if(j.mode!=='PAPER_ONLY'||j.real_orders_enabled!==false||j.eligible_for_live_promotion!==false||j.automatic_promotion!==false||j.source!=='CURRENT_READY_ONLY'||!j.account)throw new Error();var d=paperTrackingStatus(j);return {warn:d.warn,text:'PAPER ONLY / '+d.text}}}
  ];
  var results=await Promise.all(checks.map(async function(c){
   var controller=new AbortController(),timeout=setTimeout(function(){controller.abort()},15000);
@@ -310,16 +310,32 @@ function updateCandleCountdown(){var el=document.getElementById("candleCountdown
 function saveCandidateAlerts(){localStorage.setItem("edgexCandidateAlerts",JSON.stringify(candidateAlerts.slice(0,50)))}
 function checkJa(v){return v?'<span class="good">OK</span>':'<span class="warn">未達</span>'}
 var paperExecutionRequest=0;
+function paperTrackingStatus(j){
+ var a=j.account||{},t=j.tracking||{},counts=t.active_status_counts||{};
+ var labels={WAITING_READY:'稼働中 — 現行READY待ち',WAITING_FILL:'次の15M始値での模擬約定待ち',TRACKING:'模擬建玉のTP / SLを追跡中',DATA_INCOMPLETE:'履歴復旧待ち — 新規の模擬注文は保留',PAUSED:'模擬口座停止 — 既存建玉は追跡継続',AMBIGUOUS:'損益未確定 — 要確認',NOT_STARTED:'模擬処理の初回更新待ち',COLLECTOR_STALE:'模擬データの更新を確認'};
+ var valid=Object.prototype.hasOwnProperty.call(labels,t.state)&&Number.isInteger(t.data_issue_count)&&t.data_issue_count>=0&&['PENDING','OPEN','AMBIGUOUS'].every(function(k){return Number.isInteger(counts[k])&&counts[k]>=0});
+ if(!valid)return {warn:true,text:'模擬処理の状態を確認',counts:null,issues:null};
+ var warn=['DATA_INCOMPLETE','PAUSED','AMBIGUOUS','NOT_STARTED','COLLECTOR_STALE'].includes(t.state);
+ var text=labels[t.state];
+ if(counts.AMBIGUOUS>0){warn=true;text=labels.AMBIGUOUS}
+ else if(a.paused){warn=true;text=labels.PAUSED}
+ else if(t.state==='NOT_STARTED'){warn=true;text=labels.NOT_STARTED}
+ else if(a.collector_stale||!Number.isFinite(a.last_cycle_ms)||a.last_cycle_ms<=0){warn=true;text=labels.COLLECTOR_STALE}
+ else if(t.data_issue_count>0){warn=true;text=labels.DATA_INCOMPLETE}
+ return {warn:warn,text:text,counts:counts,issues:t.data_issue_count};
+}
 function renderPaperExecution(j){
  var st=document.getElementById('paperExecutionStatus'),sum=document.getElementById('paperExecutionSummary'),body=document.getElementById('paperExecutionBody'),policy=document.getElementById('paperExecutionPolicy');if(!st||!sum||!body||!policy)return;
  sum.innerHTML='';body.innerHTML='';policy.textContent='';
- if(!j||j.mode!=='PAPER_ONLY'||j.real_orders_enabled!==false||j.eligible_for_live_promotion!==false||j.automatic_promotion!==false||j.source!=='CURRENT_READY_ONLY'){st.textContent='模擬執行データを確認できません';return}
+ if(!j||j.mode!=='PAPER_ONLY'||j.real_orders_enabled!==false||j.eligible_for_live_promotion!==false||j.automatic_promotion!==false||j.source!=='CURRENT_READY_ONLY'){st.textContent='模擬執行データを確認できません';st.classList.add('warn');return}
  var a=j.account||{},p=a.policy||{},m=j.metrics||{},counts=m.status_counts||{};
  function v(x,d){return x==null?'—':fmt(x,d==null?2:d)}
  function clock(x){return x==null?'—':new Date(x).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'})}
  var reasons={PRE_EXISTING_SIGNAL:'起動前の成立履歴',STALE_OR_UNKNOWN_DATA:'データ鮮度不足',INVALID_READY_LEVELS:'Entry・SL・TP・RR不整合',INVALID_CONTRACT_SIZE_RULES:'数量ルール不明',TICKER_ALREADY_OPEN:'同じ銘柄の建玉あり',MAX_POSITIONS:'建玉上限',RISK_OR_NOTIONAL_LIMIT:'損失予算・数量上限',SIZE_TOO_SMALL:'最小数量未達',SIZE_TOO_SMALL_AT_FILL:'約定価格で最小数量未達',LEVELS_OR_RR_INVALID_AT_FILL:'約定価格で構造・RR未達',ACCOUNT_PAUSED:'口座停止',OPERATOR_STOP:'管理者停止',ENGINE_ERROR:'模擬処理エラー',DAILY_LOSS_LIMIT:'日次損失上限',CAPITAL_EXHAUSTED:'仮想資金不足',ACTIVE_POSITION_DATA_INCOMPLETE:'建玉の価格履歴不足',FILL_OBSERVATION_TIMEOUT:'約定データの期限切れ',TP_SL_SAME_CANDLE:'同一足でTP・SL両触れ',AMBIGUOUS_ACCOUNT:'損益不明のため停止',MISSING_CLOSED_CANDLE:'未処理の確定足が欠測',INVALID_CANDLE:'価格データ不整合',CONFLICTING_CANDLES:'価格履歴に差異'};
- st.textContent='PAPER ONLY — 実注文なし / '+(a.paused?'停止: '+(reasons[a.pause_reason]||a.pause_reason):'現行READYを待機・追跡')+(a.collector_stale?' / 模擬データの更新状況を確認':'')+' / 更新 '+clock(a.last_cycle_ms)+' / '+(m.sample_status||'INSUFFICIENT SAMPLE');
- sum.innerHTML=card('仮想現金 USDC',v(a.cash_usdc))+card('仮想建玉・注文',a.active_positions||0)+card('予約損失予算 USDC',v(a.reserved_risk_usdc))+card('確定済み損益 USDC',v(m.net_pnl_usdc))+card('仮定手数料 USDC',v(a.fees_paid_usdc))+card('確定 / 曖昧',(m.resolved||0)+' / '+(counts.AMBIGUOUS||0));
+ var diagnostic=paperTrackingStatus(j),active=diagnostic.counts;
+ st.classList.toggle('warn',diagnostic.warn);
+ st.textContent='PAPER ONLY — 実注文なし / '+diagnostic.text+(a.paused?' / '+(reasons[a.pause_reason]||a.pause_reason||'原因を確認'):'')+' / 更新 '+clock(a.last_cycle_ms)+' / '+(m.sample_status||'INSUFFICIENT SAMPLE');
+ sum.innerHTML=card('仮想現金 USDC',v(a.cash_usdc))+card('約定待ち / 建玉',active?active.PENDING+' / '+active.OPEN:'—')+card('履歴不足',diagnostic.issues==null?'—':diagnostic.issues+'件')+card('予約損失予算 USDC',v(a.reserved_risk_usdc))+card('確定済み損益 USDC',v(m.net_pnl_usdc))+card('仮定手数料 USDC',v(a.fees_paid_usdc))+card('確定 / 曖昧',(m.resolved||0)+' / '+(counts.AMBIGUOUS||0));
  policy.textContent='仮想初期残高 '+v(p.initial_cash_usdc)+' USDC / 1回の損失予算 '+v(p.risk_pct)+'% / 最大 '+p.max_positions+'建玉 / 合計損失予算 '+v(p.max_total_risk_pct)+'% / 日次損失上限 '+v(p.daily_loss_pct)+'%。片道の仮定手数料 '+v(p.fee_bps/100)+'%・滑り '+v(p.slippage_bps/100)+'%。停止しても仮想建玉の結果追跡は継続します。';
  var labels={BASELINED:'起動前履歴（対象外）',PENDING:'次の15M始値待ち',OPEN:'仮想建玉',TP:'仮想TP',SL:'仮想SL',AMBIGUOUS:'AMBIGUOUS',REJECTED:'拒否',CANCELLED:'取消',EXPIRED:'期限切れ'};
  body.innerHTML=(j.latest||[]).map(function(o){return '<tr>'+[o.ticker+' / '+directionJa(o.side),labels[o.status]||o.status,clock(o.created_ms),clock(o.filled_ms==null?o.execute_ms:o.filled_ms),v(o.quantity,6)+' / '+v(o.fill_price,6),v(o.stop,6)+' / '+v(o.target,6),v(o.net_pnl_usdc)+' / '+v(o.net_r,3),(o.quality||'—')+' / '+(reasons[o.reason]||o.reason||'—')].map(function(x){return '<td>'+lifecycleEscape(x)+'</td>'}).join('')+'</tr>'}).join('');

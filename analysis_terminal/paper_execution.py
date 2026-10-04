@@ -404,14 +404,25 @@ def report(conn, *, now_ms, limit=50):
     resolved = [o for o in items if o["status"] in {"TP","SL"}]
     unknown = any(o["status"] == "AMBIGUOUS" for o in items)
     age = (now_ms-state["last_cycle_ms"])/1000 if state["last_cycle_ms"] is not None else None
+    stale = age is None or age < 0 or age >= 2*STEP/1000
+    active_counts = {status: sum(o["status"] == status for o in active)
+                     for status in ("PENDING", "OPEN", "AMBIGUOUS")}
+    issues = Counter(o["quality"] for o in active
+                     if o.get("quality") in {"HISTORY_GAP", "DATA_ERROR", "MISSING_FILL_CANDLE"})
+    tracking_state = ("AMBIGUOUS" if unknown else "PAUSED" if state["paused"]
+                      else "NOT_STARTED" if age is None else "COLLECTOR_STALE" if stale
+                      else "DATA_INCOMPLETE" if issues else "TRACKING" if active_counts["OPEN"]
+                      else "WAITING_FILL" if active_counts["PENDING"] else "WAITING_READY")
     return dict(mode="PAPER_ONLY",real_orders_enabled=False,eligible_for_live_promotion=False,
                 automatic_promotion=False,source="CURRENT_READY_ONLY",fill_model="NEXT_15M_OPEN",
                 costs_model="ASSUMED_FEES_SLIPPAGE_NO_FUNDING",time_ms=now_ms,
                 account=dict(**state,**cash,equity_known=not unknown,
                          cash_usdc=None if unknown else cash["known_cash_usdc"],
-                         cycle_age_seconds=age,collector_stale=age is None or age >= 2*STEP/1000,
+                         cycle_age_seconds=age,collector_stale=stale,
                          active_positions=len(active),reserved_risk_usdc=sum(outstanding_risk(o) for o in active),
                          reserved_notional_usdc=sum(o["reserved_notional_usdc"] for o in active)),
+                tracking=dict(state=tracking_state, active_status_counts=active_counts,
+                              data_issue_count=sum(issues.values()), data_issue_counts=dict(issues)),
                 metrics=dict(records=len(items),status_counts=dict(Counter(o["status"] for o in items)),
                              resolved=len(resolved),net_pnl_usdc=sum(o["net_pnl_usdc"] for o in resolved),
                              sample_status="INSUFFICIENT SAMPLE" if len(resolved)<20 else "SUFFICIENT SAMPLE"),

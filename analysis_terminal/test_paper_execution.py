@@ -244,6 +244,7 @@ class PaperExecutionStorageTests(unittest.IsolatedAsyncioTestCase):
                 a=(await client.get('/api/paper-execution?limit=1')).json()
                 b=(await client.get('/api/paper-execution?limit=200')).json()
                 self.assertEqual(a['metrics'],b['metrics'])
+                self.assertEqual(a['tracking'],b['tracking'])
                 self.assertEqual(a['mode'],'PAPER_ONLY');self.assertFalse(a['real_orders_enabled'])
                 self.assertEqual((await client.post('/api/paper-execution')).status_code,405)
         with server._db_connect() as conn:self.assertEqual(before,list(conn.iterdump()))
@@ -310,11 +311,11 @@ class PaperExecutionUITests(unittest.TestCase):
         code=r"""
 const fs=require('fs'),assert=require('assert'),x=JSON.parse(fs.readFileSync(0,'utf8')),html=x.html;
 for(const s of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g))new Function(s[1]);
-const nodes={};['Status','Summary','Body','Policy'].forEach(k=>nodes['paperExecution'+k]={innerHTML:'',textContent:''});
+const nodes={};['Status','Summary','Body','Policy'].forEach(k=>nodes['paperExecution'+k]={innerHTML:'',textContent:'',classList:{add(){},toggle(){}}});
 const document={getElementById:id=>nodes[id]},fmt=(v,d)=>Number(v).toFixed(d),card=(k,v)=>k+':'+v,directionJa=x=>x;
 eval(html.slice(html.indexOf('function lifecycleEscape('),html.indexOf('function lifecycleTime(')));
 let paperExecutionRequest=0;
-eval(html.slice(html.indexOf('function renderPaperExecution('),html.indexOf('var readinessHistoryRequest=')));
+eval(html.slice(html.indexOf('function paperTrackingStatus('),html.indexOf('var readinessHistoryRequest=')));
 renderPaperExecution(x.report);
 assert(nodes.paperExecutionStatus.textContent.includes('PAPER ONLY — 実注文なし'));
 assert(nodes.paperExecutionStatus.textContent.includes('停止'));

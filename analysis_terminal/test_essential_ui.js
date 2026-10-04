@@ -29,7 +29,7 @@ for(const id of ['entryNowZone','nearCandidates','paperExecutionBody','apiCheckR
 const ready={ticker:'TESTUSDC',stage:'READY',direction:'LONG',score:90,rr:2.5,entry_reference:100,stop_loss:90,take_profit:125,latest_15m_time_ms:900000,setup_id:'ready',action:'ENTER',data_age_seconds:0};
 const near={...ready,ticker:'NEXTUSDC',stage:'CONFIRMATION_WAIT',setup_id:'next',reason:'retest seen; waiting for 15M confirmation'};
 const market={universe:2,scanned:2,coverage_pct:100,matched:2,snapshot_age_seconds:0,results:[ready,near],ready_candidates:[ready],qualified_near_candidates:[near],summary:{ready_count:1,qualified_near_count:1,near_signal_count:1,direction_counts:{LONG:2},average_score:90}};
-const paper={mode:'PAPER_ONLY',real_orders_enabled:false,eligible_for_live_promotion:false,automatic_promotion:false,source:'CURRENT_READY_ONLY',account:{last_cycle_ms:clock,paused:false,collector_stale:false,cash_usdc:10000,policy:{}},metrics:{resolved:0,status_counts:{},sample_status:'INSUFFICIENT SAMPLE'},latest:[]};
+const paper={mode:'PAPER_ONLY',real_orders_enabled:false,eligible_for_live_promotion:false,automatic_promotion:false,source:'CURRENT_READY_ONLY',account:{last_cycle_ms:clock,paused:false,collector_stale:false,cash_usdc:10000,policy:{}},tracking:{state:'WAITING_READY',active_status_counts:{PENDING:0,OPEN:0,AMBIGUOUS:0},data_issue_count:0,data_issue_counts:{}},metrics:{resolved:0,status_counts:{},sample_status:'INSUFFICIENT SAMPLE'},latest:[]};
 let failures=false,invalid=false,stale=false,releaseOld=null;
 const context={console,URL,AbortController,Uint32Array,crypto:require('crypto').webcrypto,
  Date:class extends Date{static now(){return clock}},navigator:{userAgent:'test',vibrate(){}},
@@ -68,6 +68,24 @@ async function settle(){for(let i=0;i<8;i++)await new Promise(setImmediate)}
  assert.equal(storage.get('edgexJournal'),'[{"ticker":"KEEPUSDC"}]');assert.equal(storage.get('edgexMarketHistory'),'[{"time_ms":1}]');
  assert(!requests.some(r=>/shadow-v2|strategy-comparison|replay|readiness-history|server-history|server-paper-signals|opportunity/.test(r.url)));
  context.tab('api');await settle();assert(nodes.api.classList.contains('active'));assert(nodes.apiCheckStatus.textContent.includes('正常 5 / 要確認 0 / 失敗 0'));assert(nodes.paperExecutionStatus.textContent.includes('PAPER ONLY'));
+ assert(nodes.paperExecutionStatus.textContent.includes('現行READY待ち'));
+ const originalTracking=paper.tracking;
+ for(const [state,text,warn] of [['WAITING_FILL','模擬約定待ち',false],['TRACKING','追跡中',false],['DATA_INCOMPLETE','履歴復旧待ち',true],['PAUSED','模擬口座停止',true],['AMBIGUOUS','損益未確定',true],['NOT_STARTED','初回更新待ち',true],['COLLECTOR_STALE','更新を確認',true]]){
+  paper.tracking={...originalTracking,state};
+  context.renderPaperExecution(paper);await context.checkApiConnections();
+  assert(nodes.paperExecutionStatus.textContent.includes(text),state);
+  assert(nodes.apiCheckResults.innerHTML.includes(text),state);
+  assert(nodes.apiCheckStatus.textContent.includes(warn?'正常 4 / 要確認 1':'正常 5 / 要確認 0'),state);
+ }
+ // The single displayed rejection does not hide an older active order's gap.
+ paper.tracking={...originalTracking,state:'DATA_INCOMPLETE',data_issue_count:1,data_issue_counts:{HISTORY_GAP:1},active_status_counts:{PENDING:0,OPEN:1,AMBIGUOUS:0}};
+ paper.latest=[{ticker:'NEWUSDC',status:'REJECTED',reason:'ACTIVE_POSITION_DATA_INCOMPLETE'}];
+ context.renderPaperExecution(paper);await context.checkApiConnections();
+ assert(nodes.apiCheckStatus.textContent.includes('要確認 1'));assert(nodes.paperExecutionSummary.innerHTML.includes('1件'));assert(nodes.paperExecutionStatus.classList.contains('warn'));
+ for(const bad of [null,{...originalTracking,state:'UNKNOWN'},{...originalTracking,data_issue_count:-1},{...originalTracking,active_status_counts:{PENDING:0,OPEN:null,AMBIGUOUS:0}}]){
+  paper.tracking=bad;context.renderPaperExecution(paper);await context.checkApiConnections();assert(nodes.apiCheckStatus.textContent.includes('要確認 1'));assert(nodes.paperExecutionStatus.textContent.includes('状態を確認'));
+ }
+ paper.tracking=originalTracking;paper.latest=[];context.renderPaperExecution(paper);assert(!nodes.paperExecutionStatus.classList.contains('warn'));
  const diagnostic=requests.filter(r=>['/health','/api/analyze?ticker=BTCUSDC','/api/paper-execution?limit=1'].includes(r.url));assert(diagnostic.length>=3);assert(diagnostic.every(r=>r.method==='GET'));
  failures=true;await context.checkApiConnections();assert(nodes.apiCheckStatus.textContent.includes('失敗 1'));assert(nodes.apiCheckResults.innerHTML.includes('取得・応答内容を確認できません'));assert(!nodes.checkApi.disabled);
  failures=false;invalid=true;await context.checkApiConnections();assert(nodes.apiCheckStatus.textContent.includes('失敗 1'));invalid=false;

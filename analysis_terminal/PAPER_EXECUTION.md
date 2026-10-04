@@ -35,6 +35,8 @@ v19.0.20では、PENDINGの約定対象足が欠測・不正だった場合も�
 
 GET /api/paper-execution?limit=50 は読取専用。表示件数が集計母集団を変えない。画面はAPIタブ。PAPER ONLY、コスト仮定、試験モデルの制約を常時表示。
 
+v19.0.21では、同APIのtrackingを全注文から読取集計し、WAITING_READY / WAITING_FILL / TRACKING / DATA_INCOMPLETE / PAUSED / AMBIGUOUS / NOT_STARTED / COLLECTOR_STALEを区別する。active_status_countsはPENDING・OPEN・AMBIGUOUS、data_issue_countsは有効な注文のHISTORY_GAP・DATA_ERROR・MISSING_FILL_CANDLEだけを数える。limit=1でも、一覧外の古い建玉の履歴不足を見落とさない。API画面は履歴不足・停止・更新不明を「要確認」とし、模擬約定待ち・建玉・履歴不足の件数を表示する。tracking未提供・不正応答も正常扱いしない。これは最後の処理時点の読取診断であり、READY判定・新規注文受付の許可・本番取引への昇格判定ではない。更新が未来時刻の場合も鮮度不明として扱う。DB・注文・戦略・収集周期は変更しない。
+
 ## 観測イベント履歴（v19.0.18）
 
 simulated_order_eventsへ、setup IDに紐づく状態・quality・reasonの変化を追記する。通常周期の無変化ではイベントを増やさない。注文・費用・口座・イベントは同じトランザクションで保存し、失敗時はまとめてロールバックする。同じ周期でPENDING→OPEN→TP/SLになってもOPENを残す。
@@ -62,4 +64,4 @@ python -m analysis_terminal.paper_execution_control resume --db /data/analysis_t
 
 日次現金変化は仮想約定足開始のentry feeと、出口判定足確定時のgross PnL−exit feeをJST日付へ割り当てる。15M足内の正確な出口時刻は推測しない。MFE/MAEは終端足のOHLC範囲を含む境界値で、約定直前・直後の足内順序を再現した値ではない。
 
-検証: python -m unittest analysis_terminal.test_paper_execution analysis_terminal.test_paper_execution_events analysis_terminal.test_paper_history_recovery -v。模擬執行を通して実注文への安全性や収益性が証明されたことにはならない。
+検証: python -m unittest analysis_terminal.test_paper_execution analysis_terminal.test_paper_execution_events analysis_terminal.test_paper_history_recovery analysis_terminal.test_paper_status analysis_terminal.test_entry_ui -v。模擬執行を通して実注文への安全性や収益性が証明されたことにはならない。
