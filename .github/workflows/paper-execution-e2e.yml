@@ -23,7 +23,7 @@ jobs:
       - name: Isolated execution through real collector hook and HTTP API
         run: |
           python -m validation.run_paper_execution_check --source validation/fixtures/velvet_ready_execution.json --output audit-output/isolated --server-hook
-      - name: Refetch public market data and verify production remains separate
+      - name: Verify separate public refetch capture and read-only production
         run: |
           python - <<'PY'
           import json, urllib.request, time
@@ -50,16 +50,16 @@ jobs:
                       last=exc
                       if attempt < 2: time.sleep(2)
               raise last
-          history=get(fixture["history_source"])
+          capture=json.loads(Path("audit-input/public-capture.json").read_text())
+          assert capture["history_source"] == fixture["history_source"] and capture["contract_source"] == fixture["contract_source"]
+          history=capture["kline_response"]
           assert history["code"] == "SUCCESS" and not history["data"].get("nextPageOffsetData")
           normalize=lambda values: sorted([asdict(scanner.Candle.from_payload(v)) for v in values],key=lambda v:v["time_ms"])
           assert all(v["priceType"] == "LAST_PRICE" for v in history["data"]["dataList"])
           assert normalize(history["data"]["dataList"]) == normalize(fixture["kline_response"]["data"]["dataList"]), "Public market history revised"
           (out/"refetched-public-candles.json").write_text(json.dumps(history,indent=2))
-          meta=get(fixture["contract_source"])
-          assert meta["code"] == "SUCCESS"
-          contract=next(c for c in meta["data"]["contractList"] if str(c["contractId"]) == fixture["contract"]["contractId"])
-          selected={k:contract.get(k) for k in fixture["contract"]}
+          selected=capture["contract"]
+          (out/"public-capture-provenance.json").write_text(json.dumps({k:v for k,v in capture.items() if k not in {"kline_response","contract"}},indent=2))
           assert selected == fixture["contract"], "Public quantity rules changed"
           (out/"refetched-contract-rules.json").write_text(json.dumps(selected,indent=2))
           base="https://edgex-analysis-terminal-production.up.railway.app"
