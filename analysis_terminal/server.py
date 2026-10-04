@@ -3794,8 +3794,10 @@ def _simulation_cycle(contracts, rows, candles_override=None):
 async def _recover_simulation_history(contracts):
     now_ms = int(time.time()*1000)
     with _db_connect() as conn:
-        pending = [o for o in paper_execution.orders(conn) if o["status"] == "OPEN"
-                   and o.get("quality") in {"HISTORY_GAP", "DATA_ERROR"}]
+        pending = [o for o in paper_execution.orders(conn)
+                   if (o["status"] == "OPEN" and o.get("quality") in {"HISTORY_GAP", "DATA_ERROR"})
+                   or (o["status"] == "PENDING" and o.get("quality") in {"MISSING_FILL_CANDLE", "DATA_ERROR"}
+                       and o["execute_ms"]+900000 <= now_ms <= o["expires_ms"])]
     by_name = {c.contract_name.upper(): c for c in contracts.values()}
     if pending:
         offset = now_ms//900000 % len(pending)
@@ -3805,8 +3807,10 @@ async def _recover_simulation_history(contracts):
         if contract is None:
             continue
         try:
-            start = o["next_candle_ms"]
+            start = o["execute_ms"] if o["status"] == "PENDING" else o["next_candle_ms"]
             end = min(now_ms//900000*900000,start+256*900000)
+            if end <= start:
+                continue
             history = await fetch_history(CLIENT._get_json_sync,contract,SETTINGS.entry_interval,start,end,size=256,max_pages=1)
             # Read-only public history is scoped to the unresolved cursor, never a past entry.
             _simulation_cycle(contracts,[],{o["ticker"]:history})
@@ -3866,7 +3870,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="EdgeX Analysis Terminal",
-    version="19.0.19",
+    version="19.0.20",
     lifespan=lifespan,
 )
 
