@@ -1,0 +1,46 @@
+# 模擬執行 v1 — PAPER ONLY
+
+この機能は仮想口座の検証。実注文、送金、APIキー作成、ステーキング、実資金の利用を行わない。実注文へ切り替える設定や注文transportは存在しない。
+
+入力は現行READYのライブ観測だけ。Shadow、旧シグナル、リプレイ結果は入力にしない。戦略・通知・既存結果判定は変更しない。結果は本番昇格標本へ加算しない。
+
+## 試験条件
+
+- 仮想初期現金10,000 USDC。未実現損益は現金に加えない。
+- 1回の予定損失予算は発注時の仮想現金の1%。SL価格での仮定滑りと往復手数料を含む。窓開けの追加損失は保証できない。
+- 最大3つの注文・建玉。銘柄単位の重複建玉なし。合計の残余損失予算3%、総想定元本は現金の1倍以下。
+- JST日次の仮想現金減少が日初現金の3%に達したら新規注文停止。日付変更だけでは自動再開しない。
+- 片道手数料5bps、滑り2bpsを試験用に仮定する。EdgeXの実際の手数料ではない。Funding、板厚、部分約定は未対応。
+- 検知した15M確認足の確定後から120秒未満、キャッシュ取得後120秒未満が必要。
+
+## 時系列と約定
+
+1. 検知時刻でsetup初回のPENDINGを保存し、数量・損失予算・元本を予約。signal candle以前を価格判定に使わない。
+2. 検知後の次の15M足の始値で仮想約定。最大15分の意図的な待機を含む粗いモデルで、即時市場注文の性能は再現しない。始値だけが必要なため、形成中の足からはopenのみを使える。
+3. 当該足の時刻は注文作成より必ず後。約定でSL/TPの価格順序とRR>=現行min_rrを再確認し、未達ならREJECTED。SL/TPは変更しない。数量は予約時より増やさない。
+4. 約定後は連続した確定足だけで結果判定。形成中のhigh/low、抜けた足の結果は使わない。カーソルの抜けはHISTORY_GAPとして保持し、新規注文を止める。
+5. 足内でTP/SL両触れは、始値によらずAMBIGUOUS。損益を推測せず口座を停止し、現金総額をnullにする。
+6. SLを飛び越える始値は、SL価格より悪い始値＋滑りで決済を模擬。想定損失予算を超え得る。
+7. 約定データを注文作成から30分以内に取得できなければEXPIRED。後日の復帰で過去約定を追加しない。
+
+## 保存と運用
+
+既存SQLiteへsimulated_ordersとsimulated_accountをCREATE IF NOT EXISTSで追加する。setupごとの主キーとBEGIN IMMEDIATEで重複・並行更新を防止。初回有効化時点の保存済み現行シグナルはBASELINED（対象外）。再起動・再migrationで状態を保持する。
+
+既存collectorの公開WSキャッシュを利用する。履歴回復は公開RESTのfetch_historyだけを1周期最大2要求・各256足に制限。復旧取得は未処理カーソル以降で、実注文APIを呼ばない。エラーは模擬口座を停止し、既存collector・通知の処理を継続する。
+
+GET /api/paper-execution?limit=50 は読取専用。表示件数が集計母集団を変えない。画面は「検証と改善」冒頭。PAPER ONLY、コスト仮定、試験モデルの制約を常時表示。
+
+停止・再開は認証されたサーバー管理環境からのみ実行する。公開書込APIは追加しない。
+
+```
+python -m analysis_terminal.paper_execution_control status --db /data/analysis_terminal.db
+python -m analysis_terminal.paper_execution_control pause --db /data/analysis_terminal.db
+python -m analysis_terminal.paper_execution_control resume --db /data/analysis_terminal.db
+```
+
+停止は未来の未約定注文を取消し、既存仮想建玉の結果追跡を継続。AMBIGUOUSや当日損失上限のままでは再開できない。DB自体のリセット、履歴削除は行わない。
+
+日次現金変化は仮想約定足開始のentry feeと、出口判定足確定時のgross PnL−exit feeをJST日付へ割り当てる。15M足内の正確な出口時刻は推測しない。MFE/MAEは終端足のOHLC範囲を含む境界値で、約定直前・直後の足内順序を再現した値ではない。
+
+検証: python -m unittest analysis_terminal.test_paper_execution -v。模擬執行を通して実注文への安全性や収益性が証明されたことにはならない。
