@@ -32,6 +32,7 @@ from analysis_terminal.comparison import cohort, strategy_comparison
 from analysis_terminal.readiness_history import daily_readiness, shadow_observation
 from analysis_terminal.entry_band import diagnose as diagnose_entry_band, observation as entry_band_observation
 from analysis_terminal import paper_execution
+from analysis_terminal import btc_wave, btc_wave_store
 from analysis_terminal.tracking import tracking_summary
 from analysis_terminal.history import fetch_history
 from analysis_terminal.outcome_history import BACKFILL_BARS, BACKFILL_REQUESTS, consecutive_window, merge_candles
@@ -54,6 +55,9 @@ DAILY_SUMMARY_HOUR_JST = int(os.getenv("DAILY_SUMMARY_HOUR_JST", "8"))
 VAPID_KEY_PATH = DB_PATH.parent / "webpush_vapid_private.pem"
 JST = ZoneInfo("Asia/Tokyo")
 _background_task: asyncio.Task | None = None
+_btc_wave_task: asyncio.Task | None = None
+_btc_wave_latest: dict[str, Any] | None = None
+_btc_wave_lock = asyncio.Lock()
 
 
 def _db_connect() -> sqlite3.Connection:
@@ -314,6 +318,7 @@ def _init_db() -> None:
             previous_signals=[json.loads(row["payload"]) for row in conn.execute(
                 "SELECT payload FROM paper_signals ORDER BY created_ms,signal_key")],
         )
+        btc_wave_store.initialize(conn)
         conn.commit()
 
     if VAPID_PRIVATE_KEY:
@@ -3855,11 +3860,65 @@ async def _background_collector() -> None:
         await asyncio.sleep(30)
 
 
+async def _btc_wave_cycle() -> None:
+    global _btc_wave_latest
+    async with _btc_wave_lock:
+        contracts = await CLIENT.get_contracts()
+        contract = next((c for c in contracts.values() if c.contract_name == "BTCUSDC"), None)
+        if contract is None:
+            raise ValueError("BTC contract unavailable")
+        raw = await fetch_snapshots([contract.contract_id], intervals=btc_wave.INTERVALS, timeout=25)
+        now_ms = int(time.time()*1000)
+        data = {i: raw.get((contract.contract_id,i),[]) for i in btc_wave.INTERVALS}
+        report = btc_wave.analyze(contract,data,now_ms=now_ms)
+        with _db_connect() as conn:
+            btc_wave_store.save(conn,report)
+            pending = [s for s in btc_wave_store.records(conn)
+                       if (s.get("result") or {}).get("status") not in {"TP","SL","AMBIGUOUS"}]
+        # Rotate bounded recovery work; an old missing history cannot starve new setups.
+        if pending and "MINUTE_5" in report["frames"]:
+            offset = (now_ms//60000*2) % len(pending)
+            pending = (pending[offset:]+pending[:offset])[:20]
+            recoveries = 0
+            for signal in pending:
+                try:
+                    candles = data["MINUTE_5"]
+                    _,missing,end = consecutive_window(signal,candles,contract,"MINUTE_5",now_ms=now_ms)
+                    if missing is not None and recoveries<2:
+                        recoveries += 1
+                        try:
+                            recovered = await fetch_history(CLIENT._get_json_sync,contract,"MINUTE_5",
+                                missing,min(end,missing+256*btc_wave.STEP),size=300,max_pages=2)
+                        except Exception as exc:
+                            recovered = []
+                            print(f"BTC Shadow recovery unavailable: {type(exc).__name__}",flush=True)
+                        candles = merge_candles(recovered,candles)
+                    with _db_connect() as conn:
+                        btc_wave_store.update(conn,signal,candles,contract,now_ms=now_ms)
+                except Exception as exc:
+                    with _db_connect() as conn:
+                        btc_wave_store.mark_error(conn,signal)
+                    print(f"BTC Shadow history unavailable: {type(exc).__name__}",flush=True)
+        _btc_wave_latest = report
+
+
+async def _background_btc_wave() -> None:
+    await asyncio.sleep(8)
+    while True:
+        try:
+            await _btc_wave_cycle()
+        except Exception as exc:
+            print(f"BTC wave collector unavailable: {type(exc).__name__}",flush=True)
+        await asyncio.sleep(60)
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    global _background_task
+    global _background_task, _btc_wave_task, _btc_wave_latest
     _init_db()
+    _btc_wave_latest = None
     _background_task = asyncio.create_task(_background_collector())
+    _btc_wave_task = asyncio.create_task(_background_btc_wave())
     try:
         yield
     finally:
@@ -3870,11 +3929,18 @@ async def lifespan(_app: FastAPI):
             except asyncio.CancelledError:
                 pass
             _background_task = None
+        if _btc_wave_task is not None:
+            _btc_wave_task.cancel()
+            try:
+                await _btc_wave_task
+            except asyncio.CancelledError:
+                pass
+            _btc_wave_task = None
 
 
 app = FastAPI(
     title="EdgeX Analysis Terminal",
-    version="19.0.22",
+    version="19.0.23",
     lifespan=lifespan,
 )
 
@@ -3913,6 +3979,19 @@ async def contracts_api():
         "count": len(contracts),
         "contracts": [contract.__dict__ for contract in contracts.values()],
     }
+
+
+@app.get("/api/btc-wave")
+async def btc_wave_api():
+    with _db_connect() as conn:
+        conn.execute("BEGIN")
+        return btc_wave_store.report(conn,now_ms=int(time.time()*1000),latest=_btc_wave_latest)
+
+
+@app.get("/btc", response_class=HTMLResponse)
+async def btc_wave_page():
+    return HTMLResponse(Path(__file__).with_name("btc.html").read_text(encoding="utf-8").replace(
+        "__APP_VERSION__",app.version),headers={"Cache-Control":"no-store"})
 
 
 @app.get("/api/analyze")
