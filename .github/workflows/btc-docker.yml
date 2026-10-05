@@ -1,0 +1,51 @@
+name: BTC v19.0.23 container validation
+on:
+  push:
+    branches: [audit/btc-wave-v19-0-23-container]
+permissions:
+  contents: read
+jobs:
+  container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build unchanged production Dockerfile
+        run: docker build -f analysis_terminal/Dockerfile -t btc-wave-terminal:test .
+      - name: Isolated container HTTP smoke
+        run: |
+          mkdir container-output
+          docker run -d --name btc-wave-test -e PORT=8080 -p 127.0.0.1:8080:8080 btc-wave-terminal:test
+          python - <<'PY'
+          import json,time,urllib.request
+          from pathlib import Path
+          base='http://127.0.0.1:8080'
+          for attempt in range(30):
+              try:
+                  with urllib.request.urlopen(base+'/health',timeout=2) as r: health=json.load(r)
+                  break
+              except Exception:
+                  time.sleep(1)
+          else: raise AssertionError('Container startup failed')
+          assert health['version']=='19.0.23' and health['storage']['db_exists']
+          checks=[]
+          for path in ['/','/btc','/api/btc-wave','/api/push/config','/api/shadow-v2']:
+              with urllib.request.urlopen(base+path,timeout=10) as r:
+                  raw=r.read().decode();assert r.status==200
+                  checks.append(dict(path=path,http_status=r.status))
+              if path=='/api/btc-wave':
+                  v=json.loads(raw);assert v['mode']=='SHADOW_ONLY' and not v['real_orders_enabled'] and not v['changes_live_rules']
+              if path=='/btc':assert 'BTC WAVE DESK' in raw and 'v19.0.23' in raw
+          summary=dict(verdict='PASS',production_dockerfile_build='PASS',isolated_container=True,version=health['version'],checks=checks)
+          Path('container-output/summary.json').write_text(json.dumps(summary,indent=2))
+          print(json.dumps(summary))
+          PY
+      - name: Remove test container
+        if: always()
+        run: docker rm -f btc-wave-test || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: btc-wave-v19-0-23-container
+          path: container-output/
+          if-no-files-found: warn
