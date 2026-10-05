@@ -1,0 +1,40 @@
+name: BTC public four timeframe probe
+on:
+  push:
+    branches: [audit/btc-wave-v19-0-23-probe]
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r analysis_terminal/test-requirements.txt
+      - run: |
+          mkdir -p btc-output
+          python - <<'PY'
+          import asyncio,json,time
+          from dataclasses import asdict
+          from pathlib import Path
+          from analysis_terminal import server
+          async def main():
+              contracts=await server.CLIENT.get_contracts()
+              btc=next(c for c in contracts.values() if c.contract_name=='BTCUSDC')
+              intervals=('HOUR_4','HOUR_1','MINUTE_15','MINUTE_5')
+              data=await server.fetch_snapshots([btc.contract_id],intervals=intervals,timeout=25)
+              payload=dict(observed_ms=int(time.time()*1000),contract=asdict(btc),series={i:[asdict(c) for c in data.get((btc.contract_id,i),[])] for i in intervals})
+              assert all(len(payload['series'][i])>=50 for i in intervals)
+              Path('btc-output/public-btc.json').write_text(json.dumps(payload))
+              print(json.dumps({i:len(payload['series'][i]) for i in intervals}))
+          asyncio.run(main())
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: btc-public-four-timeframes
+          path: btc-output/
+          retention-days: 7
