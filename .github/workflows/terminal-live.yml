@@ -17,14 +17,18 @@ jobs:
         run: |
           python - <<'PYW'
           import json,time,urllib.request,urllib.error
+          from pathlib import Path
+          out=Path('live-output');out.mkdir(exist_ok=True)
           base='https://edgex-analysis-terminal-production.up.railway.app'
           for attempt in range(24):
               try:
                   with urllib.request.urlopen(base+'/health',timeout=15) as r:
                       h=json.load(r)
+                  (out/'health-wait.json').write_text(json.dumps(h))
                   if h.get('version')=='19.0.23':
                       with urllib.request.urlopen(base+'/api/btc-wave',timeout=15) as r:
                           b=json.load(r)
+                      (out/'btc-wait.json').write_text(json.dumps(b))
                       if b.get('latest') and b['latest']['status']=='OBSERVING' and not b['stale']:
                           print('v19.0.23 and first fresh four-timeframe BTC observation ready')
                           break
@@ -38,11 +42,11 @@ jobs:
       - name: Live HTTP, migration provenance, Push and shipped JavaScript
         run: |
           python - <<'PY'
-          import json,re,subprocess,time,urllib.request,urllib.error
+          import json,re,subprocess,time,urllib.request,urllib.error,urllib.parse
           from pathlib import Path
           base="https://edgex-analysis-terminal-production.up.railway.app"
           out=Path("live-output")
-          out.mkdir()
+          out.mkdir(exist_ok=True)
           baseline=json.loads(Path("audit-input/production-baseline.json").read_text())
           checks=[]
           def fetch(path,expected=200,as_json=True):
@@ -135,9 +139,8 @@ jobs:
           assert not btc['stale'] and btc['snapshot_age_seconds']<120
           assert set(btc['latest']['frames'])=={'HOUR_4','HOUR_1','MINUTE_15','MINUTE_5'}
           assert len(btc['latest']['plans'])==4 and btc['recorded_observations']>=1
-          from analysis_terminal.btc_wave import compact
           # Check latest closed data identities and no future chart bars.
-          from app import INTERVAL_MS
+          INTERVAL_MS={'HOUR_4':14400000,'HOUR_1':3600000,'MINUTE_15':900000,'MINUTE_5':300000}
           for interval,frame in btc['latest']['frames'].items():
               assert len(frame['series'])>=50
               assert all(c['time_ms']+INTERVAL_MS[interval]<=btc['latest']['observed_ms'] for c in frame['series'])
@@ -223,4 +226,3 @@ jobs:
           path: live-output/
           retention-days: 7
           if-no-files-found: error
-
