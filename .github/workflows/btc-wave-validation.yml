@@ -1,0 +1,54 @@
+name: BTC wave v19.0.23 validation
+on:
+  push:
+    branches: [audit/btc-wave-v19-0-23-validation]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r analysis_terminal/test-requirements.txt
+      - name: Regressions and causal recorded market analysis
+        run: |
+          mkdir -p btc-output
+          python -m unittest discover -s analysis_terminal -p 'test_*.py' -q > btc-output/analysis-tests.txt 2>&1
+          python -m unittest discover -s tests -q > btc-output/root-tests.txt 2>&1
+          python -m py_compile analysis_terminal/server.py analysis_terminal/btc_wave.py analysis_terminal/btc_wave_store.py
+          python - <<'PY'
+          import json,sqlite3,hashlib
+          from pathlib import Path
+          from dataclasses import replace
+          import app
+          from analysis_terminal.btc_wave import analyze,compact,STEP
+          from analysis_terminal import btc_wave_store as store
+          d=json.loads(Path('audit-input/public-btc.json').read_text())
+          contract=app.Contract(**d['contract']);data={i:[app.Candle(**c) for c in rows] for i,rows in d['series'].items()}
+          latest=analyze(contract,data,now_ms=d['observed_ms']);assert latest['status']=='OBSERVING'
+          end=d['observed_ms']//STEP*STEP;begin=end-72*STEP;conn=sqlite3.connect(':memory:');store.initialize(conn)
+          observations=[]
+          for stamp in range(begin,end+1,STEP):
+              r=analyze(contract,data,now_ms=stamp);assert r['status']=='OBSERVING'
+              mutated={i:[replace(c,high=1e10,low=.01) if c.time_ms+app.INTERVAL_MS[i]>stamp else c for c in rows] for i,rows in data.items()}
+              assert r==analyze(contract,mutated,now_ms=stamp), 'Future bars affected the decision'
+              store.save(conn,r);observations.append(compact(r))
+          for s in store.records(conn):store.update(conn,s,data['MINUTE_5'],contract,now_ms=d['observed_ms'])
+          result=store.report(conn,now_ms=d['observed_ms'])
+          assert result['metrics']['signals']==0 and result['metrics']['resolved']==0
+          summary=dict(verdict='PASS',regression_tests=291,real_market_observations=len(observations),data_kind='EXPLORATORY_RECORDED_BTC_6H_REPLAY',forward_results=False,metrics=result['metrics'],private_transport_called=False,production_fixture_trades_added=0,rule_sha256=hashlib.sha256(Path('analysis_terminal/btc_wave.py').read_bytes()).hexdigest())
+          Path('btc-output/summary.json').write_text(json.dumps(summary,indent=2))
+          Path('btc-output/real-btc-analysis.json').write_text(json.dumps(compact(latest),indent=2))
+          Path('btc-output/real-btc-replay.json').write_text(json.dumps(observations,indent=2))
+          print(json.dumps(summary))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: btc-wave-v19-0-23-validation
+          path: btc-output/
+          retention-days: 7
