@@ -31,3 +31,5 @@ additive migrationでbtc_wave_observationsとbtc_wave_signalsだけを作成。�
 既存4タブを維持し、ヘッダーからBTC専用画面へ移動。4時間足のチャート切替・価格ホバー、時間足別の方向と構造、確定転換点間の波の値幅と認識時刻、進行中の未確定な動き、4監視プラン、折りたたみの研究記録を表示。確定した波の値幅を取れた利益と扱わない。本番ENTRYバーは既存screenerから独立取得し、120秒で無効化。Shadow条件を本番ENTRYやTelegram/Web Pushで通知しない。購読の追加・再登録も行わない。
 
 検証: python -m unittest analysis_terminal.test_btc_wave -v。test_btc_ui.jsは配信ページ全体のJavaScriptを実行し、データ失敗・鮮度・検出遅れ・応答競合・エスケープ・チャート操作・本番ENTRYとの分離を検証する。
+
+独立環境で既存production Dockerfileのビルド・起動も確認済み。空の専用DBで /、/btc、/health、/api/btc-wave、/api/push/config、/api/shadow-v2 がHTTP200となることを検証。本番の保存データを使ったテストではなく、デプロイ後の本番smokeは別途必須。
