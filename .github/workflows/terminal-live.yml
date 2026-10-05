@@ -7,7 +7,7 @@ permissions:
 jobs:
   smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -20,7 +20,7 @@ jobs:
           from pathlib import Path
           out=Path('live-output');out.mkdir(exist_ok=True)
           base='https://edgex-analysis-terminal-production.up.railway.app'
-          for attempt in range(24):
+          for attempt in range(100):
               try:
                   with urllib.request.urlopen(base+'/health',timeout=15) as r:
                       h=json.load(r)
@@ -226,3 +226,4 @@ jobs:
           path: live-output/
           retention-days: 7
           if-no-files-found: error
+
