@@ -40,7 +40,7 @@ jobs:
           assert h['push']['enabled'] and h['push']['notification_policy']=='READY_ONLY' and not h['push']['daily_summary_enabled']
           for route,file in [('/','analysis_terminal/index.html'),('/btc','analysis_terminal/btc.html')]:
               html=fetch(route,raw=True)
-              assert html==Path(file).read_text(),'Published UI differs from approved main'
+              assert html==Path(file).read_text().replace('__APP_VERSION__',h['version']),'Published UI differs from rendered approved main'
               scripts=re.findall(r'<script[^>]*>(.*?)</script>',html,re.S|re.I)
               scripts=[s for s in scripts if s.strip()]
               assert scripts
