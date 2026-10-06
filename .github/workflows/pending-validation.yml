@@ -1,0 +1,70 @@
+name: Validate cost-aware pending entry study
+on:
+  push:
+    branches: [audit/pending-entry-validation-2026-10-06]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -r analysis_terminal/test-requirements.txt
+      - name: Regression and causal cost tests
+        run: |
+          mkdir -p study-output
+          python -m unittest discover -s analysis_terminal -p 'test_*.py' -q > study-output/analysis-tests.txt 2>&1
+          python -m unittest discover -s tests -q > study-output/root-tests.txt 2>&1
+          python -m py_compile analysis_terminal/pending_entry_replay.py
+      - name: Download exact archived public data artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/y-ai-lab/edgex-breakout-alert/actions/artifacts/11262672328/zip > development.zip
+          gh api repos/y-ai-lab/edgex-breakout-alert/actions/artifacts/11430177364/zip > validation.zip
+          python - <<'PY'
+          import zipfile,hashlib
+          from pathlib import Path
+          sources={'development':'163fb6eb7947f1284dcb953d0bb8e39f1f1535a71b5778260c2a373c4f7c8a9c','validation':'820cc3a94c876f569e9eb410829d89f5d4af7fc5c90470d4d50071046ca0b1df'}
+          for role,digest in sources.items():
+              p=Path(role+'.zip');assert hashlib.sha256(p.read_bytes()).hexdigest()==digest
+              root=Path('study-input')/role;root.mkdir(parents=True,exist_ok=True)
+              with zipfile.ZipFile(p) as z:
+                  assert all((root/i.filename).resolve().is_relative_to(root.resolve()) for i in z.infolist())
+                  z.extractall(root)
+          PY
+      - name: Independently reproduce both study periods
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from analysis_terminal import server
+          from analysis_terminal.pending_entry_replay import run,decision
+          expected=json.loads(Path('analysis_terminal/pending_entry_latest.json').read_text())
+          reports=[]
+          for role,previous in zip(('development','validation'),expected['periods']):
+              matches=list((Path('study-input')/role).rglob('replay-report.json'))
+              assert len(matches)==1
+              report=run(matches[0].parent,server.analyze_contract,server.SETTINGS,role=role)
+              for field in ('metrics','portfolios','opportunities','engine_sha256','protocol_sha256'):
+                  assert report[field]==previous[field], (role,field)
+              reports.append(report)
+              out=Path('study-output')/role;out.mkdir(exist_ok=True)
+              (out/'report.json').write_text(json.dumps(report,allow_nan=False))
+              (out/'summary.json').write_text(json.dumps({k:v for k,v in report.items() if k not in {'records','markets'}},indent=2,allow_nan=False))
+          assert decision(reports)==expected['decision']=='CONTINUE_INSUFFICIENT_SAMPLE'
+          summary=dict(verdict='PASS',decision=decision(reports),production_orders_enabled=False,production_parameters_changed=False,verified_source_files=sum(r['source_files_verified'] for r in reports))
+          Path('study-output/summary.json').write_text(json.dumps(summary,indent=2))
+          print(json.dumps(summary))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pending-entry-independent-validation
+          path: study-output/
+          retention-days: 14
