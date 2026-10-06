@@ -4,6 +4,7 @@ Use the existing BTC linear cost assumption: 5bps fee + 2bps slippage on
 each side. No funding, spread/queue simulation or execution claims.
 """
 import math
+from collections import Counter
 from statistics import mean
 
 from analysis_terminal.outcomes import verified_result
@@ -46,6 +47,49 @@ def projection(signal):
                 projected_tp_net_r=tp_net,projected_sl_net_r=sl_net,
                 projected_net_rr=net_rr,tp_profitable_after_assumed_costs=tp_net>0,
                 real_execution_results=False,changes_live_rules=False)
+
+
+def completion(signals, plans, accepted):
+    """Account for censoring; scenarios are assumptions, never new outcomes.
+
+    Only OPEN/TP1 with verified coverage and valid frozen prices can enter a
+    scenario. Ambiguous, erroneous or missing histories block a whole-cohort
+    estimate instead of being guessed as future winners or losers.
+    """
+    statuses=Counter(str((s.get("result") or {}).get("status") or "OPEN") for s in signals)
+    open_plans=[p for s,p in zip(signals,plans)
+                if (s.get("result") or {}).get("status") in {"OPEN","TP1"}
+                and verified_result(s.get("result")) and p is not None
+                and (s.get("result") or {}).get("quality") not in {"HISTORY_GAP","DATA_ERROR"}]
+    total,resolved=len(signals),len(accepted)
+    remaining=total-resolved
+    blocked=remaining-len(open_plans)
+    state="EMPTY" if not total else "ALL_RESOLVED" if not remaining else "PARTIALLY_RESOLVED" if resolved else "NO_VERIFIED_RESOLUTIONS"
+    sensitivity=dict(status="EMPTY" if not total else "BLOCKED_DATA_QUALITY" if blocked else
+                     "NOT_NEEDED_ALL_RESOLVED" if not remaining else "HYPOTHETICAL_OPEN_OUTCOMES",
+                     available=bool(open_plans) and blocked==0,
+                     assumes_no_new_entries=True,real_execution_results=False,
+                     portfolio_roi_pct=None,scenarios=None,
+                     limitations=["Scenarios assign every currently open entry its frozen TP or SL; they are not forecasts, probabilities or confidence bounds.",
+                                  "Full-position TP/SL assumption; funding, actual fills, gap losses and partial position sizing are unmodeled.",
+                                  "Exclude AMBIGUOUS and incomplete/error histories; never rewrite recorded outcomes."])
+    if sensitivity["available"]:
+        values=[r for _,_,r in accepted]
+        scenarios={}
+        for name,field in (("all_open_tp","projected_tp_net_r"),("all_open_sl","projected_sl_net_r")):
+            rs=values+[p[field] for p in open_plans]
+            profit,loss=sum(max(r,0) for r in rs),-sum(min(r,0) for r in rs)
+            pf=profit/loss if loss else "INF" if profit else None
+            scenarios[name]=dict(signals=len(rs),sum_net_r=round(sum(rs),4),avg_net_r=round(mean(rs),4),
+                                 net_win_rate=round(100*sum(r>0 for r in rs)/len(rs),2),
+                                 profit_factor=round(pf,4) if isinstance(pf,float) else pf)
+        sensitivity["scenarios"]=scenarios
+    return dict(status=state,estimate_scope="VERIFIED_RESOLVED_SIGNALS_ONLY",total_signals=total,
+                verified_resolved=resolved,resolved_pct=round(100*resolved/total,2) if total else None,
+                unresolved_or_excluded=remaining,open_signals=statuses["OPEN"]+statuses["TP1"],
+                modeled_open_signals=len(open_plans),blocked_signals=blocked,
+                status_counts=dict(statuses),cohort_complete=bool(total) and remaining==0,
+                observed_metrics_are_provisional=bool(remaining),sensitivity=sensitivity)
 
 
 def metrics(signals):
@@ -100,6 +144,7 @@ def metrics(signals):
                 avg_assumed_cost_r=round(mean(p["cost_to_tp_r"] if s["result"]["status"]=="TP" else p["cost_to_sl_r"] for s,p,_ in accepted),4) if accepted else None,
                 max_consecutive_net_losses=longest if ordered else None,streak_samples=len(ordered),
                 excluded_resolved=excluded,minimum_resolved=20,
+                completion=completion(signals,plans,accepted),
                 sample_status="SUFFICIENT SAMPLE" if len(rs)>=20 else "INSUFFICIENT SAMPLE",
                 real_execution_results=False,eligible_for_live_promotion=False,automatic_promotion=False,
                 portfolio_roi_pct=None,
