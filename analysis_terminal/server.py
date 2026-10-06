@@ -28,7 +28,7 @@ import app as scanner
 from analysis_terminal.outcomes import evaluate_paper_signal, verified_result
 from analysis_terminal.setups import first_per_setup, later_ready_time, ready_times_by_setup, setup_identity
 from analysis_terminal.lifecycle import ENDED, current_observation, new_setup, observe_setup
-from analysis_terminal.comparison import cohort, strategy_comparison
+from analysis_terminal.comparison import cohort, strategy_comparison, cost_cohort_metrics
 from analysis_terminal.readiness_history import daily_readiness, shadow_observation
 from analysis_terminal.entry_band import diagnose as diagnose_entry_band, observation as entry_band_observation
 from analysis_terminal import paper_execution
@@ -3940,7 +3940,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="EdgeX Analysis Terminal",
-    version="19.0.23",
+    version="19.0.24",
     lifespan=lifespan,
 )
 
@@ -4358,6 +4358,7 @@ async def shadow_v2_api(
         ),
         "current": current,
         "metrics": _shadow_v2_metrics(signals),
+        "cost_adjusted": cost_cohort_metrics(signals),
         "latest": signals[:min(limit, 50)],
     }
 
