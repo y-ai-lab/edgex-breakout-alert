@@ -106,6 +106,86 @@ class NetCostTests(unittest.TestCase):
         self.assertIsNotNone(r["latest"][0]["shadow"]["cost_projection"])
 
 
+class CompletionTests(unittest.TestCase):
+    def test_partial_cohort_does_not_become_final_after_twenty_resolutions(self):
+        rows=[signal(i,"TP",2) for i in range(1,21)]+[signal(21)]
+        m=costs.metrics(rows)
+        self.assertEqual(m["sample_status"],"SUFFICIENT SAMPLE")
+        c=m["completion"]
+        self.assertEqual((c["total_signals"],c["verified_resolved"],c["open_signals"]),(21,20,1))
+        self.assertFalse(c["cohort_complete"])
+        self.assertTrue(c["observed_metrics_are_provisional"])
+
+    def test_scenarios_include_every_open_plan_without_changing_observed_metrics(self):
+        rows=[signal(1,"SL",-1),signal(2)]
+        m=costs.metrics(rows);c=m["completion"]
+        self.assertEqual((m["resolved"],m["net_wins"],m["net_losses"]),(1,0,1))
+        self.assertEqual(c["resolved_pct"],50)
+        scenarios=c["sensitivity"]["scenarios"]
+        tp=costs.projection(rows[1])["projected_tp_net_r"]
+        sl=costs.projection(rows[0])["projected_sl_net_r"]
+        self.assertEqual(scenarios["all_open_tp"]["signals"],2)
+        self.assertAlmostEqual(scenarios["all_open_tp"]["avg_net_r"],round((tp+sl)/2,4))
+        self.assertEqual(scenarios["all_open_sl"]["net_win_rate"],0)
+        self.assertIsNone(c["sensitivity"]["portfolio_roi_pct"])
+
+    def test_ambiguous_errors_unverified_outcomes_and_invalid_prices_block_scenarios(self):
+        cases=[signal(3,"AMBIGUOUS"),signal(3,"ERROR"),signal(3,"TP",7),signal(3,stop=None)]
+        bad=signal(3,"SL",-1);bad["result"]["coverage_complete"]=False;cases.append(bad)
+        for bad in cases:
+            c=costs.metrics([signal(1,"SL",-1),signal(2),bad])["completion"]
+            self.assertEqual((c["modeled_open_signals"],c["blocked_signals"]),(1,1))
+            self.assertEqual(c["sensitivity"]["status"],"BLOCKED_DATA_QUALITY")
+            self.assertIsNone(c["sensitivity"]["scenarios"])
+
+    def test_open_with_missing_or_error_history_is_never_filled_by_assumption(self):
+        for quality in ("HISTORY_GAP","DATA_ERROR"):
+            s=signal();s["result"]["quality"]=quality
+            c=costs.metrics([s])["completion"]
+            self.assertEqual((c["modeled_open_signals"],c["blocked_signals"]),(0,1))
+        for field,value in (("coverage_complete",False),("evaluation_version",1)):
+            s=signal();s["result"][field]=value
+            self.assertFalse(costs.metrics([s])["completion"]["sensitivity"]["available"])
+
+    def test_all_resolved_and_empty_are_distinct_and_need_no_future_scenarios(self):
+        complete=costs.metrics([signal(1,"SL",-1)])["completion"]
+        empty=costs.metrics([])["completion"]
+        self.assertTrue(complete["cohort_complete"])
+        self.assertEqual(complete["resolved_pct"],100)
+        self.assertEqual(complete["sensitivity"]["status"],"NOT_NEEDED_ALL_RESOLVED")
+        self.assertFalse(empty["cohort_complete"])
+        self.assertEqual(empty["status"],"EMPTY")
+        self.assertIsNone(empty["resolved_pct"])
+
+    def test_tp1_is_still_unresolved_full_position_not_booked_profit(self):
+        m=costs.metrics([signal(1,"TP1")])
+        self.assertEqual(m["resolved"],0)
+        self.assertIsNone(m["avg_net_r"])
+        self.assertEqual(m["completion"]["open_signals"],1)
+        self.assertTrue(m["completion"]["sensitivity"]["available"])
+
+    def test_unprofitable_projected_tp_never_counts_as_scenario_win(self):
+        c=costs.metrics([signal(1,entry=100,stop=99.99,target=100.02)])["completion"]
+        scenario=c["sensitivity"]["scenarios"]["all_open_tp"]
+        self.assertEqual(scenario["net_win_rate"],0)
+        self.assertLess(scenario["avg_net_r"],0)
+
+    def test_first_open_record_is_not_replaced_by_later_resolved_duplicate(self):
+        first=signal(1)
+        later=signal(1,"TP",2,key="later",created_ms=first["created_ms"]+900000)
+        c=cost_cohort_metrics([later,first])["completion"]
+        self.assertEqual((c["total_signals"],c["verified_resolved"],c["modeled_open_signals"]),(1,0,1))
+
+    def test_scenarios_preserve_input_and_are_not_forecasts_or_promotion(self):
+        rows=[signal(1,"TP",2),signal(2),signal(3)]
+        before=copy.deepcopy(rows)
+        m=costs.metrics(rows)
+        self.assertEqual(rows,before)
+        self.assertFalse(m["automatic_promotion"])
+        self.assertFalse(m["completion"]["sensitivity"]["real_execution_results"])
+        json.dumps(m,allow_nan=False)
+
+
 class NetCostAPITests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         storage.StorageTests.setUp(self)
