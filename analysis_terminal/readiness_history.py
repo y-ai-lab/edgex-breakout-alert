@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 
 from analysis_terminal.comparison import cohort, metrics
 from analysis_terminal.entry_band import history_summary as entry_band_history
+from analysis_terminal.net_costs import metrics as cost_metrics
 
 STEP = 900_000
 JST = ZoneInfo("Asia/Tokyo")
@@ -116,11 +117,14 @@ def daily_readiness(snapshots, current_records, shadow_records, *, now_ms, days=
                    observation_coverage_pct=percent(len(obs), expected),
                    signals={name: metrics([s for s in items if begin <= s["created_ms"] < end])
                             for name, items in models.items()})
+        row["cost_adjusted_signals"]={name:cost_metrics([s for s in items if begin <= s["created_ms"] < end])
+                                      for name,items in models.items()}
         daily.append(row)
     summary = summarize(list(indexed.values()))
     summary.update(expected_buckets=sum(x["expected_buckets"] for x in daily),
                    missing_buckets=sum(x["missing_buckets"] for x in daily),
                    signals={name: metrics(items) for name, items in models.items()})
+    summary["cost_adjusted_signals"]={name:cost_metrics(items) for name,items in models.items()}
     summary["observation_coverage_pct"] = percent(summary["observations"], summary["expected_buckets"])
     return dict(dataset="RECORDED_LIVE_OBSERVATIONS", time_ms=now_ms, timezone="Asia/Tokyo", days=days,
                 interval_ms=STEP, start_ms=start_ms, end_ms=now_ms+1,

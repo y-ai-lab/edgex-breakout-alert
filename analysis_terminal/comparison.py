@@ -7,6 +7,7 @@ from typing import Any
 
 from analysis_terminal.outcomes import verified_result
 from analysis_terminal.setups import first_per_setup, setup_identity
+from analysis_terminal.net_costs import metrics as cost_metrics, projection as cost_projection
 
 
 def finite_number(value: Any) -> float | None:
@@ -74,6 +75,11 @@ def metrics(signals: list[dict[str, Any]]) -> dict[str, Any]:
                 **excursions)
 
 
+def cost_cohort_metrics(records):
+    signals,excluded=cohort(records)
+    return dict(cost_metrics(signals),sample_basis="unique_setup_first_recorded_entry_all_history",exclusions=excluded)
+
+
 def strategy_comparison(current_records: list[dict[str, Any]], shadow_records: list[dict[str, Any]],
                         limit: int = 50) -> dict[str, Any]:
     current, current_excluded = cohort(current_records)
@@ -88,11 +94,12 @@ def strategy_comparison(current_records: list[dict[str, Any]], shadow_records: l
     def brief(signal):
         if signal is None:
             return None
-        return {key: signal.get(key) for key in ("key", "created_ms", "entry", "stop", "target", "result")}
+        return {key: signal.get(key) for key in ("key", "created_ms", "entry", "stop", "target", "result")} | {"cost_projection":cost_projection(signal)}
 
     ids = sorted(c.keys() | v.keys(), key=lambda k: (-min(s["created_ms"] for s in (c.get(k), v.get(k)) if s), k))
     return dict(sample_basis="unique_setup_first_recorded_entry_all_history", automatic_promotion=False,
                 current=metrics(current), shadow=metrics(shadow),
+                cost_adjusted=dict(current=cost_metrics(current),shadow=cost_metrics(shadow)),
                 exclusions=dict(current=current_excluded, shadow=shadow_excluded),
                 groups=dict(current_only=dict(setups=len(current_only), current=metrics([c[k] for k in current_only])),
                             shadow_only=dict(setups=len(shadow_only), shadow=metrics([v[k] for k in shadow_only])),

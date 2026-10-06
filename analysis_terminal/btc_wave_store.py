@@ -6,6 +6,7 @@ from statistics import mean
 from analysis_terminal.btc_wave import STEP, compact
 from analysis_terminal.outcomes import evaluate_paper_signal, verified_result
 from analysis_terminal.outcome_history import consecutive_window
+from analysis_terminal.net_costs import metrics as cost_metrics, projection as cost_projection
 
 
 def initialize(conn):
@@ -96,6 +97,7 @@ def report(conn, *, now_ms, latest=None):
                 eligible_for_live_promotion=False,changes_live_rules=False,now_ms=now_ms,
                 snapshot_age_seconds=age,stale=stale,latest=latest,
                 recorded_observations=observations,metrics=metrics(items),
+                cost_adjusted=cost_metrics(items),
                 groups={mode+"_"+side:metrics([s for s in items if s["mode"]==mode and s["side"]==side])
                         for mode in ("BREAKOUT","RANGE") for side in ("LONG","SHORT")},
-                signals=list(reversed(items))[:50])
+                signals=[dict(s,cost_projection=cost_projection(s)) for s in reversed(items)][:50])

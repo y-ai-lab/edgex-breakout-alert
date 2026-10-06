@@ -81,3 +81,15 @@ GitHubの実行時刻は遅れる場合がある。最初の期間は10/7 00:00 
 本番昇格には別途、実時間のShadow決着20件以上、Avg R>0、PF>1を最低条件として、
 費用込み収益性、未使用期間、資金制約・損失・データ品質を確認する必要がある。
 単独で20件を満たしたことを採用の保証としない。
+
+## v19.0.24: 費用控除後の成績を並列集計（2026-10-06）
+
+エントリー・SL・TP・min_rr・昇格条件は変更していない。`/api/strategy-comparison`、`/api/shadow-v2`、`/api/readiness-history`、`/api/btc-wave` に読み取り専用の `cost_adjusted` 集計を追加した（日次履歴は `cost_adjusted_signals`）。既存のgross集計は維持する。
+
+[取得時点の成績](cost_review_latest.json): Shadow v2は107 setup、59 resolved、18 TP / 41 SL。TP到達率30.51%、gross Avg R -0.0847 / PF 0.8780。片道手数料5bps・スリッページ2bpsを仮定すると、net Avg R -0.1637 / PF 0.7803、黒字率30.51%。107候補すべての費用込みRRは2未満。これは既存のgross fixed 2Rを費用控除した結果であり、候補を新たに除外するルールではない。本番昇格しない。現行戦略は2 resolvedでINSUFFICIENT SAMPLE。
+
+TP到達率と費用控除後の黒字率を分離する。verified outcome・凍結価格・記録済みRの整合性を検証し、不明/AMBIGUOUS/履歴不完全/重複setup/未識別legacyを除外する。画面上の表示件数制限は集計対象を減らさない。読み取りによるDB更新は行わない。
+
+新集計のRは元のentry-to-stop価格差を基準とする。前節のpending-entry研究は費用込みstop-risk基準なので、数値を同じRとして直接合算しない。実約定、funding、板・spread・queue、記録済みexit価格を超えるgap損失はモデル化していない。これは仮定に基づく診断で、実運用のROIではない。資本配分がないためportfolio_roi_pctはnullとする。
+
+固定済みpending-entry仮説の収集期間・パラメータは維持。最初の完了日データは2026-10-08 UTC以降であり、待機期間に同じ過去期間を再調整しない。
