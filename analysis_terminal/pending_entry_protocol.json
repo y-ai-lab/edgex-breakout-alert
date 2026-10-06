@@ -1,0 +1,60 @@
+{
+  "protocol": "confirmed_pullback_cost_2r_v1",
+  "registered_utc": "2026-10-06T17:18:11Z",
+  "model": "confirmed_pullback_cost_2r",
+  "changes_live_rules": false,
+  "real_orders_enabled": false,
+  "automatic_promotion": false,
+  "eligible_for_live_promotion": false,
+  "hypothesis": "Freeze production 4H structural SL/TP after first trend/breakout/retest/strict 15M confirmation. Later pullback to net RR >=2 may add profitable filled setups without widening stop or lowering confirmation quality.",
+  "development": {
+    "start_ms": 1790391600000,
+    "end_ms": 1790996400000,
+    "role": "VIEWED_DEVELOPMENT"
+  },
+  "validation": {
+    "start_ms": 1790996400000,
+    "end_ms": 1791255600000,
+    "role": "RECENT_RETROSPECTIVE_VALIDATION",
+    "untouched_out_of_sample": false
+  },
+  "prospective_start_ms": 1791331200000,
+  "rules": {
+    "min_net_rr": 2,
+    "pending_bars": 4,
+    "fee_bps_each_side": 5,
+    "slippage_bps_each_side": 2,
+    "confirmation": "unchanged production colour AND strict close beyond roll, plus retest",
+    "stop_target": "freeze original structural levels; TP must be beyond roll; never widen SL or invent TP",
+    "price_model": "HYPOTHETICAL_ADVERSE_EXECUTION_ON_TOUCH",
+    "signal_time": "signal close +1ms sentinel, excludes signal candle",
+    "duplicates": "first qualified confirmation per setup, never rearm expired/invalidated/gap setups",
+    "invalidation": "4 bars expiry or next known trend/setup invalidation",
+    "fill": "later bar touch, opening through SL invalidates; assumed fill still needs net RR>=2",
+    "fill_candle": "any TP/SL touch AMBIGUOUS; no inference about TP-before-fill",
+    "outcome": "closed contiguous later bars; both TP/SL AMBIGUOUS; gap stops evaluation"
+  },
+  "portfolio": {
+    "initial_cash_usdc": 10000,
+    "risk_pct": 1,
+    "max_positions": 3,
+    "max_total_risk_pct": 3,
+    "max_notional_multiple": 1,
+    "daily_loss_pct": 3,
+    "quantity": "reserve at creation using net stop risk and known cash; round observed size step; no future profit increases",
+    "uncertain": "freeze capital on ambiguous result/gap; equity and ROI unknown"
+  },
+  "decision": {
+    "minimum_resolved_each_period": 20,
+    "kill": "any sufficiently sampled period net AvgR<=0 or PF<=1",
+    "continue": "both periods>=20, positive net AvgR and PF>1, additional fills vs current; then forward Shadow required",
+    "insufficient": "CONTINUE_INSUFFICIENT_SAMPLE, never tune or promote",
+    "roi": "capped portfolio realized cash return, separate from expectancy R; disclose open/uncertain exposure"
+  },
+  "limitations": [
+    "Recent live context already seen: validation is not a pristine holdout.",
+    "Touch execution is hypothetical; tick prices, spread, liquidity and queue not validated.",
+    "Funding not modeled; research cannot justify live promotion.",
+    "Previous measured-move and EMA-pullback failures remain recorded."
+  ]
+}
