@@ -1,0 +1,185 @@
+name: Pending live capture research live read-only smoke
+on:
+  push:
+    branches: [audit/pending-capture-live-v19-0-36]
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Public production API and persistence smoke
+        run: |
+          python - <<'PY'
+          import json,re,subprocess,time,urllib.request,urllib.error,urllib.parse,hashlib
+          from pathlib import Path
+          baseline=json.loads(Path('audit-input/research-baseline.json').read_text())
+          base='https://edgex-analysis-terminal-production.up.railway.app'
+          out=Path('live-output');out.mkdir(exist_ok=True)
+          checks=[]
+          def fetch(path,expected=200,raw=False,post=False):
+              data=b'{}' if post else None
+              request=urllib.request.Request(base+path,data=data,headers={'User-Agent':'EdgeX-read-only-smoke','Content-Type':'application/json'})
+              try:
+                  with urllib.request.urlopen(request,timeout=60) as r:
+                      status,text=r.status,r.read().decode()
+              except urllib.error.HTTPError as e:status,text=e.code,e.read().decode()
+              assert status==expected,(path,status)
+              checks.append(dict(path=path,status=status,method='POST_INVALID_BODY' if post else 'GET'))
+              return text if raw else json.loads(text)
+          h=fetch('/health')
+          assert h['ok'] and h['version']=='19.0.36'
+          assert h['storage']['db_exists'] and h['storage']['paper_signals']>=baseline['health']['storage']['paper_signals']
+          assert h['storage']['market_snapshots_48h']>=1
+          assert h['push']['subscribers']==baseline['health']['push']['subscribers']==1
+          assert h['push']['enabled'] and h['push']['notification_policy']=='READY_ONLY' and not h['push']['daily_summary_enabled']
+          for route,file in [('/','analysis_terminal/index.html'),('/btc','analysis_terminal/btc.html')]:
+              html=fetch(route,raw=True)
+              assert html==Path(file).read_text().replace('__APP_VERSION__',h['version']),'Published UI differs from rendered approved main'
+              scripts=re.findall(r'<script[^>]*>(.*?)</script>',html,re.S|re.I)
+              scripts=[s for s in scripts if s.strip()]
+              assert scripts
+              for s in scripts:
+                  proc=subprocess.run(['node','-e','new Function(require("fs").readFileSync(0,"utf8"))'],input=s,text=True,capture_output=True)
+                  assert proc.returncode==0,proc.stderr
+          p=fetch('/api/paper-execution?limit=200')
+          assert p['mode']=='PAPER_ONLY' and not p['real_orders_enabled'] and not p['automatic_promotion']
+          for field in ['activated_ms','policy','event_tracking_started_ms']:
+              assert p['account'][field]==baseline['paper']['account'][field],field
+          for previous in baseline['paper']['latest']:
+              current=next(o for o in p['latest'] if o['order_id']==previous['order_id'])
+              for field in ['order_id','setup_id','created_ms','ticker']:
+                  assert current[field]==previous[field],field
+          assert p['account']['last_error'] is None
+          pc=fetch('/api/push/config');pc.pop('public_key',None)
+          assert pc['subscribers']==1 and pc['notification_policy']=='READY_ONLY'
+          fetch('/api/push/events')
+          fetch('/api/push/preferences',expected=422)
+          for path in ['/api/push/subscribe','/api/push/unsubscribe','/api/push/preferences','/api/push/test']:
+              fetch(path,expected=422,post=True)
+          assert fetch('/api/push/config')['subscribers']==1
+          fetch('/api/screener')
+          fetch('/api/analyze?ticker=BTCUSDC')
+          fetch('/api/paper-execution/events?limit=200')
+          history=fetch('/api/server-history?hours=48')
+          assert history['snapshots']
+          archive=fetch('/api/entry-history?days=0&limit=100')
+          assert archive['historical'] and not archive['current_entry_status']
+          assert archive['retention']=='PERSISTENT'
+          all_items=list(archive['items']);cursor=archive['next_cursor']
+          while cursor:
+              page=fetch('/api/entry-history?days=0&limit=100&'+urllib.parse.urlencode(cursor))
+              all_items.extend(page['items']);cursor=page['next_cursor']
+          by_id={i['setup_id']:i for i in all_items}
+          assert len(by_id)==len(all_items)
+          first_near={}
+          assert archive['totals']['setups']>=baseline['archive']['totals']['setups']
+          for previous in baseline['archive']['items']:
+              assert previous['setup_id'] in by_id,'Archived setup was removed'
+              current=by_id[previous['setup_id']]
+              if previous['first_near']:assert current['first_near']==previous['first_near']
+              if previous['first_ready']:assert current['first_ready']==previous['first_ready']
+              if previous['first_near']:first_near[previous['setup_id']]=previous['first_near']
+          one=fetch('/api/entry-history?days=0&limit=1')
+          assert one['totals']==archive['totals'],'Page limit shrank archive totals'
+          for kind,field in [('READY','first_ready'),('NEAR','first_near')]:
+              filtered=fetch('/api/entry-history?days=0&kind='+kind+'&limit=100')
+              assert all(i[field] for i in filtered['items'])
+              assert filtered['totals']['setups']==archive['totals'][kind.lower()]
+          for invalid in ['kind=SHADOW','before_ms=1','before_setup=x','limit=101','days=-1']:
+              fetch('/api/entry-history?'+invalid,expected=422)
+          if all_items:
+              ticker=all_items[0]['ticker']
+              filtered=fetch('/api/entry-history?days=0&ticker='+urllib.parse.quote(ticker.lower()))
+              assert filtered['items'] and all(ticker in i['ticker'] for i in filtered['items'])
+          for item in all_items:
+              assert item['first_near'] or item['first_ready']
+              outcome=item['reference_outcome']
+              if outcome:assert outcome['hypothetical'] is True
+          follow=fetch('/api/entry-history?days=0&limit=100')
+          for item in follow['items']:
+              if item['setup_id'] in by_id:
+                  old=by_id[item['setup_id']]
+                  assert item['first_near']==old['first_near'] and item['first_ready']==old['first_ready']
+          fetch('/api/readiness-review')
+          readiness=fetch('/api/readiness-history?days=14')
+          for name in ('current','shadow'):
+              assert readiness['summary']['cost_adjusted_signals'][name]['signals']==readiness['summary']['signals'][name]['signals']
+          shadow=fetch('/api/shadow-v2?limit=1000')
+          assert shadow['cost_adjusted']['signals']==shadow['metrics']['setup_tracked']
+          assert shadow['cost_adjusted']['exclusions']['legacy_unidentified']==shadow['metrics']['legacy_unidentified_signals']
+          comparison=fetch('/api/strategy-comparison?limit=500')
+          limited=fetch('/api/strategy-comparison?limit=1')
+          assert comparison['cost_adjusted']==limited['cost_adjusted'],'Display limit must not shrink net economics cohort'
+          for name in ('current','shadow'):
+              m=comparison['cost_adjusted'][name]
+              assert m['signals']==comparison[name]['signals']
+              assert m['resolved']==comparison[name]['resolved']
+              assert not m['real_execution_results'] and not m['automatic_promotion']
+              assert m['portfolio_roi_pct'] is None
+              c=m['completion']
+              assert c['total_signals']==m['signals'] and c['verified_resolved']==m['resolved']
+              assert c['modeled_open_signals']+c['blocked_signals']+c['verified_resolved']==c['total_signals']
+              assert c['unresolved_or_excluded']==m['signals']-m['resolved']
+              assert c['cohort_complete']==(m['signals']>0 and m['signals']==m['resolved'])
+              sensitivity=c['sensitivity']
+              assert sensitivity['portfolio_roi_pct'] is None and not sensitivity['real_execution_results']
+              if sensitivity['available']:
+                  assert c['blocked_signals']==0 and c['modeled_open_signals']>0
+                  cases=sensitivity['scenarios']
+                  assert cases['all_open_tp']['signals']==cases['all_open_sl']['signals']==m['signals']
+                  assert cases['all_open_tp']['avg_net_r']>=cases['all_open_sl']['avg_net_r']
+              else:assert sensitivity['scenarios'] is None
+              assert not any(m['excluded_resolved'].values()),m['excluded_resolved']
+          json.dumps(comparison,allow_nan=False)
+          assert not shadow['cost_adjusted']['automatic_promotion']
+          for attempt in range(10):
+              btc=fetch('/api/btc-wave')
+              if not btc['stale'] and btc['latest'] and btc['latest']['status']=='OBSERVING':break
+              time.sleep(10)
+          else:raise AssertionError('BTC collector not fresh after deployment')
+          assert btc['cost_adjusted']['signals']==btc['metrics']['signals']
+          assert btc['cost_adjusted']['resolved']==btc['metrics']['resolved']
+          if btc['metrics']['avg_net_r'] is not None:
+              assert abs(btc['cost_adjusted']['avg_net_r']-btc['metrics']['avg_net_r'])<.000051
+          assert btc['mode']=='SHADOW_ONLY' and not btc['real_orders_enabled'] and not btc['automatic_promotion']
+          assert btc['recorded_observations']>=baseline['btc']['recorded_observations']
+          assert btc['metrics']['signals']>=baseline['btc']['metrics']['signals']
+          assert fetch('/health')['push']['subscribers']==1
+          for attempt in range(10):
+              capture=fetch('/api/pending-entry-shadow?limit=500')
+              if capture['meta']['last_success_ms'] is not None:break
+              time.sleep(10)
+          else:raise AssertionError('Prospective Shadow collector did not run')
+          assert capture['mode']=='SHADOW_ONLY' and capture['dataset']=='LIVE_CAPTURE_HYPOTHETICAL'
+          for key in ['real_orders_enabled','automatic_promotion','eligible_for_live_promotion','notifications_enabled','current_entry_status']:
+              assert capture[key] is False,key
+          assert capture['meta']['last_error'] is None
+          assert capture['meta']['rule_fingerprint']
+          assert capture['meta']['capture_start_ms']==(capture['meta']['activated_ms']//86400000+1)*86400000
+          quality=capture['meta']['last_cycle']
+          assert quality.get('BASELINED_OR_MISSED_OBSERVATION',0)+quality.get('CONTIGUOUS_FRESH_OBSERVATION',0)+quality.get('ALREADY_OBSERVED',0)>0,quality
+          thin=fetch('/api/pending-entry-shadow?limit=1')
+          assert thin['cohorts']==capture['cohorts']
+          assert thin['meta']['activated_ms']==capture['meta']['activated_ms']
+          fetch('/api/pending-entry-shadow?limit=0',expected=422)
+          fetch('/api/pending-entry-shadow?limit=501',expected=422)
+          for cohort in capture['cohorts']:
+              for model,pf in cohort['portfolios'].items():
+                  assert cohort['metrics'][model]['sample_status'] in ['INSUFFICIENT SAMPLE','SUFFICIENT SAMPLE']
+          (out/'pending-capture.json').write_text(json.dumps(capture,indent=2,allow_nan=False))
+          summary=dict(verdict='PASS',archive_totals=archive['totals'],available_events_imported=len(first_near),checks=checks,production_version=h['version'],database_exists=h['storage']['db_exists'],market_snapshots_48h=h['storage']['market_snapshots_48h'],push_subscribers=pc['subscribers'],policy=pc['notification_policy'],paper_metrics=p['metrics'],cost_adjusted=comparison['cost_adjusted'],shadow_metrics=shadow['metrics'],btc_metrics=btc['metrics'],btc_snapshot_age_seconds=btc['snapshot_age_seconds'],shipped_javascript='PASS',notifications_sent_by_test=False,subscription_mutations=False,private_orders=False)
+          (out/'summary.json').write_text(json.dumps(summary,indent=2,allow_nan=False))
+          print(json.dumps({k:v for k,v in summary.items() if k not in ['checks','shadow_metrics','btc_metrics']}))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pending-live-live-smoke
+          path: live-output/
+          retention-days: 14
