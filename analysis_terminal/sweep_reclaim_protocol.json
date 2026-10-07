@@ -1,0 +1,102 @@
+{
+  "protocol": "trend_range_sweep_reclaim_net2r_v1",
+  "model": "trend_range_sweep_reclaim_net2r",
+  "registered_utc": "2026-10-07T14:46:21Z",
+  "changes_live_rules": false,
+  "real_orders_enabled": false,
+  "automatic_promotion": false,
+  "eligible_for_live_promotion": false,
+  "hypothesis": "Independent entry family: in the closed 4H EMA20/50 trend, a closed 15M candle strictly sweeps and reclaims the preceding 20-candle range edge with matching candle direction. Structural invalidation comes from this actual sweep extreme, not an arbitrary stop chosen to obtain 2R. No 4H breakout requirement.",
+  "development": {
+    "start_ms": 1790391600000,
+    "end_ms": 1790996400000,
+    "role": "PREVIOUSLY_VIEWED_MARKET_DEVELOPMENT"
+  },
+  "validation": {
+    "start_ms": 1788577200000,
+    "end_ms": 1789182000000,
+    "role": "NEWLY_FETCHED_HISTORICAL_VALIDATION",
+    "run_only_if_development_not_killed": true,
+    "not_captured_forward": true
+  },
+  "prospective_start_ms": 1791417600000,
+  "prospective_windows": "Fixed seven-day UTC windows from Oct 8, completed days only. No activation after a retrospective KILL. Source-period research is not live-captured Shadow evidence.",
+  "production_parameters": {
+    "monitor_interval": "HOUR_4",
+    "entry_interval": "MINUTE_15",
+    "trend_fast_ema": 20,
+    "trend_slow_ema": 50,
+    "atr_period": 14,
+    "roll_lookback": 20,
+    "roll_max_age": 6,
+    "retest_lookback": 4,
+    "atr_stop_buffer": 0.5,
+    "atr_target_buffer": 0.25,
+    "retest_atr_tolerance": 0.35,
+    "min_rr": 2.0
+  },
+  "source_universe_sha256": "1ee2f543d56f61b4adf0560f2ccf12bb29b755358ab686b9c107c778978681cd",
+  "indicator_windows": {
+    "HOUR_4": 180,
+    "MINUTE_15": 180
+  },
+  "rules": {
+    "range_bars": 20,
+    "atr_period": 14,
+    "trend_fast_ema": 20,
+    "trend_slow_ema": 50,
+    "atr_stop_buffer": 0.5,
+    "atr_target_buffer": 0.25,
+    "min_net_rr": 2,
+    "pending_bars": 4,
+    "fee_bps_each_side": 5,
+    "slippage_bps_each_side": 2,
+    "trend": "LONG closed 4H close > EMA20 > EMA50; SHORT inverse. Indicators use exactly 180 contiguous closed candles, same mathematical routines as production.",
+    "setup": "Range is MIN/MAX of 20 closed 15M candles strictly preceding the signal. LONG signal low < range low AND close > range low AND close > open. SHORT signal high > range high AND close < range high AND close < open. Strict equality does not qualify.",
+    "stop": "Freeze LONG signal low - 0.5 ATR15, SHORT signal high + 0.5 ATR15. This is a separate 15M structural invalidation model; existing production/Shadow 4H stops are unchanged. No later stop widening.",
+    "extension": "Opposite edge of preceding frozen 20-bar range, buffered inward by 0.25 ATR15. No TP from signal-bar extrema or future candles.",
+    "entry_target": "Freeze limit at signal close. Net 2R first TP includes adverse slippage and fee on both sides and must lie inside the frozen extension. No lower RR or arbitrary stop narrowing.",
+    "identity": "sweep-reclaim-v1:ticker:side:signal_open_ms:frozen_edge; separate lifecycle from every breakout model. First qualifying sweep only per (side,last_closed_4H_open_ms,frozen_edge), including warmup and failed room eligibility; no retry within that episode.",
+    "history": "Scan same 25-hour warmup as controls. Complete 180-candle windows required. After missing history, suppress first episodes whose 4H anchor close precedes the last unknown observation. Count exclusions and all-market coverage.",
+    "pending": "Before a later fill require complete closed windows, same 4H trend direction, latest closed candle direction and close beyond frozen edge, last-four-bar retest and validity relative to original frozen SL. Expire four bars after signal close. No new sweep required and no outcome-dependent rearm.",
+    "execution": "Pure model adapter to frozen confirmation-zone evaluator. Signal close+1ms excludes signal bar. Limit touch on later closed candle; opening through roll/stop rejects; actual assumed fill must retain net RR >=2.",
+    "outcomes": "Any exit touch on unknown intrabar limit-fill bar = AMBIGUOUS with no fill-bar excursions; later both TP/SL = AMBIGUOUS; missing contiguous history stops; SL opening gaps charge worse price. No inferred order or automatic trend exit after fill.",
+    "precision": "Continuous hypothetical prices. Exchange price tick, spread, queue, liquidity, funding and real fills remain unvalidated."
+  },
+  "portfolio": {
+    "initial_cash_usdc": 10000,
+    "risk_pct": 1,
+    "max_positions": 3,
+    "max_total_risk_pct": 3,
+    "max_notional_multiple": 1,
+    "daily_loss_pct": 3,
+    "quantity": "reserve at creation using net stop risk and known cash; round observed size step; no future profit increases",
+    "uncertain": "freeze capital on ambiguous result/gap; equity and ROI unknown",
+    "daily_loss_timezone": "Asia/Tokyo"
+  },
+  "decision": {
+    "minimum_resolved_each_period": 20,
+    "development_kill": "Development resolved>=20 and net AvgR<=0 or PF<=1 => KILL_NO_LIVE_PROMOTION. Stop before fetching/evaluating the registered unused historical validation; do not activate forward collection.",
+    "validation_kill": "Any evaluated period resolved>=20 and net AvgR<=0 or PF<=1 => KILL_NO_LIVE_PROMOTION. No condition tuning.",
+    "insufficient": "Any evaluated period resolved<20 => CONTINUE_INSUFFICIENT_SAMPLE. No promotion; collect additional preregistered samples without parameter changes.",
+    "pass": "Both complete retrospective periods >=20 resolved, AvgR>0, PF>1 and net incremental fills vs current >0 => FORWARD_SHADOW_REQUIRED. No automatic live promotion.",
+    "no_incremental": "Positive adequately sampled periods but no net incremental fills vs current => PIVOT_NO_INCREMENTAL_FILLS.",
+    "roi": "Report capital-constrained realized PnL separately. OPEN/AMBIGUOUS/data gaps leave full equity and ROI unknown."
+  },
+  "frozen_dependencies_sha256": {
+    "app.py": "2e24f61e47ee40fdb3ae5f18152129f6632e83d508b73d27bf33fda0919ac9ab",
+    "confirmation_zone_replay.py": "fa62fd6571a5a153ef8b1b5a4a8f95551159edece717549d8b4816df696e7602",
+    "pending_entry_replay.py": "111686641afe5e61c64311fa730716b5198d3a74e34440e06f48d99da3c53df8",
+    "pending_entry_protocol.json": "1ed8af4b9bb0dd7281e80a21956677bb6d9e315f47fb0c00689992662a29ee0f"
+  },
+  "development_comparator_sha256": "37353c224ff1b1b373e1727f8c5f5e04096042a61bb6db21406d2eccd60630eb",
+  "comparison": "Reproduce the original three execution controls from market sources; development full ledger/metrics/portfolio must equal the frozen report. Fresh validation controls are separate samples, never overwrite an old experiment. Compare exact ticker+direction+signal-close overlap and net/capped fill count differences. Different setup families are not causal paired filters.",
+  "limitations": [
+    "Development market period already viewed; no untouched-development claim.",
+    "Validation is newly fetched historical data if run, with today's fixed 182-market universe; survivorship/listing and coverage bias remain.",
+    "Independent 15M structural-stop risk model; not a modification or loosening of the existing 4H strategy.",
+    "Many overlapping/correlated events are not independent returns or a daily trade quota.",
+    "OHLC hypothetical fills and costs; no exchange orders, real ROI guarantees or live promotion.",
+    "MFE/MAE from the frozen evaluator include unordered terminal-bar extrema; not an exact ordered pre-exit path."
+  ]
+}
