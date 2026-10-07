@@ -1,0 +1,39 @@
+{
+  "protocol": "pending_entry_live_capture_v1",
+  "registered_utc": "2026-10-07T18:55:00Z",
+  "model": "confirmed_pullback_cost_2r",
+  "mode": "LIVE_CAPTURE_HYPOTHETICAL_ONLY",
+  "changes_live_rules": false,
+  "real_orders_enabled": false,
+  "automatic_promotion": false,
+  "eligible_for_live_promotion": false,
+  "frozen_research_protocol_sha256": "1ed8af4b9bb0dd7281e80a21956677bb6d9e315f47fb0c00689992662a29ee0f",
+  "frozen_engine_sha256": "111686641afe5e61c64311fa730716b5198d3a74e34440e06f48d99da3c53df8",
+  "rules": {
+    "indicator_windows": {
+      "HOUR_4": 180,
+      "MINUTE_15": 180
+    },
+    "max_capture_delay_ms": 120000,
+    "strategy": "Reuse frozen candidate/evaluate/metrics/portfolio without changing production analyzer or pending research rules. Capture proposal and both fixed controls in a separate cohort.",
+    "activation": "Persistent activation; prospective cohort begins next UTC midnight. Baseline existing setups for all models, including pre-cohort, first observation and after missed observations. Require breakout 4H close at/after cohort origin and uninterrupted per-market observation since before that close.",
+    "signal_time": "Retain signal close+1ms created_ms sentinel and actual observed_ms separately. First executable candle strictly starts after observed_ms: floor(observed_ms/15M)*15M+15M. Never use partially elapsed capture candle.",
+    "expiry": "Keep original signal close+4 bars proposal, +2 bars controls; observation delay never extends deadline. These live capture controls are NOT historical replay or actual production fills.",
+    "pending_state": "Use immutable setup identity observed before eligible candle open. No hindsight reconstruction of missed first confirmation or pending state.",
+    "outcome": "Closed sequential later candles only; reuse frozen fill ambiguity, same-bar TP/SL ambiguity and adverse gap logic. Missing candle or pre-fill state becomes terminal DATA_GAP; freeze uncertain capital, never impute profit.",
+    "duplicates": "First qualified candidate per model/setup only. Mark baseline/gap setups consumed; never rearm or backfill candidates.",
+    "cohorts": "Fixed non-overlapping 7-day UTC cohorts from capture origin. Partial/open/censored outcomes disclosed; never add cumulative daily snapshots.",
+    "notification": "None. Independent SQLite tables. No push, Telegram, UI entry cards, production paper-account orders or exchange transport.",
+    "portfolio": "Reuse 10000 USDC, 1% risk, 3 positions/3% total risk, 1x notional, JST 3% daily loss limit; reserve at creation without future sizing."
+  },
+  "interpretation": {
+    "sample": "INSUFFICIENT SAMPLE below 20 resolved in each model/cohort; live capture is still simulated OHLC touch, not real fills.",
+    "practicality": "At least two complete independent periods >=50 resolved, win>=40%, net AvgR>0/PF>=1.2, higher costs AvgR>0/PF>1, additional fills and known positive capped ROI with >=20 capped resolved before considering further execution-quality validation. Preserve original research gates separately.",
+    "failures": "No automatic promotion or parameter tuning. Adequately sampled negative net expectation/PF<=1 requires KILL review.",
+    "limitations": [
+      "Capture cohort differs conservatively from replay due to exclusion of elapsed candle and existing/unknown setups. Do not combine with historical samples.",
+      "No spread, tick, queue, funding or actual fill validation.",
+      "Missed state or candle can censor results and freeze capital; disclose coverage."
+    ]
+  }
+}
