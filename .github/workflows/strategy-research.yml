@@ -13,6 +13,8 @@ on:
       - "analysis_terminal/test_pending_entry_replay.py"
       - "analysis_terminal/test_pending_followup.py"
       - ".github/workflows/strategy-research.yml"
+      - ".github/scripts/research_summary.py"
+      - ".github/scripts/test_research_summary.py"
   schedule:
     - cron: "30 0 * * *"
   workflow_dispatch:
@@ -37,6 +39,7 @@ jobs:
       - run: python -m pip install -r analysis_terminal/test-requirements.txt
       - run: python -m unittest discover -s analysis_terminal -p 'test_*.py' -q
       - run: python -m unittest discover -s tests -q
+      - run: python -m unittest discover -s .github/scripts -p 'test_*.py' -q
       - run: python -m py_compile analysis_terminal/pending_entry_replay.py
   research:
     needs: checks
@@ -131,6 +134,11 @@ jobs:
           name: edgex-frozen-outcomes-${{ steps.recovery.outputs.cohort_end_ms }}
           path: strategy-output/recovery/
           retention-days: 90
+      - name: Review verified weekly ledger without combining daily samples
+        if: always() && steps.window.outcome == 'success'
+        run: |
+          python .github/scripts/research_summary.py --research-dir strategy-output --output strategy-output/review/decision-summary.json --markdown strategy-output/review/decision-summary.md
+          cat strategy-output/review/decision-summary.md >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
