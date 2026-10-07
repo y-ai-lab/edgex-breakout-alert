@@ -99,10 +99,15 @@ def candidate(row, model, *, candle_ms):
                 outcome_ms=None, mfe_r=0.0, mae_r=0.0)
 
 
-def evaluate(record, candles, states, *, end_ms, min_rr=2.0):
+def evaluate(record, candles, states, *, end_ms, min_rr=2.0, start_ms=None):
     """States keyed by prior-bar close: never invalidate using a future 4H close."""
     r = dict(record)
     expected = record["created_ms"]-1
+    if start_ms is not None:
+        if (record["status"] != "OPEN" or record["filled_ms"] is None or
+                start_ms % STEP or not record["filled_ms"]+STEP <= start_ms <= end_ms):
+            raise ValueError("Follow-up requires a filled OPEN and a later closed-bar boundary")
+        expected = start_ms
     series = {c.time_ms: c for c in candles if c.time_ms+STEP <= end_ms}
     for stamp in range(expected, end_ms, STEP):
         if r["status"] == "PENDING" and stamp >= r["expires_ms"]:

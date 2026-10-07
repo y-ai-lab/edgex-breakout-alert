@@ -1,0 +1,22 @@
+{
+  "protocol": "frozen_filled_open_followup_v1",
+  "registered_on_utc": "2026-10-07",
+  "purpose": "Continue outcomes of frozen weekly research cohorts without new entries or parameter tuning.",
+  "followup_days": 7,
+  "tracked": "Only already-filled OPEN records in the original cohort; original terminal results remain immutable.",
+  "pending": "Unfilled PENDING at the week boundary remains censored; no assumed future entry, expiry or capital release.",
+  "cohort": "First successful completed seven-day research artifact on main; never replace with a later re-optimized cohort.",
+  "costs": "Unchanged original 5bps fee and 2bps adverse slippage each side, normalized by net stop risk.",
+  "gaps": "Require consecutive closed 15M bars from original period end; never skip a missing bar to claim TP.",
+  "ambiguous": "Same-bar TP and SL remain AMBIGUOUS; no intrabar ordering inference.",
+  "entry_rule_fingerprint": "9b2df54f9d908d4b653fc270992ad3e1ada2e812f2d38133581f476516e55afd",
+  "original_entry_protocol_sha256": "1ed8af4b9bb0dd7281e80a21956677bb6d9e315f47fb0c00689992662a29ee0f",
+  "known_original_engine_sha256": "4a53a654b2994ef59fae434680d08316c306c851d63390d824fac22422365d28",
+  "sample_accounting": "Follow-up updates the same cohort; daily partial reports never add independent samples.",
+  "portfolio": "Re-evaluate the original capped portfolio with unchanged creation/fill events; no later entries or future-profit sizing.",
+  "dataset": "RETROSPECTIVE_OUTCOME_FOLLOWUP, not captured-live Shadow fills or actual execution.",
+  "changes_live_rules": false,
+  "real_orders_enabled": false,
+  "automatic_promotion": false,
+  "eligible_for_live_promotion": false
+}

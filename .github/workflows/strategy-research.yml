@@ -5,7 +5,9 @@ on:
     branches: [main]
     paths:
       - "analysis_terminal/pending_entry*"
+      - "analysis_terminal/pending_followup*"
       - "analysis_terminal/test_pending_entry_replay.py"
+      - "analysis_terminal/test_pending_followup.py"
       - ".github/workflows/strategy-research.yml"
   schedule:
     - cron: "30 0 * * *"
@@ -13,6 +15,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: edgex-frozen-strategy-research
@@ -34,7 +37,7 @@ jobs:
   research:
     needs: checks
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -54,7 +57,7 @@ jobs:
           out=Path('strategy-output');out.mkdir(exist_ok=True)
           (out/'run-status.json').write_text(json.dumps(state,indent=2))
           with open(os.environ['GITHUB_OUTPUT'],'a') as f:
-              f.write(f'ready={str(ready).lower()}\nend_ms={state["end_ms"]}\ndays={state["days"]}\n')
+              f.write(f'ready={str(ready).lower()}\nstart_ms={state["start_ms"]}\nend_ms={state["end_ms"]}\ndays={state["days"]}\n')
           print(json.dumps(state))
           PY
       - name: Read public markets; no private credentials
@@ -62,6 +65,37 @@ jobs:
         run: |
           python -m analysis_terminal.run_replay --end-ms "${{ steps.window.outputs.end_ms }}" --days "${{ steps.window.outputs.days }}" --universe-manifest analysis_terminal/replay_latest.json --output strategy-output/source
           python -m analysis_terminal.pending_entry_replay --source strategy-output/source --role prospective --output strategy-output/review
+      - name: Seal the first complete weekly cohort without changing entries
+        id: seal
+        if: steps.window.outputs.days == '7'
+        run: python -m analysis_terminal.pending_followup --seal-research strategy-output --output strategy-output/frozen
+      - uses: actions/upload-artifact@v4
+        if: steps.seal.outcome == 'success'
+        with:
+          name: edgex-frozen-cohort-${{ steps.window.outputs.start_ms }}-${{ steps.window.outputs.end_ms }}
+          path: strategy-output/frozen/
+          retention-days: 90
+      - name: Follow only already-filled OPEN from the preceding frozen cohort
+        id: followup
+        if: always() && steps.window.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python -m analysis_terminal.pending_followup --scheduled --output strategy-output/followup
+          python - <<'PY'
+          import json,os
+          from pathlib import Path
+          state=json.loads(Path('strategy-output/followup/run-status.json').read_text())
+          complete=state.get('end_ms',0)-state.get('cohort_end_ms',0)==7*86400000
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:
+              f.write(f'complete={str(complete).lower()}\ncohort_end_ms={state.get("cohort_end_ms",0)}\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: steps.followup.outputs.complete == 'true'
+        with:
+          name: edgex-frozen-outcomes-${{ steps.followup.outputs.cohort_end_ms }}
+          path: strategy-output/followup/
+          retention-days: 90
       - uses: actions/upload-artifact@v4
         if: always()
         with:
