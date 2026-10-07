@@ -1,0 +1,350 @@
+{
+  "registration_commit": "97541ec311e45e5cb65f25df5852948cec803d3d",
+  "decision": "DESCRIPTIVE_ONLY_NO_RULE_CHANGE",
+  "rejected_model_forward_enabled": false,
+  "changes_live_rules": false,
+  "automatic_promotion": false,
+  "real_orders_enabled": false,
+  "periods": [
+    {
+      "protocol": "frozen_confirmation_continuation_diagnostics_v1",
+      "dataset": "DESCRIPTIVE_VIEWED_FROZEN_COHORT",
+      "role": "development",
+      "start_ms": 1790391600000,
+      "end_ms": 1790996400000,
+      "protocol_sha256": "7d4ff7f34f507c1f7717173c82ea5fd76be60b9ce9c32a12c619a4fe21a1326e",
+      "engine_sha256": "573022d30df5b92fc59e12b33dd4461e070de09c4fe6007b8490ba0c9638b47b",
+      "source_report_sha256": "6717b4900a542018e0bd26808acff6602edcd49cd7c1084678b481ba2cb4aeb2",
+      "source_files_verified": 182,
+      "original_metrics": {
+        "candidates": 205,
+        "filled": 205,
+        "resolved": 152,
+        "tp": 22,
+        "sl": 130,
+        "statuses": {
+          "OPEN": 53,
+          "SL": 130,
+          "TP": 22
+        },
+        "win_rate": 14.473684210526315,
+        "avg_net_r": -0.565789473684211,
+        "expectancy_net_r": -0.565789473684211,
+        "profit_factor": 0.3384615384615379,
+        "avg_mfe_r": 0.8321639293498927,
+        "avg_mae_r": 1.0782987768919514,
+        "max_consecutive_losses": 24,
+        "sample_status": "SUFFICIENT SAMPLE"
+      },
+      "original_portfolio": {
+        "initial_cash_usdc": 10000,
+        "known_cash_usdc": 8976.71254783634,
+        "realized_net_pnl_usdc": -1018.7973959819917,
+        "admitted": 22,
+        "filled": 22,
+        "resolved": 19,
+        "active": 3,
+        "uncertain": 0,
+        "exclusions": {
+          "CAPACITY_OR_TICKER": 157,
+          "DAILY_LOSS_LIMIT": 13,
+          "SIZE_OR_RISK_LIMIT": 13
+        },
+        "realized_roi_pct": -10.187973959819917,
+        "closed_portfolio_roi_pct": null,
+        "equity_usdc": null,
+        "max_known_cash_drawdown_pct": 13.080725595100017,
+        "profit_factor": 0.2819064418964593,
+        "notes": [
+          "Realized return is not total ROI when positions remain open.",
+          "Cash drawdown excludes unrealized losses; not equity drawdown.",
+          "Intrabar fills booked at bar close; reservations prevent future-profit sizing."
+        ]
+      },
+      "summary": {
+        "candidates": 205,
+        "filled": 205,
+        "statuses": {
+          "OPEN": 53,
+          "SL": 130,
+          "TP": 22
+        },
+        "groups": {
+          "OPEN": {
+            "filled": 53,
+            "latency_bins": {
+              "<=_4_bars": 0,
+              "<=_16_bars": 0,
+              "<=_96_bars": 0,
+              ">_96_bars": 0
+            },
+            "elapsed_bars_median": null,
+            "with_preterminal_path": 53,
+            "without_preterminal_path": 0,
+            "preterminal_mfe_bins": {
+              "<_0.5": 22,
+              "[0.5,1)": 13,
+              ">=_1": 18
+            },
+            "adverse_roll_close_before_terminal": 39,
+            "equal_roll_close_before_terminal": 15,
+            "median_stop_cost_share": 0.05562293980148442,
+            "median_signal_features": {
+              "breakout_age_hours": 0.5,
+              "signal_stop_atr4": 1.2978859833981924,
+              "signal_stop_atr15": 4.983665653248196,
+              "confirmation_roll_margin_atr": 0.4899,
+              "confirmation_body_atr": 0.4035,
+              "trend_spread_atr4": 0.7740030157194819
+            }
+          },
+          "SL": {
+            "filled": 130,
+            "latency_bins": {
+              "<=_4_bars": 4,
+              "<=_16_bars": 16,
+              "<=_96_bars": 63,
+              ">_96_bars": 47
+            },
+            "elapsed_bars_median": 71.5,
+            "with_preterminal_path": 128,
+            "without_preterminal_path": 2,
+            "preterminal_mfe_bins": {
+              "<_0.5": 69,
+              "[0.5,1)": 37,
+              ">=_1": 22
+            },
+            "adverse_roll_close_before_terminal": 126,
+            "equal_roll_close_before_terminal": 36,
+            "median_stop_cost_share": 0.043184638222510265,
+            "median_signal_features": {
+              "breakout_age_hours": 0.5,
+              "signal_stop_atr4": 1.284550652659132,
+              "signal_stop_atr15": 5.217638877418272,
+              "confirmation_roll_margin_atr": 0.5547500000000001,
+              "confirmation_body_atr": 0.58465,
+              "trend_spread_atr4": 1.0199519763278304
+            }
+          },
+          "TP": {
+            "filled": 22,
+            "latency_bins": {
+              "<=_4_bars": 0,
+              "<=_16_bars": 4,
+              "<=_96_bars": 10,
+              ">_96_bars": 8
+            },
+            "elapsed_bars_median": 54.0,
+            "with_preterminal_path": 22,
+            "without_preterminal_path": 0,
+            "preterminal_mfe_bins": {
+              "<_0.5": 0,
+              "[0.5,1)": 0,
+              ">=_1": 22
+            },
+            "adverse_roll_close_before_terminal": 12,
+            "equal_roll_close_before_terminal": 4,
+            "median_stop_cost_share": 0.04450779291441437,
+            "median_signal_features": {
+              "breakout_age_hours": 0.75,
+              "signal_stop_atr4": 1.2270555483110939,
+              "signal_stop_atr15": 4.5523049971937875,
+              "confirmation_roll_margin_atr": 0.68845,
+              "confirmation_body_atr": 0.6144499999999999,
+              "trend_spread_atr4": 0.8279532197272859
+            }
+          }
+        },
+        "observation_stops": {
+          "PERIOD_END_CENSORED": 53,
+          "BEFORE_TERMINAL_BAR": 152
+        },
+        "unique_tickers": 106,
+        "unfilled_excluded_from_path": 0,
+        "terminal_candle_excluded": true,
+        "fill_candle_excluded": true
+      },
+      "decision": "DESCRIPTIVE_ONLY_NO_RULE_CHANGE. Any next strategy must be separately registered and evaluated on unused future periods; rejected model stays KILL and its forward collection remains disabled.",
+      "changes_live_rules": false,
+      "real_orders_enabled": false,
+      "automatic_promotion": false,
+      "eligible_for_live_promotion": false,
+      "limitations": [
+        "Preterminal excursions are observable lower bounds, not full ordered MFE before exit.",
+        "Fill and terminal candles excluded; absent path is unknown, not zero excursion.",
+        "OPEN is right-censored and its diagnostics are not resolved profitability.",
+        "Previously viewed periods and correlated markets; no causal or untouched validation claim.",
+        "No selected subgroups, new entries, parameter tuning, counterfactual profits or ROI."
+      ]
+    },
+    {
+      "protocol": "frozen_confirmation_continuation_diagnostics_v1",
+      "dataset": "DESCRIPTIVE_VIEWED_FROZEN_COHORT",
+      "role": "validation",
+      "start_ms": 1790996400000,
+      "end_ms": 1791255600000,
+      "protocol_sha256": "7d4ff7f34f507c1f7717173c82ea5fd76be60b9ce9c32a12c619a4fe21a1326e",
+      "engine_sha256": "573022d30df5b92fc59e12b33dd4461e070de09c4fe6007b8490ba0c9638b47b",
+      "source_report_sha256": "eae95a6322ec6ca0293180d7d0dda952e7aedae9e0b3123b3e8b5c3b59d85165",
+      "source_files_verified": 182,
+      "original_metrics": {
+        "candidates": 60,
+        "filled": 60,
+        "resolved": 27,
+        "tp": 8,
+        "sl": 19,
+        "statuses": {
+          "OPEN": 33,
+          "SL": 19,
+          "TP": 8
+        },
+        "win_rate": 29.62962962962963,
+        "avg_net_r": -0.11111111111111238,
+        "expectancy_net_r": -0.11111111111111238,
+        "profit_factor": 0.8421052631578929,
+        "avg_mfe_r": 1.0730053686496812,
+        "avg_mae_r": 0.8992239307462063,
+        "max_consecutive_losses": 10,
+        "sample_status": "SUFFICIENT SAMPLE"
+      },
+      "original_portfolio": {
+        "initial_cash_usdc": 10000,
+        "known_cash_usdc": 10020.35999024158,
+        "realized_net_pnl_usdc": 23.709605012484047,
+        "admitted": 7,
+        "filled": 7,
+        "resolved": 4,
+        "active": 3,
+        "uncertain": 0,
+        "exclusions": {
+          "CAPACITY_OR_TICKER": 53
+        },
+        "realized_roi_pct": 0.23709605012484047,
+        "closed_portfolio_roi_pct": null,
+        "equity_usdc": null,
+        "max_known_cash_drawdown_pct": 1.7850134927610817,
+        "profit_factor": 1.1193570712382035,
+        "notes": [
+          "Realized return is not total ROI when positions remain open.",
+          "Cash drawdown excludes unrealized losses; not equity drawdown.",
+          "Intrabar fills booked at bar close; reservations prevent future-profit sizing."
+        ]
+      },
+      "summary": {
+        "candidates": 60,
+        "filled": 60,
+        "statuses": {
+          "OPEN": 33,
+          "SL": 19,
+          "TP": 8
+        },
+        "groups": {
+          "OPEN": {
+            "filled": 33,
+            "latency_bins": {
+              "<=_4_bars": 0,
+              "<=_16_bars": 0,
+              "<=_96_bars": 0,
+              ">_96_bars": 0
+            },
+            "elapsed_bars_median": null,
+            "with_preterminal_path": 33,
+            "without_preterminal_path": 0,
+            "preterminal_mfe_bins": {
+              "<_0.5": 18,
+              "[0.5,1)": 8,
+              ">=_1": 7
+            },
+            "adverse_roll_close_before_terminal": 29,
+            "equal_roll_close_before_terminal": 7,
+            "median_stop_cost_share": 0.04492975367993604,
+            "median_signal_features": {
+              "breakout_age_hours": 0.5,
+              "signal_stop_atr4": 1.3923250865578964,
+              "signal_stop_atr15": 5.834072443600553,
+              "confirmation_roll_margin_atr": 0.4798,
+              "confirmation_body_atr": 0.4994,
+              "trend_spread_atr4": 0.9123636286731297
+            }
+          },
+          "SL": {
+            "filled": 19,
+            "latency_bins": {
+              "<=_4_bars": 0,
+              "<=_16_bars": 4,
+              "<=_96_bars": 12,
+              ">_96_bars": 3
+            },
+            "elapsed_bars_median": 31,
+            "with_preterminal_path": 19,
+            "without_preterminal_path": 0,
+            "preterminal_mfe_bins": {
+              "<_0.5": 16,
+              "[0.5,1)": 1,
+              ">=_1": 2
+            },
+            "adverse_roll_close_before_terminal": 18,
+            "equal_roll_close_before_terminal": 2,
+            "median_stop_cost_share": 0.07315760145812232,
+            "median_signal_features": {
+              "breakout_age_hours": 0.5,
+              "signal_stop_atr4": 1.1086488296488402,
+              "signal_stop_atr15": 5.105603180410971,
+              "confirmation_roll_margin_atr": 0.8939,
+              "confirmation_body_atr": 0.6866,
+              "trend_spread_atr4": 1.5285857084752479
+            }
+          },
+          "TP": {
+            "filled": 8,
+            "latency_bins": {
+              "<=_4_bars": 0,
+              "<=_16_bars": 1,
+              "<=_96_bars": 3,
+              ">_96_bars": 4
+            },
+            "elapsed_bars_median": 99.0,
+            "with_preterminal_path": 8,
+            "without_preterminal_path": 0,
+            "preterminal_mfe_bins": {
+              "<_0.5": 1,
+              "[0.5,1)": 0,
+              ">=_1": 7
+            },
+            "adverse_roll_close_before_terminal": 4,
+            "equal_roll_close_before_terminal": 1,
+            "median_stop_cost_share": 0.07898647433151397,
+            "median_signal_features": {
+              "breakout_age_hours": 0.25,
+              "signal_stop_atr4": 1.1554288520385825,
+              "signal_stop_atr15": 5.552697103164689,
+              "confirmation_roll_margin_atr": 1.0862500000000002,
+              "confirmation_body_atr": 0.79335,
+              "trend_spread_atr4": 1.8480252624437594
+            }
+          }
+        },
+        "observation_stops": {
+          "PERIOD_END_CENSORED": 33,
+          "BEFORE_TERMINAL_BAR": 27
+        },
+        "unique_tickers": 37,
+        "unfilled_excluded_from_path": 0,
+        "terminal_candle_excluded": true,
+        "fill_candle_excluded": true
+      },
+      "decision": "DESCRIPTIVE_ONLY_NO_RULE_CHANGE. Any next strategy must be separately registered and evaluated on unused future periods; rejected model stays KILL and its forward collection remains disabled.",
+      "changes_live_rules": false,
+      "real_orders_enabled": false,
+      "automatic_promotion": false,
+      "eligible_for_live_promotion": false,
+      "limitations": [
+        "Preterminal excursions are observable lower bounds, not full ordered MFE before exit.",
+        "Fill and terminal candles excluded; absent path is unknown, not zero excursion.",
+        "OPEN is right-censored and its diagnostics are not resolved profitability.",
+        "Previously viewed periods and correlated markets; no causal or untouched validation claim.",
+        "No selected subgroups, new entries, parameter tuning, counterfactual profits or ROI."
+      ]
+    }
+  ]
+}
