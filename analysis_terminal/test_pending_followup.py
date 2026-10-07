@@ -197,6 +197,81 @@ class FollowupTests(unittest.TestCase):
             with self.assertRaises(ValueError):follow.scheduled(Path(d),now_ms=end+follow.DAY)
 
 
+class RecoveryTests(unittest.TestCase):
+    def archive(self):
+        base,source=anchored_fixture();begin,end=base["start_ms"],base["end_ms"]
+        report_raw,source_raw=json.dumps(base).encode(),json.dumps(source).encode()
+        stamp=dict(report_sha256=follow.sha(report_raw),source_sha256=follow.sha(source_raw),start_ms=begin,end_ms=end)
+        stream=io.BytesIO()
+        with zipfile.ZipFile(stream,'w') as z:
+            for name,raw in (("report.json",report_raw),("source.json",source_raw),("seal.json",json.dumps(stamp))):
+                z.writestr(name,raw)
+        raw=stream.getvalue()
+        artifact=dict(id=1,created_at="2026-10-14",name=f'edgex-frozen-cohort-{begin}-{end}',expired=False,
+                      digest="sha256:"+follow.sha(raw),workflow_run=dict(head_branch="main"))
+        return base,artifact,raw
+
+    def test_recovery_waits_until_normal_followup_window_has_advanced(self):
+        origin=json.loads(study.PROTOCOL.read_text())["prospective_start_ms"]
+        with tempfile.TemporaryDirectory() as d,patch.object(follow,"gh_json",side_effect=AssertionError("network")):
+            for days in (0,7,13,14):
+                state=follow.scheduled(Path(d),now_ms=origin+days*follow.DAY,finalize_previous=True)
+                self.assertEqual(state["status"],"WAITING_FOR_COMPLETED_FOLLOWUP")
+
+    def test_missed_boundary_recovers_same_cohort_and_cutoff_through_next_week(self):
+        base,artifact,raw=self.archive();begin,end=base["start_ms"],base["end_ms"]
+        listing=dict(total_count=1,artifacts=[artifact])
+        with tempfile.TemporaryDirectory() as d,patch.object(follow,"gh_json",return_value=listing) as query,\
+             patch.object(follow.subprocess,"check_output",return_value=raw),\
+             patch.object(follow,"public_candles",AsyncMock(return_value={"TESTUSDC":[candle(end,low=89)]})) as public:
+            # On day 15 the normal path has moved to the next cohort. Recovery
+            # still evaluates the original cohort through day 14, including day 21.
+            for days in (15,16,20,21):
+                state=follow.scheduled(Path(d),now_ms=begin+days*follow.DAY,finalize_previous=True)
+                result=json.loads((Path(d)/"followup-report.json").read_text())
+                self.assertEqual((state["cohort_start_ms"],state["cohort_end_ms"],state["end_ms"]),
+                                 (begin,end,end+7*follow.DAY))
+                self.assertTrue(result["followup_complete"])
+                self.assertEqual(result["newly_resolved"],1)
+                self.assertEqual(result["records"][0]["status"],"SL")
+                self.assertEqual(public.call_args.kwargs["end_ms"],end+7*follow.DAY)
+                self.assertIn(artifact["name"],query.call_args.args[0])
+                for field in ("key","setup_id","created_ms","filled_ms","entry","stop","target"):
+                    self.assertEqual(result["records"][0][field],base["records"][0][field])
+
+    def test_recovery_excludes_profit_after_original_cutoff(self):
+        base,artifact,raw=self.archive();end=base["end_ms"];cutoff=end+7*follow.DAY
+        candles=[candle(t) for t in range(end,cutoff,STEP)]+[candle(cutoff,high=130)]
+        with tempfile.TemporaryDirectory() as d,patch.object(follow,"gh_json",return_value=dict(total_count=1,artifacts=[artifact])),\
+             patch.object(follow.subprocess,"check_output",return_value=raw),\
+             patch.object(follow,"public_candles",AsyncMock(return_value={"TESTUSDC":candles})):
+            follow.scheduled(Path(d),now_ms=cutoff+follow.DAY,finalize_previous=True)
+            result=json.loads((Path(d)/"followup-report.json").read_text())
+            self.assertEqual(result["records"][0]["status"],"OPEN")
+            self.assertEqual(result["newly_resolved"],0)
+            self.assertIsNone(result["portfolios"][study.MODEL]["closed_portfolio_roi_pct"])
+
+    def test_recovery_missing_or_expired_cohort_never_reconstructs_entries(self):
+        base,artifact,_=self.archive();artifact["expired"]=True
+        with tempfile.TemporaryDirectory() as d,patch.object(follow.subprocess,"check_output",side_effect=AssertionError("download")):
+            for artifacts,status in (([],"MISSING_FROZEN_COHORT"),([artifact],"FROZEN_COHORT_EXPIRED")):
+                with patch.object(follow,"gh_json",return_value=dict(total_count=len(artifacts),artifacts=artifacts)):
+                    state=follow.scheduled(Path(d),now_ms=base["end_ms"]+8*follow.DAY,finalize_previous=True)
+                    self.assertEqual(state["status"],status)
+
+    def test_recovery_missing_bar_does_not_resolve_using_later_profit(self):
+        base,artifact,raw=self.archive();end=base["end_ms"]
+        with tempfile.TemporaryDirectory() as d,patch.object(follow,"gh_json",return_value=dict(total_count=1,artifacts=[artifact])),\
+             patch.object(follow.subprocess,"check_output",return_value=raw),\
+             patch.object(follow,"public_candles",AsyncMock(return_value={"TESTUSDC":[candle(end+STEP,high=130)]})):
+            state=follow.scheduled(Path(d),now_ms=end+8*follow.DAY,finalize_previous=True)
+            result=json.loads((Path(d)/"followup-report.json").read_text())
+            self.assertEqual(state["status"],"FOLLOWUP_DATA_GAPS")
+            self.assertEqual(result["records"][0]["status"],"DATA_GAP")
+            self.assertEqual(result["newly_resolved"],0)
+            self.assertIsNone(result["portfolios"][study.MODEL]["equity_usdc"])
+
+
 class PublicFollowupTests(unittest.IsolatedAsyncioTestCase):
     async def test_fetches_only_public_15m_quotes_after_cohort_boundary(self):
         base,source=fixture();start=base["end_ms"]
