@@ -12,7 +12,7 @@
       "end_ms": 1790996400000,
       "period_complete": true,
       "protocol_sha256": "1afdc13deee0bdda1ecaea330197ca4e402d263bcaea24e27ae0aa645bd87aa4",
-      "engine_sha256": "7a9cf8e9207518ddb66f6cc34ffbfc8e8dcdf990c306c92422b881896b0dc2fe",
+      "engine_sha256": "0c435d928b6827957dd73ec67bafb7565a5cd5673d73194eb991a1b8fb9f8796",
       "source_manifest_sha256": "f7395ff494b4c34c44f1f8c7f1c66c39fe1204dc4897a22d386631d5926043a0",
       "source_files_verified": 182,
       "baseline_report_sha256": "37353c224ff1b1b373e1727f8c5f5e04096042a61bb6db21406d2eccd60630eb",
@@ -239,5 +239,11 @@
   "changes_live_rules": false,
   "real_orders_enabled": false,
   "automatic_promotion": false,
-  "eligible_for_live_promotion": false
+  "eligible_for_live_promotion": false,
+  "dependency_provenance_correction": {
+    "file": "app.py",
+    "registered_local_sha256": "2e24f61e47ee40fdb3ae5f18152129f6632e83d508b73d27bf33fda0919ac9ab",
+    "unchanged_github_sha256": "b1f4d4d15dc1ce4665f0f9f776de050059b60fb18faa4cf1583b04bf02a6c4af",
+    "only_difference": "Registered local copy had one additional EOF newline; exact hash equivalence required. No protocol, strategy or outcome rule changed."
+  }
 }

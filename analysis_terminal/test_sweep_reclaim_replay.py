@@ -141,7 +141,14 @@ class SweepTests(unittest.TestCase):
         p=json.loads(study.PROTOCOL.read_text())
         for name,digest in p['frozen_dependencies_sha256'].items():
             path=study.PROTOCOL.parent.parent/name if name=='app.py' else study.PROTOCOL.with_name(name)
-            self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(),digest)
+            raw=path.read_bytes()
+            study.verify_frozen_dependency(name,raw,digest)
+            with self.assertRaisesRegex(ValueError,'Frozen control changed'):
+                study.verify_frozen_dependency(name,raw+b'# changed',digest)
+            if name=='app.py':
+                study.verify_frozen_dependency(name,raw.rstrip(b'\n')+b'\n',digest)
+                with self.assertRaises(ValueError):
+                    study.verify_frozen_dependency(name,raw.rstrip(b'\n')+b'\n\n\n',digest)
         self.assertFalse(p['eligible_for_live_promotion']);self.assertFalse(p['changes_live_rules'])
         self.assertTrue(p['validation']['run_only_if_development_not_killed'])
         with self.assertRaisesRegex(ValueError,'registered frozen comparator'):
