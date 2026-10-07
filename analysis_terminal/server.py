@@ -34,6 +34,7 @@ from analysis_terminal.entry_band import diagnose as diagnose_entry_band, observ
 from analysis_terminal import paper_execution
 from analysis_terminal import btc_wave, btc_wave_store
 from analysis_terminal import entry_history
+from analysis_terminal import pending_live
 from analysis_terminal.tracking import tracking_summary
 from analysis_terminal.history import fetch_history
 from analysis_terminal.outcome_history import BACKFILL_BARS, BACKFILL_REQUESTS, consecutive_window, merge_candles
@@ -321,6 +322,7 @@ def _init_db() -> None:
         )
         btc_wave_store.initialize(conn)
         entry_history.initialize(conn)
+        pending_live.initialize(conn, now_ms=int(time.time()*1000))
         conn.commit()
 
     if VAPID_PRIVATE_KEY:
@@ -3829,6 +3831,19 @@ async def _recover_simulation_history(contracts):
             print(f"Paper simulation history unavailable: {type(exc).__name__}",flush=True)
 
 
+def _pending_live_cycle(contracts) -> None:
+    cache = _snapshot_cache
+    try:
+        with _db_connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            pending_live.cycle(conn, contracts=contracts, snapshots=cache[1] if cache else {},
+                               analyze=analyze_contract, settings=SETTINGS, now_ms=int(time.time()*1000))
+    except Exception as exc:
+        with _db_connect() as conn:
+            pending_live.record_error(conn, type(exc).__name__)
+        print(f"Pending Shadow capture paused: {type(exc).__name__}", flush=True)
+
+
 async def _background_collector() -> None:
     last_bucket: int | None = None
     await asyncio.sleep(5)
@@ -3854,6 +3869,7 @@ async def _background_collector() -> None:
                         conn.commit()
                 except Exception as exc:
                     print(f"Entry history collector error: {type(exc).__name__}", flush=True)
+                _pending_live_cycle(contracts)
                 await _process_priority_changes(rows, bucket)
                 await _maybe_push_candidate_changes(rows)
                 await _refresh_paper_signal_results(contracts)
@@ -3951,7 +3967,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="EdgeX Analysis Terminal",
-    version="19.0.35",
+    version="19.0.36",
     lifespan=lifespan,
 )
 
@@ -4435,6 +4451,13 @@ async def readiness_review_api(
         "scanned": len(rows),
         "review": _readiness_review(rows),
     }
+
+
+@app.get("/api/pending-entry-shadow")
+async def pending_entry_shadow_api(limit: int = Query(default=50, ge=1, le=500)):
+    with _db_connect() as conn:
+        conn.execute("BEGIN")
+        return pending_live.review(conn, now_ms=int(time.time()*1000), limit=limit)
 
 
 @app.get("/api/outcome-tracking")
