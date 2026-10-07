@@ -1,0 +1,103 @@
+name: Pending coverage public API smoke
+on:
+  push:
+    branches: [audit/pending-coverage-live-v19-0-38]
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Read-only public routes and collector audit
+        run: |
+          python - <<'PY'
+          import json,re,subprocess,time,urllib.request,urllib.error,urllib.parse
+          from pathlib import Path
+          base='https://edgex-analysis-terminal-production.up.railway.app'
+          checks=0
+          def fetch(path,expected=200,raw=False,invalid_post=False):
+              global checks
+              req=urllib.request.Request(base+path,data=b'{}' if invalid_post else None,headers={'Content-Type':'application/json','User-Agent':'EdgeX-read-only-smoke'})
+              try:
+                  with urllib.request.urlopen(req,timeout=60) as response:status,body=response.status,response.read().decode()
+              except urllib.error.HTTPError as exc:status,body=exc.code,exc.read().decode()
+              assert status==expected,'Unexpected route status'
+              checks+=1
+              return body if raw else json.loads(body)
+          h=fetch('/health')
+          assert h['ok'] and h['version']=='19.0.38' and h['storage']['db_exists']
+          assert h['storage']['market_snapshots_48h']>0
+          assert h['push']['enabled'] and h['push']['notification_policy']=='READY_ONLY' and not h['push']['daily_summary_enabled']
+          for route,file in [('/','analysis_terminal/index.html'),('/btc','analysis_terminal/btc.html')]:
+              html=fetch(route,raw=True)
+              assert html==Path(file).read_text().replace('__APP_VERSION__',h['version'])
+              scripts=re.findall(r'<script[^>]*>(.*?)</script>',html,re.I|re.S)
+              assert scripts
+              for script in scripts:
+                  if script.strip():
+                      proc=subprocess.run(['node','-e','new Function(require("fs").readFileSync(0,"utf8"))'],input=script,text=True,capture_output=True)
+                      assert proc.returncode==0,'Shipped JavaScript syntax failure'
+          paper=fetch('/api/paper-execution?limit=200')
+          assert paper['mode']=='PAPER_ONLY' and not paper['real_orders_enabled'] and not paper['automatic_promotion']
+          assert paper['account']['last_error'] is None
+          fetch('/api/paper-execution/events?limit=200')
+          push=fetch('/api/push/config')
+          assert push['notification_policy']=='READY_ONLY'
+          fetch('/api/push/events')
+          fetch('/api/push/preferences',expected=422)
+          for route in ['/api/push/subscribe','/api/push/unsubscribe','/api/push/preferences','/api/push/test']:
+              fetch(route,expected=422,invalid_post=True)
+          assert fetch('/api/push/config')['subscribers']==push['subscribers']
+          fetch('/api/screener')
+          fetch('/api/analyze?ticker=BTCUSDC')
+          assert fetch('/api/server-history?hours=48')['snapshots']
+          archive=fetch('/api/entry-history?days=0&limit=100')
+          assert archive['historical'] and not archive['current_entry_status'] and archive['retention']=='PERSISTENT'
+          small=fetch('/api/entry-history?days=0&limit=1')
+          assert small['totals']==archive['totals']
+          for kind,field in [('READY','first_ready'),('NEAR','first_near')]:
+              filtered=fetch('/api/entry-history?days=0&kind='+kind+'&limit=100')
+              assert all(row[field] for row in filtered['items'])
+              assert filtered['totals']['setups']==archive['totals'][kind.lower()]
+          for bad in ['kind=SHADOW','limit=101','days=-1']:
+              fetch('/api/entry-history?'+bad,expected=422)
+          fetch('/api/readiness-review')
+          fetch('/api/readiness-history?days=14')
+          shadow=fetch('/api/shadow-v2?limit=1000')
+          assert not shadow['cost_adjusted']['automatic_promotion']
+          comparison=fetch('/api/strategy-comparison?limit=500')
+          assert fetch('/api/strategy-comparison?limit=1')['cost_adjusted']==comparison['cost_adjusted']
+          for model in ['current','shadow']:
+              m=comparison['cost_adjusted'][model]
+              assert not m['real_execution_results'] and not m['automatic_promotion']
+              assert m['portfolio_roi_pct'] is None
+          for attempt in range(10):
+              capture=fetch('/api/pending-entry-shadow?limit=500')
+              if capture['coverage']['total_recorded_buckets']>0:break
+              time.sleep(10)
+          else:raise AssertionError('No audit attempt recorded')
+          assert capture['mode']=='SHADOW_ONLY'
+          for key in ['real_orders_enabled','automatic_promotion','eligible_for_live_promotion','notifications_enabled','current_entry_status']:
+              assert capture[key] is False
+          assert capture['meta']['last_error'] is None
+          assert capture['meta']['coverage_started_ms']>=capture['meta']['activated_ms']
+          first=capture['coverage']['latest_observations'][0]
+          assert first['observed_ms']>=first['bucket_ms']
+          assert first['requested_markets']>=first['valid_markets']>0
+          assert first['quality']['VALID_INDICATOR_WINDOWS']==first['valid_markets']
+          thin=fetch('/api/pending-entry-shadow?limit=1')
+          assert thin['cohorts']==capture['cohorts'] and thin['continuous_portfolios']==capture['continuous_portfolios']
+          assert thin['coverage']==capture['coverage']
+          fetch('/api/pending-entry-shadow?limit=0',expected=422)
+          fetch('/api/pending-entry-shadow?limit=501',expected=422)
+          btc=fetch('/api/btc-wave')
+          assert btc['mode']=='SHADOW_ONLY' and not btc['real_orders_enabled'] and not btc['automatic_promotion']
+          assert fetch('/health')['push']['subscribers']==push['subscribers']
+          # No response bodies, production history, prices or account values are persisted or printed.
+          print('PASS: '+str(checks)+' public route checks; JavaScript valid; no notification delivery or order execution.')
+          PY
