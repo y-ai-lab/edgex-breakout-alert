@@ -51,11 +51,15 @@ jobs:
                       fill=candle(start+step,open=101,low=95,high=102) if side=='LONG' else candle(start+step,open=99,low=98,high=105,close=99)
                       exit=candle(start+2*step,open=110,low=109,high=121,close=120) if side=='LONG' else candle(start+2*step,open=90,low=79,high=91,close=80)
                       if scenario=='ambiguous':fill=candle(start+step,low=80,high=130)
+                      if scenario=='gap':fill=candle(start+step) if side=='LONG' else candle(start+step,open=99,low=98.9,high=99.1,close=99)
+                      if scenario=='expired':
+                          for i in range(1,6):x.overrides[start+i*step]=candle(start+i*step) if side=='LONG' else candle(start+i*step,open=99,low=98.9,high=99.1,close=99)
                       if scenario!='expired':x.overrides.update({fill.time_ms:fill,exit.time_ms:exit})
                       for i in range(1,6):
                           if scenario=='gap' and i==1:continue
                           x.cycle(start+i*step)
                       report=x.review()
+                      assert impl.records(x.conn)[0]['status']=={'tp':'TP','ambiguous':'AMBIGUOUS','gap':'DATA_GAP','expired':'EXPIRED'}[scenario],(side,scenario,impl.records(x.conn)[0]['status'])
                       return impl.records(x.conn),report['cohorts'],report['continuous_portfolios']
                   finally:x.tearDown()
           cases=[]
