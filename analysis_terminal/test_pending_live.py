@@ -237,6 +237,9 @@ class PendingLiveTests(unittest.TestCase):
         self.assertEqual(c['quality']['CAPTURED_'+study.MODEL],1)
         self.assertEqual(c['quality']['QUALIFIED_'+study.MODEL],1)
         self.assertEqual(c['requested_market_observations'],1)
+        overview=self.review(now=START+120000)['coverage']
+        self.assertEqual(overview['total_recorded_buckets'],2)
+        self.assertEqual(overview['latest_observations'][0]['bucket_ms'],START)
 
     def test_gap_coverage_keeps_unobserved_bucket_and_late_attempt_separate(self):
         self.cycle(START-STEP)

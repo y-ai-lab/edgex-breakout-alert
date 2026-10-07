@@ -196,8 +196,11 @@ def record_error(conn, error_type):
 def coverage(conn, *, meta, now_ms):
     """First recorded attempts only; absent history is never reconstructed."""
     origin = meta['capture_start_ms']
+    overview = dict(total_recorded_buckets=conn.execute('SELECT COUNT(*) FROM pending_live_cycles').fetchone()[0],
+                    latest_observations=[json.loads(r[0]) for r in conn.execute(
+                        'SELECT payload FROM pending_live_cycles ORDER BY bucket_ms DESC LIMIT 20')])
     if now_ms < origin:
-        return dict(status='WAITING_FOR_CAPTURE_START',started_ms=meta['coverage_started_ms'],cohorts=[])
+        return dict(status='WAITING_FOR_CAPTURE_START',started_ms=meta['coverage_started_ms'],cohorts=[],**overview)
     last = now_ms//STEP*STEP
     evidence = {r[0]:json.loads(r[1]) for r in conn.execute(
         'SELECT bucket_ms,payload FROM pending_live_cycles WHERE bucket_ms>=? AND bucket_ms<=?',(origin,last))}
@@ -225,7 +228,7 @@ def coverage(conn, *, meta, now_ms):
                                    'WAITING_FOR_OBSERVATION' if not found else 'OBSERVATIONS_RECORDED'))
     return dict(status='OBSERVATION_HISTORY_INCOMPLETE' if any(r['overdue_missing_buckets'] for r in reports) else
                 'OBSERVATIONS_RECORDED' if evidence else 'WAITING_FOR_OBSERVATION',
-                started_ms=meta['coverage_started_ms'],basis='FIRST_RECORDED_ATTEMPT_PER_BUCKET',cohorts=reports)
+                started_ms=meta['coverage_started_ms'],basis='FIRST_RECORDED_ATTEMPT_PER_BUCKET',cohorts=reports,**overview)
 
 
 def review(conn, *, now_ms, limit=50):
