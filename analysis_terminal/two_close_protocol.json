@@ -1,0 +1,91 @@
+{
+  "protocol": "two_close_measured_net2r_v1",
+  "model": "two_close_measured_net2r",
+  "registered_utc": "2026-10-07T13:35:03Z",
+  "changes_live_rules": false,
+  "real_orders_enabled": false,
+  "automatic_promotion": false,
+  "eligible_for_live_promotion": false,
+  "hypothesis": "Require the immediately adjacent second closed 15M candle to sustain the same first Shadow setup and strict confirmation. Enter only after this second close; freeze original 4H SL and measured extension. Independent strategy comparison, not a pure filter effect.",
+  "development": {
+    "start_ms": 1790391600000,
+    "end_ms": 1790996400000,
+    "role": "VIEWED_DEVELOPMENT"
+  },
+  "validation": {
+    "start_ms": 1790996400000,
+    "end_ms": 1791255600000,
+    "role": "RECENT_RETROSPECTIVE_VALIDATION",
+    "untouched_out_of_sample": false
+  },
+  "prospective_start_ms": 1791417600000,
+  "prospective_windows": "Fixed seven-day UTC windows from Oct 8. Completed days only; no collection activation after a retrospective KILL. Separate samples from existing experiments.",
+  "production_parameters": {
+    "monitor_interval": "HOUR_4",
+    "entry_interval": "MINUTE_15",
+    "trend_fast_ema": 20,
+    "trend_slow_ema": 50,
+    "atr_period": 14,
+    "roll_lookback": 20,
+    "roll_max_age": 6,
+    "retest_lookback": 4,
+    "atr_stop_buffer": 0.5,
+    "atr_target_buffer": 0.25,
+    "retest_atr_tolerance": 0.35,
+    "min_rr": 2.0
+  },
+  "rules": {
+    "confirmation_bars": 2,
+    "min_net_rr": 2,
+    "pending_bars": 4,
+    "fee_bps_each_side": 5,
+    "slippage_bps_each_side": 2,
+    "first_seed": "First existing Shadow v2-qualified setup only, including setup identity, valid structural SL, retest, candle direction and close strictly beyond roll. First-seed fee-adjusted room need not already qualify; the second-close price is independently assessed.",
+    "second_confirmation": "Exactly the next contiguous CLOSED 15M bar. Same setup/direction and latest candle time; strict color AND close beyond the same roll, retest and current stop validity. Its whole bar must not touch the original frozen SL. Failure consumes the setup; no retries or later better confirmations.",
+    "frozen_structure": "First signal structural SL, roll and measured extension are immutable. No widened SL or new extension from a later 4H bar.",
+    "entry_target": "At second confirmation close freeze a limit at that close and a cost-adjusted net-2R TP computed from the original SL. TP must lie inside the original measured extension. Continuous hypothetical prices, not real orders.",
+    "entry_clock": "Second signal close +1ms. Neither first nor second confirmation candle can fill or decide a trade outcome. The second bar SL check is pre-entry invalidation only, never an SL outcome.",
+    "execution": "Reuse frozen confirmation-zone evaluator with pure model-name adapter. Only later closed bars, same setup and strict latest closed confirmation/structure before fills, four-bar expiry, opening through original roll/stop rejects.",
+    "outcomes": "Any exit touch on unknown intrabar limit-fill bar = AMBIGUOUS; no fill-bar excursions. Later TP+SL same candle = AMBIGUOUS, gaps stop, stop opening gaps charged at worse open. No inferred ordering.",
+    "boundary": "First seeds whose adjacent second close is outside the source period are censored/excluded, never silently reassigned to the next weekly cohort. Partial-week updates may complete them before the fixed week ends.",
+    "identity": "Exactly one second-confirmation chance per first setup; source warmup excludes prior setups. Never count retries or tickers as new setups."
+  },
+  "portfolio": {
+    "initial_cash_usdc": 10000,
+    "risk_pct": 1,
+    "max_positions": 3,
+    "max_total_risk_pct": 3,
+    "max_notional_multiple": 1,
+    "daily_loss_pct": 3,
+    "quantity": "reserve at creation using net stop risk and known cash; round observed size step; no future profit increases",
+    "uncertain": "freeze capital on ambiguous result/gap; equity and ROI unknown",
+    "daily_loss_timezone": "Asia/Tokyo"
+  },
+  "decision": {
+    "minimum_resolved_each_period": 20,
+    "kill": "Any sufficiently sampled retrospective period net AvgR<=0 or PF<=1: KILL and do not activate forward collection.",
+    "insufficient": "CONTINUE_INSUFFICIENT_SAMPLE; retain all rules; no promotion.",
+    "retrospective_pass": "Both fixed periods >=20 resolved, AvgR>0, PF>1 and net additional filled setups vs current >0: FORWARD_SHADOW_REQUIRED.",
+    "forward": "Only complete future registered windows with >=20 resolved, positive net AvgR, PF>1, net incremental fills and cost/capital review can justify manual production consideration. No automatic promotion.",
+    "roi": "Report realized cash separately; OPEN/AMBIGUOUS/data gaps keep equity and full ROI unknown."
+  },
+  "frozen_dependencies_sha256": {
+    "confirmation_zone_replay.py": "fa62fd6571a5a153ef8b1b5a4a8f95551159edece717549d8b4816df696e7602",
+    "pending_entry_replay.py": "111686641afe5e61c64311fa730716b5198d3a74e34440e06f48d99da3c53df8",
+    "confirmation_zone_protocol.json": "d32ca8eadbf8346d6702925dca5cbf54dcfe68fc201ac354302d03c6714a44b3",
+    "pending_entry_protocol.json": "1ed8af4b9bb0dd7281e80a21956677bb6d9e315f47fb0c00689992662a29ee0f"
+  },
+  "comparator_reports_sha256": {
+    "development": "6717b4900a542018e0bd26808acff6602edcd49cd7c1084678b481ba2cb4aeb2",
+    "validation": "eae95a6322ec6ca0293180d7d0dda952e7aedae9e0b3123b3e8b5c3b59d85165"
+  },
+  "comparison": "Preserve all four original model ledgers, metrics and independent capped portfolios. Compare setup overlap/missing/new fills, net fill difference vs current and first-confirmation net2R. Entry time/price/TP differ, so no causal paired-filter or improved-return claim from count changes.",
+  "limitations": [
+    "Retrospective periods already viewed; no untouched validation claim.",
+    "Extra price touches are not live fills; conservative OHLC ambiguity may censor outcomes.",
+    "Cost-adjusted net risk R differs from original Shadow price-stop R.",
+    "No condition tuning after viewing this experiment. Existing frozen strategy protocols and live signals remain unchanged.",
+    "Confirmation persistence may reduce entries or delay price; exact OHLC fills, exchange tick, funding and liquidity unvalidated.",
+    "No reclassification of rejected earlier model, no subgroup tuning. Unresolved positions retain unknown whole-cohort equity/ROI."
+  ]
+}
