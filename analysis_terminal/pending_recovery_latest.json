@@ -1,0 +1,243 @@
+{
+  "version": "19.0.27",
+  "purpose": "Recover missed final weekly follow-up using the original seven-day cutoff; no new entries",
+  "decision": "CONTINUE_FIXED_PENDING_PROTOCOL_NO_LIVE_PROMOTION",
+  "validation": {
+    "commit": "241833b1f482f9f848d5b6ad22d9356f487681d4",
+    "run_id": 37567128149,
+    "artifact_id": 11459970380,
+    "artifact_sha256": "9eddc57a2fd27953466aebfe07aa2506f0847d78785ed0be64835d5d55de716b",
+    "analysis_tests": 335,
+    "root_tests": 25,
+    "verified_market_files": 364,
+    "unchanged_market_summary_sha256": "e11ef813509634608e9330e20057a73f22c131ea1193050519d2e3a37b5d653c"
+  },
+  "live_observation": {
+    "observed_ms": 1791343708124,
+    "production_version": "19.0.26",
+    "ready_funnel": {
+      "scanned": 181,
+      "confirmed_after_retest": 3,
+      "current_ready": 0,
+      "shadow_v2_ready": 2,
+      "current_blocked_stages": [
+        {
+          "ticker": "DELLUSDC",
+          "stage": "RR_WAIT",
+          "rr": 0.7597534170232376
+        },
+        {
+          "ticker": "LITEUSDC",
+          "stage": "RR_WAIT",
+          "rr": 0.383344125399666
+        },
+        {
+          "ticker": "MUUSDC",
+          "stage": "STRUCTURE_WAIT",
+          "rr": null
+        }
+      ],
+      "entry_band_counts": {
+        "COMPATIBLE": 8,
+        "NO_OVERLAP": 47,
+        "INVALID_STRUCTURE": 0,
+        "INVALID_INPUT": 0
+      }
+    },
+    "economics": {
+      "current": {
+        "cost_model": "LINEAR_5BPS_FEE_2BPS_SLIPPAGE_EACH_SIDE",
+        "r_basis": "ORIGINAL_ENTRY_TO_STOP_PRICE_DISTANCE",
+        "fee_bps_each_side": 5,
+        "slippage_bps_each_side": 2,
+        "signals": 3,
+        "priced_signals": 3,
+        "unpriced_signals": 0,
+        "projected_tp_nonpositive": 0,
+        "projected_net_rr_below_2": 2,
+        "resolved": 2,
+        "tp": 0,
+        "sl": 2,
+        "net_wins": 0,
+        "net_losses": 2,
+        "net_flat": 0,
+        "tp_hit_rate": 0,
+        "net_win_rate": 0,
+        "avg_net_r": -1.0398,
+        "expectancy_net_r": -1.0398,
+        "profit_factor": 0,
+        "avg_assumed_cost_r": 0.0398,
+        "max_consecutive_net_losses": 2,
+        "streak_samples": 2,
+        "excluded_resolved": {
+          "unverified": 0,
+          "invalid_prices": 0,
+          "inconsistent_r": 0
+        },
+        "minimum_resolved": 20,
+        "completion": {
+          "status": "PARTIALLY_RESOLVED",
+          "estimate_scope": "VERIFIED_RESOLVED_SIGNALS_ONLY",
+          "total_signals": 3,
+          "verified_resolved": 2,
+          "resolved_pct": 66.67,
+          "unresolved_or_excluded": 1,
+          "open_signals": 1,
+          "modeled_open_signals": 1,
+          "blocked_signals": 0,
+          "status_counts": {
+            "SL": 2,
+            "OPEN": 1
+          },
+          "cohort_complete": false,
+          "observed_metrics_are_provisional": true,
+          "sensitivity": {
+            "status": "HYPOTHETICAL_OPEN_OUTCOMES",
+            "available": true,
+            "assumes_no_new_entries": true,
+            "real_execution_results": false,
+            "portfolio_roi_pct": null,
+            "scenarios": {
+              "all_open_tp": {
+                "signals": 3,
+                "sum_net_r": -0.1522,
+                "avg_net_r": -0.0507,
+                "net_win_rate": 33.33,
+                "profit_factor": 0.9268
+              },
+              "all_open_sl": {
+                "signals": 3,
+                "sum_net_r": -3.2341,
+                "avg_net_r": -1.078,
+                "net_win_rate": 0,
+                "profit_factor": 0
+              }
+            },
+            "limitations": [
+              "Scenarios assign every currently open entry its frozen TP or SL; they are not forecasts, probabilities or confidence bounds.",
+              "Full-position TP/SL assumption; funding, actual fills, gap losses and partial position sizing are unmodeled.",
+              "Exclude AMBIGUOUS and incomplete/error histories; never rewrite recorded outcomes."
+            ]
+          }
+        },
+        "sample_status": "INSUFFICIENT SAMPLE",
+        "real_execution_results": false,
+        "eligible_for_live_promotion": false,
+        "automatic_promotion": false,
+        "portfolio_roi_pct": null,
+        "limitations": [
+          "Hypothetical signal-close entry and TP/SL-touch exits; not actual fills.",
+          "Linear fee/slippage assumption; funding, spread, liquidity and gaps beyond the recorded exit are unmodeled.",
+          "R uses the original price stop distance; not the net-stop-risk unit in the pullback portfolio study.",
+          "Signal R cannot determine capital return, portfolio ROI or an equity curve."
+        ]
+      },
+      "shadow": {
+        "cost_model": "LINEAR_5BPS_FEE_2BPS_SLIPPAGE_EACH_SIDE",
+        "r_basis": "ORIGINAL_ENTRY_TO_STOP_PRICE_DISTANCE",
+        "fee_bps_each_side": 5,
+        "slippage_bps_each_side": 2,
+        "signals": 119,
+        "priced_signals": 119,
+        "unpriced_signals": 0,
+        "projected_tp_nonpositive": 0,
+        "projected_net_rr_below_2": 119,
+        "resolved": 76,
+        "tp": 25,
+        "sl": 51,
+        "net_wins": 25,
+        "net_losses": 51,
+        "net_flat": 0,
+        "tp_hit_rate": 32.89,
+        "net_win_rate": 32.89,
+        "avg_net_r": -0.0912,
+        "expectancy_net_r": -0.0912,
+        "profit_factor": 0.8736,
+        "avg_assumed_cost_r": 0.078,
+        "max_consecutive_net_losses": 8,
+        "streak_samples": 76,
+        "excluded_resolved": {
+          "unverified": 0,
+          "invalid_prices": 0,
+          "inconsistent_r": 0
+        },
+        "minimum_resolved": 20,
+        "completion": {
+          "status": "PARTIALLY_RESOLVED",
+          "estimate_scope": "VERIFIED_RESOLVED_SIGNALS_ONLY",
+          "total_signals": 119,
+          "verified_resolved": 76,
+          "resolved_pct": 63.87,
+          "unresolved_or_excluded": 43,
+          "open_signals": 43,
+          "modeled_open_signals": 43,
+          "blocked_signals": 0,
+          "status_counts": {
+            "TP": 25,
+            "SL": 51,
+            "OPEN": 43
+          },
+          "cohort_complete": false,
+          "observed_metrics_are_provisional": true,
+          "sensitivity": {
+            "status": "HYPOTHETICAL_OPEN_OUTCOMES",
+            "available": true,
+            "assumes_no_new_entries": true,
+            "real_execution_results": false,
+            "portfolio_roi_pct": null,
+            "scenarios": {
+              "all_open_tp": {
+                "signals": 119,
+                "sum_net_r": 75.3427,
+                "avg_net_r": 0.6331,
+                "net_win_rate": 57.14,
+                "profit_factor": 2.3739
+              },
+              "all_open_sl": {
+                "signals": 119,
+                "sum_net_r": -53.6678,
+                "avg_net_r": -0.451,
+                "net_win_rate": 21.01,
+                "profit_factor": 0.4717
+              }
+            },
+            "limitations": [
+              "Scenarios assign every currently open entry its frozen TP or SL; they are not forecasts, probabilities or confidence bounds.",
+              "Full-position TP/SL assumption; funding, actual fills, gap losses and partial position sizing are unmodeled.",
+              "Exclude AMBIGUOUS and incomplete/error histories; never rewrite recorded outcomes."
+            ]
+          }
+        },
+        "sample_status": "SUFFICIENT SAMPLE",
+        "real_execution_results": false,
+        "eligible_for_live_promotion": false,
+        "automatic_promotion": false,
+        "portfolio_roi_pct": null,
+        "limitations": [
+          "Hypothetical signal-close entry and TP/SL-touch exits; not actual fills.",
+          "Linear fee/slippage assumption; funding, spread, liquidity and gaps beyond the recorded exit are unmodeled.",
+          "R uses the original price stop distance; not the net-stop-risk unit in the pullback portfolio study.",
+          "Signal R cannot determine capital return, portfolio ROI or an equity curve."
+        ]
+      }
+    },
+    "decision": "NO_LIVE_PROMOTION; fixed pending-entry protocol awaiting first completed UTC day",
+    "real_orders_enabled": false,
+    "automatic_promotion": false
+  },
+  "cutoff_recovery": {
+    "example": {
+      "cohort_start": "2026-10-07T00:00:00Z",
+      "cohort_end": "2026-10-14T00:00:00Z",
+      "fixed_followup_end": "2026-10-21T00:00:00Z",
+      "recovery_available": "Completed UTC dates 2026-10-22 through 2026-10-28"
+    },
+    "scope": "One preceding final cohort, not a 90-day outage recovery",
+    "missing_seal": "Explicit missing; never reconstruct entries",
+    "repeated_artifacts": "Same cohort updates; retain first main final artifact, never count again"
+  },
+  "changes_live_rules": false,
+  "real_orders_enabled": false,
+  "automatic_promotion": false,
+  "eligible_for_live_promotion": false
+}

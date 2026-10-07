@@ -151,11 +151,17 @@ def gh_json(path):
     return json.loads(subprocess.check_output(["gh","api",path]))
 
 
-def scheduled(output, *, now_ms):
+def scheduled(output, *, now_ms, finalize_previous=False):
     """Read only this repository's main artifacts and public quote endpoints."""
     output.mkdir(parents=True,exist_ok=True)
     origin=json.loads(study.PROTOCOL.read_text())["prospective_start_ms"]
     window=study.research_window(now_ms,origin)
+    if finalize_previous:
+        # The normal window advances after its final day. Recover the preceding
+        # cohort at exactly its original seven-day cutoff, never at today's end.
+        if window["start_ms"]<origin+14*DAY:
+            return dict(status="WAITING_FOR_COMPLETED_FOLLOWUP",automatic_promotion=False)
+        window=dict(start_ms=window["start_ms"]-7*DAY,end_ms=window["start_ms"])
     begin=window["start_ms"]-7*DAY
     if begin<origin:
         return dict(status="WAITING_FOR_FIRST_FROZEN_COHORT",automatic_promotion=False)
@@ -201,14 +207,18 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--seal-research",type=Path)
     parser.add_argument("--scheduled",action="store_true")
+    parser.add_argument("--finalize-previous",action="store_true",
+                        help="Recover the preceding cohort's fixed final cutoff after a missed boundary run")
     parser.add_argument("--output",type=Path,required=True)
     args=parser.parse_args()
     if bool(args.seal_research)==args.scheduled:
         parser.error("Choose exactly one mode")
+    if args.finalize_previous and not args.scheduled:
+        parser.error("--finalize-previous requires --scheduled")
     if args.seal_research:
         seal(args.seal_research,args.output)
     else:
-        try:state=scheduled(args.output,now_ms=int(time.time()*1000))
+        try:state=scheduled(args.output,now_ms=int(time.time()*1000),finalize_previous=args.finalize_previous)
         except Exception as exc:
             args.output.mkdir(parents=True,exist_ok=True)
             (args.output/"run-status.json").write_text(json.dumps(dict(status="FOLLOWUP_FAILED",error_type=type(exc).__name__))+"\n")

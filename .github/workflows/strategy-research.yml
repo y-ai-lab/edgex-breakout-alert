@@ -96,6 +96,27 @@ jobs:
           name: edgex-frozen-outcomes-${{ steps.followup.outputs.cohort_end_ms }}
           path: strategy-output/followup/
           retention-days: 90
+      - name: Recover the preceding final cutoff after a missed boundary run
+        id: recovery
+        if: always() && steps.window.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python -m analysis_terminal.pending_followup --scheduled --finalize-previous --output strategy-output/recovery
+          python - <<'PY'
+          import json,os
+          from pathlib import Path
+          state=json.loads(Path('strategy-output/recovery/run-status.json').read_text())
+          complete=state.get('end_ms',0)-state.get('cohort_end_ms',0)==7*86400000
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:
+              f.write(f'complete={str(complete).lower()}\ncohort_end_ms={state.get("cohort_end_ms",0)}\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: steps.recovery.outputs.complete == 'true'
+        with:
+          name: edgex-frozen-outcomes-${{ steps.recovery.outputs.cohort_end_ms }}
+          path: strategy-output/recovery/
+          retention-days: 90
       - uses: actions/upload-artifact@v4
         if: always()
         with:
