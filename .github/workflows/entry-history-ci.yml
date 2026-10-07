@@ -1,0 +1,48 @@
+name: Entry history validation
+on:
+  push:
+    branches: [audit/entry-history-v19-0-29]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -r analysis_terminal/test-requirements.txt
+      - name: Full regression including archive migration and shipped mobile JavaScript
+        run: |
+          mkdir -p validation-output
+          python -m unittest discover -s analysis_terminal -p 'test_*.py' -q > validation-output/analysis-tests.txt 2>&1
+          python -m unittest discover -s tests -q > validation-output/root-tests.txt 2>&1
+          python -m compileall -q analysis_terminal
+          node analysis_terminal/test_essential_ui.js analysis_terminal/index.html
+          node analysis_terminal/test_btc_ui.js analysis_terminal/btc.html
+          node analysis_terminal/test_notifications.js analysis_terminal/index.html
+      - name: Confirm strategy, outcomes, notification service and frozen research are unchanged
+        run: |
+          python - <<'PY'
+          import ast,subprocess
+          from pathlib import Path
+          parent='6b94e6fa360b9773704f9c4eedfa18100fdf0da6'
+          def prior(p):return subprocess.check_output(['git','show',parent+':'+p])
+          old=prior('analysis_terminal/server.py').decode();new=Path('analysis_terminal/server.py').read_text()
+          def function(s,name):return ast.dump(next(n for n in ast.parse(s).body if isinstance(n,(ast.FunctionDef,ast.AsyncFunctionDef)) and n.name==name),include_attributes=False)
+          for name in ['analyze_contract','_evaluate_paper_signal','_persist_shadow_v2_signals','_maybe_push_candidate_changes','_persist_scan_result']:
+              assert function(old,name)==function(new,name),name
+          for p in ['app.py','production_app.py','Dockerfile','requirements.txt','analysis_terminal/btc.html','analysis_terminal/sw.js','analysis_terminal/outcomes.py','analysis_terminal/lifecycle.py','analysis_terminal/paper_execution.py','analysis_terminal/pending_entry_protocol.json','analysis_terminal/pending_entry_replay.py','analysis_terminal/pending_followup.py','analysis_terminal/pending_followup_protocol.json']:
+              assert prior(p)==Path(p).read_bytes(),p
+          print('PASS: production strategy, outcome time ordering, Push and frozen experiments unchanged')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: entry-history-validation
+          path: validation-output/
+          retention-days: 14

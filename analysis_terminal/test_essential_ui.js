@@ -22,6 +22,7 @@ function element(tag,attributes=''){
 }
 for(const m of markup.matchAll(/<([a-z]+)\b([^>]*)>/g))all.push(element(m[1],m[2]));
 for(const id of ['stage','direction'])nodes[id].value='ALL';
+nodes.entryHistoryKind.value='ALL';nodes.entryHistoryDays.value='7';
 assert.equal(all.filter(x=>x.dataset.tab).length,4);
 assert.deepEqual(all.filter(x=>x.dataset.tab).map(x=>x.dataset.tab),['dashboard','screen','analysis','api']);
 for(const id of ['compare','journal','savePlan','compareSelected','strategyComparisonStatus','readinessHistoryStatus'])assert(!nodes[id],id);
@@ -32,6 +33,8 @@ const near={...ready,ticker:'NEXTUSDC',stage:'CONFIRMATION_WAIT',setup_id:'next'
 const market={universe:2,scanned:2,coverage_pct:100,matched:2,snapshot_age_seconds:0,results:[ready,near],ready_candidates:[ready],qualified_near_candidates:[near],summary:{ready_count:1,qualified_near_count:1,near_signal_count:1,direction_counts:{LONG:2},average_score:90}};
 const paper={mode:'PAPER_ONLY',real_orders_enabled:false,eligible_for_live_promotion:false,automatic_promotion:false,source:'CURRENT_READY_ONLY',account:{last_cycle_ms:clock,paused:false,collector_stale:false,cash_usdc:10000,policy:{}},tracking:{state:'WAITING_READY',active_status_counts:{PENDING:0,OPEN:0,AMBIGUOUS:0},data_issue_count:0,data_issue_counts:{}},metrics:{resolved:0,status_counts:{},sample_status:'INSUFFICIENT SAMPLE'},latest:[]};
 let failures=false,invalid=false,stale=false,releaseOld=null;
+const historyItem={setup_id:'history-1',ticker:'NEXTUSDC',direction:'LONG',first_near:{observed_ms:1000,stage:'CONFIRMATION_WAIT',entry_reference:80,stop_loss:70,take_profit:100,rr:2,confirmation_color_ok:false,confirmation_level_ok:true},first_ready:{observed_ms:2000,stage:'READY',entry_reference:81,stop_loss:70,take_profit:105,rr:3.18},latest:{observed_ms:3000,stage:'RR_WAIT'},lifecycle:{ended_ms:4000,end_reason:'SUPERSEDED'},reference_outcome:{verified:true,status:'SL',final_r:-1,hypothetical:true}};
+let historyReply={historical:true,totals:{setups:2,ready:1,near:2},items:[historyItem],next_cursor:{before_ms:2000,before_setup:'history-1'}},historyGate=null,historyFailure=false;
 const context={console,URL,AbortController,Uint32Array,crypto:require('crypto').webcrypto,
  Date:class extends Date{static now(){return clock}},navigator:{userAgent:'test',vibrate(){}},
  location:{href:'https://test/',origin:'https://test'},history:{replaceState(){}},
@@ -55,6 +58,10 @@ const context={console,URL,AbortController,Uint32Array,crypto:require('crypto').
   else if(url.startsWith('/api/watchlist'))data={tickers:[]};
   else if(url.startsWith('/api/risk'))data={size:1,max_loss:10,target_profit:25,risk_budget:10,notional:100,rr:2.5};
   else if(url.startsWith('/api/chart'))data={analysis:{...ready,ticker:'TESTUSDC'},series:{HOUR_4:[],MINUTE_15:[]}};
+  else if(url.startsWith('/api/entry-history')){
+   if(historyFailure)throw new Error('offline');
+   if(historyGate){const gate=historyGate;historyGate=null;await gate.promise;data=gate.reply}else data=historyReply;
+  }
   else throw new Error('Unexpected API load: '+url);
   return {ok:true,json:async()=>data};
  }};
@@ -68,6 +75,7 @@ async function settle(){for(let i=0;i<8;i++)await new Promise(setImmediate)}
  assert(nodes.nearCandidates.innerHTML.includes('Entry目安'));assert(nodes.nearCandidates.innerHTML.includes('SL'));assert(nodes.nearCandidates.innerHTML.includes('TP'));
  assert.equal(storage.get('edgexJournal'),'[{"ticker":"KEEPUSDC"}]');assert.equal(storage.get('edgexMarketHistory'),'[{"time_ms":1}]');
  assert(!requests.some(r=>/shadow-v2|strategy-comparison|replay|readiness-history|server-history|server-paper-signals|opportunity/.test(r.url)));
+ assert(!requests.some(r=>r.url.startsWith('/api/entry-history')),'History must be lazy and leave ENTRY NOW boot unchanged');
  context.tab('api');await settle();assert(nodes.api.classList.contains('active'));assert(nodes.apiCheckStatus.textContent.includes('正常 5 / 要確認 0 / 失敗 0'));assert(nodes.paperExecutionStatus.textContent.includes('PAPER ONLY'));
  assert(nodes.paperExecutionStatus.textContent.includes('現行READY待ち'));
  const originalTracking=paper.tracking;
@@ -102,5 +110,31 @@ async function settle(){for(let i=0;i<8;i++)await new Promise(setImmediate)}
  context.renderNearCandidates({...market,_client_rendered_ms:clock,qualified_near_candidates:[{...near,ticker:'<img src=x onerror=bad()>',reason:'<script>bad()</script>'}]});
  assert(!nodes.nearCandidates.innerHTML.includes('<img'));assert(!nodes.nearCandidates.innerHTML.includes('<script>bad'));
  nodes.checkApi.click();await settle();assert(nodes.apiCheckStatus.textContent.includes('正常 5'));
+ // The archive is historical, lazy, paginated, escaped, and independent of live ENTRY.
+ const entryBefore=nodes.entryNowContent.innerHTML,globalBefore=nodes.globalEntryBar.innerHTML;
+ nodes.entryHistoryDetails.open=true;nodes.entryHistoryDetails.ontoggle.call(nodes.entryHistoryDetails);await settle();
+ assert(nodes.entryHistoryItems.innerHTML.includes('過去ENTRY'));assert(nodes.entryHistoryItems.innerHTML.includes('仮想追跡'));
+ assert(nodes.entryHistoryItems.innerHTML.includes('別setupへ交代'));assert(nodes.entryHistoryItems.innerHTML.includes('当時のEntry 81'));
+ assert(nodes.entryHistoryItems.innerHTML.includes('あと一歩時点'));assert(!nodes.entryHistoryMore.hidden);
+ assert.equal(nodes.entryNowContent.innerHTML,entryBefore);assert.equal(nodes.globalEntryBar.innerHTML,globalBefore);
+ historyReply={...historyReply,items:[{...historyItem,setup_id:'history-2',first_ready:null,reference_outcome:null}],next_cursor:null};
+ nodes.entryHistoryMore.click();await settle();assert.equal(context.entryHistoryItems.length,2);assert(nodes.entryHistoryMore.hidden);
+ assert(requests.some(r=>r.url.includes('before_ms=2000')&&r.url.includes('before_setup=history-1')));
+ assert(nodes.entryHistoryItems.innerHTML.includes('未成立: 15分足の方向'));assert(nodes.entryHistoryItems.innerHTML.includes('ENTRYへの昇格記録なし'));
+ nodes.entryHistoryTicker.value='BTC & /';nodes.entryHistoryKind.value='NEAR';nodes.entryHistoryDays.value='0';
+ nodes.entryHistoryKind.onchange();await settle();assert(requests.at(-1).url.includes('ticker=BTC%20%26%20%2F'));assert(requests.at(-1).url.includes('kind=NEAR&'));
+ assert.equal(context.entryHistoryItems.length,1,'New filters replace rather than append');
+ let releaseHistory;historyGate={promise:new Promise(r=>releaseHistory=r),reply:{...historyReply,items:[{...historyItem,ticker:'OLDUSDC'}]}};
+ const older=context.loadEntryHistory(false);await settle();historyReply={...historyReply,items:[{...historyItem,ticker:'NEWUSDC'}]};
+ await context.loadEntryHistory(false);releaseHistory();await older;assert(nodes.entryHistoryItems.innerHTML.includes('NEWUSDC'));assert(!nodes.entryHistoryItems.innerHTML.includes('OLDUSDC'));
+ historyFailure=true;await context.loadEntryHistory(false);assert(nodes.entryHistoryStatus.textContent.includes('再試行'));historyFailure=false;
+ historyReply={...historyReply,items:[{...historyItem,ticker:'<img src=x onerror=bad()>',lifecycle:{ended_ms:1,end_reason:'<script>bad()</script>'}}]};
+ await context.loadEntryHistory(false);assert(nodes.entryHistoryItems.innerHTML.includes('&lt;img'));assert(!nodes.entryHistoryItems.innerHTML.includes('<img'));assert(!nodes.entryHistoryItems.innerHTML.includes('<script>'));
+ historyReply={...historyReply,items:[historyItem]};await context.loadEntryHistory(false);
+ const chartsBefore=requests.filter(r=>r.url.startsWith('/api/chart')).length;
+ nodes.entryHistoryItems.querySelectorAll('.entryHistoryAnalyze')[0].click();await settle();
+ assert.equal(nodes.ticker.value,'NEXTUSDC');assert(nodes.analysis.classList.contains('active'));
+ assert(requests.filter(r=>r.url.startsWith('/api/chart')).length>chartsBefore,'History action fetches current analysis');
+ assert(requests.filter(r=>r.url.startsWith('/api/entry-history')).every(r=>r.method==='GET'));
  console.log('Complete UI boot, four tabs, candidates, stale rejection, analysis/risk, GET API checks, failures/races and retained local data: OK');
 })().catch(e=>{console.error(e);process.exitCode=1});
