@@ -33,6 +33,7 @@ from analysis_terminal.readiness_history import daily_readiness, shadow_observat
 from analysis_terminal.entry_band import diagnose as diagnose_entry_band, observation as entry_band_observation
 from analysis_terminal import paper_execution
 from analysis_terminal import btc_wave, btc_wave_store
+from analysis_terminal import entry_history
 from analysis_terminal.tracking import tracking_summary
 from analysis_terminal.history import fetch_history
 from analysis_terminal.outcome_history import BACKFILL_BARS, BACKFILL_REQUESTS, consecutive_window, merge_candles
@@ -319,6 +320,7 @@ def _init_db() -> None:
                 "SELECT payload FROM paper_signals ORDER BY created_ms,signal_key")],
         )
         btc_wave_store.initialize(conn)
+        entry_history.initialize(conn)
         conn.commit()
 
     if VAPID_PRIVATE_KEY:
@@ -3843,6 +3845,15 @@ async def _background_collector() -> None:
                     _persist_setup_lifecycles(rows)
                 except Exception as exc:
                     print(f"Setup lifecycle collector error: {exc}", flush=True)
+                try:
+                    with _db_connect() as conn:
+                        entry_history.capture(conn, rows, now_ms=int(time.time()*1000),
+                            min_rr=SETTINGS.min_rr,
+                            monitor_ms=scanner.INTERVAL_MS[SETTINGS.monitor_interval],
+                            entry_ms=scanner.INTERVAL_MS[SETTINGS.entry_interval])
+                        conn.commit()
+                except Exception as exc:
+                    print(f"Entry history collector error: {type(exc).__name__}", flush=True)
                 await _process_priority_changes(rows, bucket)
                 await _maybe_push_candidate_changes(rows)
                 await _refresh_paper_signal_results(contracts)
@@ -3940,7 +3951,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="EdgeX Analysis Terminal",
-    version="19.0.28",
+    version="19.0.29",
     lifespan=lifespan,
 )
 
@@ -4498,6 +4509,23 @@ async def setup_lifecycle_api(
     ticker: str | None = Query(default=None, min_length=2, max_length=64),
 ):
     return _setup_lifecycle_review(limit, ticker)
+
+
+@app.get("/api/entry-history")
+async def entry_history_api(
+    days: int = Query(default=7, ge=0, le=365),
+    kind: str = Query(default="ALL", pattern="^(ALL|READY|NEAR)$"),
+    ticker: str = Query(default="", max_length=64),
+    limit: int = Query(default=30, ge=1, le=100),
+    before_ms: int | None = Query(default=None, ge=1),
+    before_setup: str | None = Query(default=None, min_length=1, max_length=256),
+):
+    if (before_ms is None) != (before_setup is None):
+        raise HTTPException(422, "Both cursor fields are required")
+    with _db_connect() as conn:
+        return entry_history.review(conn, now_ms=int(time.time()*1000), days=days,
+            candidate_kind=kind, ticker=ticker, limit=limit,
+            before_ms=before_ms, before_setup=before_setup)
 
 
 @app.get("/api/confirmation-diagnostics")

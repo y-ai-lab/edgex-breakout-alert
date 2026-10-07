@@ -143,8 +143,24 @@ button{-webkit-tap-highlight-color:transparent}
 <div id="dashSummary" class="summary executiveSummary"></div>
 <div class="focusSection">
   <div class="sectionHeading"><div><div class="eyebrow">WATCH NEXT</div><h3>次に監視する候補</h3></div><div class="sub">条件成立前です。カードをタップして分析。</div></div>
-  <div id="nearCandidates" class="entryReadyGrid"><span class="muted">最新データを取得しています。</span></div>
+<div id="nearCandidates" class="entryReadyGrid"><span class="muted">最新データを取得しています。</span></div>
 </div>
+<details id="entryHistoryDetails" class="dashboardDrawer">
+<summary>ENTRY・あと一歩の履歴</summary>
+<div class="drawerBody">
+<p class="sub">過去の候補です。今のエントリー可否は上のENTRY NOWで確認してください。サーバーに保存し、端末を変えても振り返れます。</p>
+<div class="filters">
+<div class="field small"><label for="entryHistoryKind">候補</label><select id="entryHistoryKind"><option value="ALL">すべて</option><option value="READY">ENTRYになった</option><option value="NEAR">あと一歩まで来た</option></select></div>
+<div class="field small"><label for="entryHistoryDays">期間</label><select id="entryHistoryDays"><option value="7">7日</option><option value="30">30日</option><option value="0">全期間</option></select></div>
+<div class="field small"><label for="entryHistoryTicker">銘柄</label><input id="entryHistoryTicker" placeholder="BTC / HYPE" maxlength="64"></div>
+<button id="entryHistoryRefresh" class="ghost">履歴を更新</button>
+</div>
+<p id="entryHistoryStatus" class="sub">開くと履歴を取得します。</p>
+<div id="entryHistoryItems" class="entryReadyGrid"></div>
+<button id="entryHistoryMore" class="ghost" hidden>もっと見る</button>
+<p class="sub">同じセットアップは1件にまとめます。価格は初回の記録を保持。TP/SLは仮想追跡で、実際の約定結果ではありません。過去に削除された履歴は復元できません。</p>
+</div>
+</details>
 <div class="quickAccessGrid">
   <div class="analyticsBox"><div class="boxLabel">★ お気に入り</div><div id="dashWatch" class="status">まだありません</div></div>
   <div class="analyticsBox"><div class="boxLabel">最近見た銘柄</div><div id="recentTickers" class="status">まだありません</div></div>
@@ -275,6 +291,10 @@ async function checkApiConnections(){
 function openRiskCalculator(){tab('analysis');var el=document.getElementById('risk');if(el){el.open=true;el.scrollIntoView({behavior:'smooth',block:'start'})}}
 document.getElementById('checkApi').onclick=function(){checkApiConnections();loadPaperExecution()};
 document.getElementById('openNotifications').onclick=function(){tab('api');var el=document.getElementById('notificationSettings');el.open=true;el.scrollIntoView({behavior:'smooth',block:'start'})};
+document.getElementById('entryHistoryDetails').ontoggle=function(){if(this.open&&!entryHistoryLoaded)loadEntryHistory(false)};
+document.getElementById('entryHistoryRefresh').onclick=function(){loadEntryHistory(false)};
+document.getElementById('entryHistoryMore').onclick=function(){loadEntryHistory(true)};
+['entryHistoryKind','entryHistoryDays','entryHistoryTicker'].forEach(function(id){document.getElementById(id).onchange=function(){loadEntryHistory(false)}});
 function saveWatch(){localStorage.setItem("edgexWatch",JSON.stringify(Array.from(watch)));renderQuickAccess();saveWatchToServer()}
 function newSyncKey(){var a=new Uint32Array(4);crypto.getRandomValues(a);return Array.from(a).map(x=>x.toString(16).padStart(8,"0")).join("")}
 function showWatchSyncStatus(msg,cls){var e=document.getElementById("watchSyncStatus");if(e)e.innerHTML='<span class="'+(cls||"muted")+'">'+msg+'</span>'}
@@ -459,6 +479,38 @@ function renderEntryDiagnostics(j){
 async function loadEntryDiagnostics(){try{renderEntryDiagnostics(await jf('/api/entry-diagnostics'))}catch(e){var st=document.getElementById('entryDiagnosticsStatus');if(st)st.textContent='Entry分析を取得できません: '+e.message}}
 function lifecycleEscape(value){return String(value==null?"—":value).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
 function lifecycleTime(ms){return ms==null?"—":new Date(ms).toLocaleString("ja-JP")}
+var entryHistoryItems=[],entryHistoryCursor=null,entryHistoryRequest=0,entryHistoryLoaded=false;
+function renderEntryHistory(){
+ var el=document.getElementById('entryHistoryItems');
+ if(!entryHistoryItems.length){el.innerHTML='<span class="muted">この条件の履歴はまだありません。</span>';return}
+ el.innerHTML=entryHistoryItems.map(function(item){
+  var ready=item.first_ready,near=item.first_near,first=ready||near||{},latest=item.latest||{},life=item.lifecycle||{},out=item.reference_outcome;
+  var progression=life.ended_ms?'終了: '+lifecycleReason(life.end_reason):'最終観測: '+stageJa(latest.stage);
+  var condition=first.stage==='CONFIRMATION_WAIT'?'未成立: '+(first.confirmation_color_ok?'':'15分足の方向 ')+(first.confirmation_level_ok?'':'終値のロール水準突破'):first.stage==='RETEST_WAIT'?'未成立: リテスト':ready?'現行READYの条件が成立':'—';
+  if(first.stage==='CONFIRMATION_WAIT'&&(first.confirmation_color_ok==null||first.confirmation_level_ok==null))condition='未成立: 15分足の確認（詳細未記録）';
+  var outcome=out?(out.verified?'仮想追跡: '+resultJa(out.status)+(out.final_r==null?'':' / '+fmt(out.final_r,2)+'R'):'仮想追跡: データ確認中'):(ready?'仮想追跡: 記録なし':'ENTRYへの昇格記録なし');
+  function text(v){return lifecycleEscape(v)}
+  return '<div class="analyticsBox"><div class="boxLabel">'+text(ready?'過去ENTRY':'あと一歩（過去）')+'</div><b>'+text(item.ticker)+'</b> <span class="pill">'+text(directionJa(item.direction))+'</span><div class="sub">'+text(near?'あと一歩: '+lifecycleTime(near.observed_ms):'あと一歩の記録なし')+'<br>'+text(ready?'ENTRY: '+lifecycleTime(ready.observed_ms):'ENTRYの記録なし')+'</div><div class="pickMeta"><span>当時のEntry '+text(fmt(first.entry_reference,8))+'</span><span>SL '+text(fmt(first.stop_loss,8))+'</span><span>TP '+text(fmt(first.take_profit,8))+'</span><span>RR '+text(fmt(first.rr,2))+'</span></div><div class="sub">'+text(condition)+'<br>'+text(progression)+' / '+text(lifecycleTime(life.ended_ms||latest.observed_ms))+'<br>'+text(outcome)+'</div>'+(ready&&near?'<div class="sub">あと一歩時点: '+text(stageJa(near.stage))+' / Entry '+text(fmt(near.entry_reference,8))+' / SL '+text(fmt(near.stop_loss,8))+' / TP '+text(fmt(near.take_profit,8))+' / RR '+text(fmt(near.rr,2))+'</div>':'')+'<button class="ghost entryHistoryAnalyze" data-ticker="'+text(item.ticker)+'">現在の分析を見る</button></div>';
+ }).join('');
+ el.querySelectorAll('.entryHistoryAnalyze').forEach(function(button){button.onclick=function(){document.getElementById('ticker').value=this.dataset.ticker;tab('analysis');analyze()}});
+}
+async function loadEntryHistory(more){
+ var request=++entryHistoryRequest,status=document.getElementById('entryHistoryStatus'),button=document.getElementById('entryHistoryMore');
+ var cursor=more?entryHistoryCursor:null;
+ if(!more){entryHistoryItems=[];entryHistoryCursor=null;button.hidden=true;renderEntryHistory()}
+ button.disabled=true;status.textContent='履歴を取得しています…';
+ var url='/api/entry-history?limit=30&days='+encodeURIComponent(document.getElementById('entryHistoryDays').value)+'&kind='+encodeURIComponent(document.getElementById('entryHistoryKind').value)+'&ticker='+encodeURIComponent(document.getElementById('entryHistoryTicker').value.trim());
+ if(cursor)url+='&before_ms='+encodeURIComponent(cursor.before_ms)+'&before_setup='+encodeURIComponent(cursor.before_setup);
+ try{
+  var j=await jf(url);if(request!==entryHistoryRequest)return;
+  if(j.historical!==true||!Array.isArray(j.items)||!j.totals)throw new Error('履歴の応答を確認できません');
+  entryHistoryItems=entryHistoryItems.concat(j.items.filter(function(item){return !entryHistoryItems.some(function(old){return old.setup_id===item.setup_id})}));
+  entryHistoryCursor=j.next_cursor;entryHistoryLoaded=true;renderEntryHistory();
+  status.textContent='セットアップ '+j.totals.setups+'件 / ENTRY '+j.totals.ready+'件 / あと一歩 '+j.totals.near+'件（両方に含まれる候補あり）';
+  button.hidden=!entryHistoryCursor;
+ }catch(e){if(request===entryHistoryRequest)status.textContent='履歴を取得できません。履歴を更新して再試行してください。'}
+ finally{if(request===entryHistoryRequest)button.disabled=false}
+}
 function lifecycleReason(reason){return ({BREAKOUT_WINDOW_EXPIRED:"4Hブレイク期限切れ",TREND_INVALIDATED:"4Hトレンド条件が崩れた",SUPERSEDED:"別setupへ交代",BREAKOUT_NOT_SELECTED:"ブレイク条件が対象外",STRUCTURAL_STOP_INVALID:"構造ストップが無効",REACTIVATED:"同setupの条件が再成立",RECORDED_ENTRY_IMPORTED:"既存の成立記録を保持",SETUP_OBSERVED:"監視開始",READY_OBSERVED:"現行READY成立",STAGE_CHANGED:"確認段階が変化",SHADOW_READY_OBSERVED:"Shadow条件が成立"}[reason]||reason||"—")}
 function renderSetupLifecycles(j){
  var sum=document.getElementById("setupLifecycleSummary"),st=document.getElementById("setupLifecycleStatus"),body=document.getElementById("setupLifecycleBody"),events=document.getElementById("setupLifecycleEvents");if(!sum||!st||!body||!events)return;
