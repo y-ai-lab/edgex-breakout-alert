@@ -192,10 +192,15 @@ def review(conn, *, now_ms, limit=50):
               'WAITING_FOR_CAPTURE_START' if now_ms<meta['capture_start_ms'] else
               'WAITING_FOR_FIRST_OBSERVATION' if age is None else
               'STALE_OBSERVATION' if age>2*STEP else 'COLLECTING')
+    continuous = {m:study.portfolio([dict(r,created_ms=r['observed_ms']+1)
+                  for r in rows if r['model']==m]) for m in study.MODELS}
     return dict(protocol='pending_entry_live_capture_v1',mode='SHADOW_ONLY',dataset='LIVE_CAPTURE_HYPOTHETICAL',
                 real_orders_enabled=False,automatic_promotion=False,eligible_for_live_promotion=False,
                 notifications_enabled=False,current_entry_status=False,
                 status=status,observation_age_seconds=age/1000 if age is not None else None,
                 meta=meta,total_records=len(rows),cohorts=cohorts,latest=list(reversed(rows))[:limit],
+                cohort_portfolio_scope='INDEPENDENT_PERIOD_SIMULATION',
+                continuous_portfolios=continuous,
+                continuous_capped_filled_count_difference=continuous[study.MODEL]['filled']-continuous['current_next_open']['filled'],
                 sample_status='INSUFFICIENT SAMPLE' if not cohorts or any(c['metrics'][study.MODEL]['resolved']<20 for c in cohorts) else 'REVIEW_REQUIRED',
                 limitations=json.loads(PROTOCOL.read_text())['interpretation']['limitations'])

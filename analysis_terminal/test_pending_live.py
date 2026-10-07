@@ -190,6 +190,29 @@ class PendingLiveTests(unittest.TestCase):
         self.assertEqual(live.records(self.conn),before)
 
 
+    def test_continuous_capital_does_not_reset_open_reservations_at_week_boundary(self):
+        self.capture()
+        self.overrides[START+STEP]=candle(START+STEP,low=95)
+        self.cycle(START+STEP);self.cycle(START+2*STEP)
+        opened=live.records(self.conn)[0]
+        self.assertEqual(opened['status'],'OPEN')
+        later=dict(opened,key=opened['key']+':later',setup_id=opened['setup_id']+':later',
+                   cohort_start_ms=START+live.WEEK,created_ms=START+live.WEEK+1,
+                   observed_ms=START+live.WEEK+1000,filled_ms=START+live.WEEK+STEP,
+                   outcome_ms=START+live.WEEK+2*STEP,status='TP',final_net_r=2,
+                   net_pnl_per_unit=2*opened['net_risk'],exit_price=opened['target']*(1-study.SLIP))
+        self.conn.execute('INSERT INTO pending_live_signals VALUES (?,?,?,?)',
+                          (later['key'],later['ticker'],live._json(later),later['created_ms']))
+        r=self.review(now=START+2*live.WEEK)
+        self.assertEqual(len(r['cohorts']),2)
+        self.assertGreater(r['cohorts'][1]['portfolios'][study.MODEL]['closed_portfolio_roi_pct'],0)
+        continuous=r['continuous_portfolios'][study.MODEL]
+        self.assertEqual(continuous['filled'],1)
+        self.assertEqual(continuous['resolved'],0)
+        self.assertIsNone(continuous['closed_portfolio_roi_pct'])
+        self.assertEqual(continuous['exclusions']['CAPACITY_OR_TICKER'],1)
+
+
 class PendingLiveStorageTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         from analysis_terminal.test_storage import StorageTests,server
