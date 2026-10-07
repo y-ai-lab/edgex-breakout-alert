@@ -1,0 +1,28 @@
+{
+  "protocol": "frozen_confirmation_continuation_diagnostics_v1",
+  "registered_utc": "2026-10-07T11:24:55Z",
+  "purpose": "Describe failure timing and continuation of the rejected confirmation-zone model; no new strategy, threshold search, or counterfactual profits.",
+  "model": "confirmation_zone_measured_net2r",
+  "periods": {
+    "development": {"report_sha256": "6717b4900a542018e0bd26808acff6602edcd49cd7c1084678b481ba2cb4aeb2", "start_ms": 1790391600000, "end_ms": 1790996400000},
+    "validation": {"report_sha256": "eae95a6322ec6ca0293180d7d0dda952e7aedae9e0b3123b3e8b5c3b59d85165", "start_ms": 1790996400000, "end_ms": 1791255600000}
+  },
+  "diagnostic_rules": {
+    "elapsed_bars_boundaries": [4, 16, 96],
+    "elapsed_bars_basis": "From filled-bar OPEN to recorded outcome-bar CLOSE, inclusive; <=1h, (1h,4h], (4h,24h], >24h. Excludes unfilled and censored outcomes.",
+    "preterminal_mfe_price_r_boundaries": [0.5, 1.0],
+    "preterminal_path": "Only contiguous closed candles strictly after the unknown intrabar fill candle and strictly before the recorded terminal candle. OPEN includes the full contiguous closed prefix to period end. DATA_GAP stops before the missing candle.",
+    "roll_failure": "First strictly adverse candle close versus frozen roll level in the preterminal prefix. An exact-level close is separately recorded. Neither the fill nor terminal candle may establish this observation.",
+    "r_basis": "Favorable/adverse price distance divided by absolute assumed entry minus frozen stop; not cost-adjusted net-risk R.",
+    "cost_share": "(net stop risk - nominal entry-to-stop price distance) / net stop risk; includes both adverse slippages and fees. Not a profitability adjustment or tuning rule.",
+    "features": "Reconstruct first signal using only closed 180-bar 4H/15M windows. Record setup age from breakout CLOSE, signal stop distance in ATR4/ATR15, confirmation roll margin, body, trend spread. No outcome-dependent input.",
+    "verification": "Rebuild the whole original confirmation-zone report from SHA-verified market sources and unchanged controls; exact original ledger, prices, outcomes, metrics and portfolios required.",
+    "denominators": "Show all statuses and OPEN censoring. SL latency has SL denominator; preterminal low-MFE is a lower-bound observation, not proof that the terminal candle never rallied before SL. All status groups retained, no best-performing subgroup selection."
+  },
+  "changes_live_rules": false,
+  "real_orders_enabled": false,
+  "automatic_promotion": false,
+  "eligible_for_live_promotion": false,
+  "untouched_validation": false,
+  "decision": "DESCRIPTIVE_ONLY_NO_RULE_CHANGE. Any next strategy must be separately registered and evaluated on unused future periods; rejected model stays KILL and its forward collection remains disabled."
+}
