@@ -1,0 +1,77 @@
+{
+  "protocol": "confirmation_zone_measured_net2r_v1",
+  "model": "confirmation_zone_measured_net2r",
+  "registered_utc": "2026-10-07T10:16:45Z",
+  "changes_live_rules": false,
+  "real_orders_enabled": false,
+  "automatic_promotion": false,
+  "eligible_for_live_promotion": false,
+  "hypothesis": "Use first measured-room Shadow confirmation close as a limit price inside the roll confirmation zone. Frozen 4H stop and measured extension cap; fixed first TP earns net 2R at the planned adverse fill. May add entries without deep roll recrossing or lower minimum RR.",
+  "development": {
+    "start_ms": 1790391600000,
+    "end_ms": 1790996400000,
+    "role": "VIEWED_DEVELOPMENT"
+  },
+  "validation": {
+    "start_ms": 1790996400000,
+    "end_ms": 1791255600000,
+    "role": "RECENT_RETROSPECTIVE_VALIDATION",
+    "untouched_out_of_sample": false
+  },
+  "prospective_start_ms": 1791417600000,
+  "prospective_windows": "Non-overlapping seven-day UTC windows anchored at 2026-10-08; only completed UTC days. First partial daily read on 2026-10-09. Separate cohort, no additions to existing protocol samples.",
+  "production_parameters": {
+    "monitor_interval": "HOUR_4",
+    "entry_interval": "MINUTE_15",
+    "trend_fast_ema": 20,
+    "trend_slow_ema": 50,
+    "atr_period": 14,
+    "roll_lookback": 20,
+    "roll_max_age": 6,
+    "retest_lookback": 4,
+    "atr_stop_buffer": 0.5,
+    "atr_target_buffer": 0.25,
+    "retest_atr_tolerance": 0.35,
+    "min_rr": 2.0
+  },
+  "rules": {
+    "min_net_rr": 2,
+    "pending_bars": 4,
+    "fee_bps_each_side": 5,
+    "slippage_bps_each_side": 2,
+    "seed": "First existing Shadow v2-qualified confirmation per setup; existing colour AND close beyond roll, plus retest and valid 4H structural stop. Failed initial room eligibility is not rearmed.",
+    "entry": "Limit at that confirmation close, strictly on confirmed side of roll; no signal-bar fill.",
+    "target": "Freeze net-2R TP at signal time from planned adverse fill and fixed structural stop. TP must stay inside frozen measured extension. Never widen stop.",
+    "invalidation": "Before each potential fill: same setup, valid current structural stop, latest CLOSED 15M colour AND roll confirmation and retest still valid. Expire after four bars. Opening through roll or stop rejects.",
+    "fill": "Later closed-bar limit touch. Favorable opening gaps allowed only inside roll zone; actual adverse assumed fill must still have net RR >=2 and stay between stop and target.",
+    "signal_time": "Signal close +1ms exclusion sentinel; state at bar open uses only preceding closed candles.",
+    "fill_candle": "Any TP/SL touch on intrabar limit-fill candle is AMBIGUOUS; no MFE/MAE from fill bar.",
+    "outcomes": "Consecutive later closed bars only; gaps stop evaluation, TP+SL in one bar AMBIGUOUS; stop opening gaps charge worse price.",
+    "duplicates": "First qualified seed per setup, no rearm, no ticker identity inference",
+    "precision": "Continuous hypothetical prices. Exchange price tick, queue, spread, funding and actual fills unvalidated."
+  },
+  "portfolio": {
+    "initial_cash_usdc": 10000,
+    "risk_pct": 1,
+    "max_positions": 3,
+    "max_total_risk_pct": 3,
+    "max_notional_multiple": 1,
+    "daily_loss_pct": 3,
+    "quantity": "reserve at creation using net stop risk and known cash; round observed size step; no future profit increases",
+    "uncertain": "freeze capital on ambiguous result/gap; equity and ROI unknown"
+  },
+  "decision": {
+    "minimum_resolved_each_period": 20,
+    "kill": "Any sufficiently sampled retrospective period net AvgR<=0 or PF<=1: KILL and do not activate forward collection.",
+    "insufficient": "CONTINUE_INSUFFICIENT_SAMPLE; retain all rules; no promotion.",
+    "retrospective_pass": "Both fixed periods >=20 resolved, AvgR>0, PF>1 and net additional filled setups vs current >0: FORWARD_SHADOW_REQUIRED.",
+    "forward": "Only complete future registered windows with >=20 resolved, positive net AvgR, PF>1, net incremental fills and cost/capital review can justify manual production consideration. No automatic promotion.",
+    "roi": "Report realized cash separately; OPEN/AMBIGUOUS/data gaps keep equity and full ROI unknown."
+  },
+  "limitations": [
+    "Retrospective periods already viewed; no untouched validation claim.",
+    "Extra price touches are not live fills; conservative OHLC ambiguity may censor outcomes.",
+    "Cost-adjusted net risk R differs from original Shadow price-stop R.",
+    "No condition tuning after viewing this experiment. Existing frozen strategy protocols and live signals remain unchanged."
+  ]
+}
