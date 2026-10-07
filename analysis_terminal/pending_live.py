@@ -24,11 +24,16 @@ def initialize(conn, *, now_ms):
     conn.execute('CREATE TABLE IF NOT EXISTS pending_live_seen (signal_key TEXT PRIMARY KEY, reason TEXT NOT NULL)')
     conn.execute('CREATE TABLE IF NOT EXISTS pending_live_states (ticker TEXT NOT NULL, close_ms INTEGER NOT NULL, setup_id TEXT, observed_ms INTEGER NOT NULL, PRIMARY KEY(ticker,close_ms))')
     conn.execute('CREATE TABLE IF NOT EXISTS pending_live_signals (signal_key TEXT PRIMARY KEY, ticker TEXT NOT NULL, payload TEXT NOT NULL, created_ms INTEGER NOT NULL)')
+    conn.execute('CREATE TABLE IF NOT EXISTS pending_live_cycles (bucket_ms INTEGER PRIMARY KEY, observed_ms INTEGER NOT NULL, payload TEXT NOT NULL)')
     meta = dict(activated_ms=now_ms, capture_start_ms=(now_ms//DAY+1)*DAY,
                 protocol_sha256=hashlib.sha256(PROTOCOL.read_bytes()).hexdigest(),
                 engine_sha256=hashlib.sha256(Path(study.__file__).read_bytes()).hexdigest(),
                 rule_fingerprint=None, last_success_ms=None, last_error=None, last_cycle=None)
     conn.execute('INSERT OR IGNORE INTO pending_live_meta VALUES (1,?)', (_json(meta),))
+    existing = _meta(conn)
+    if 'coverage_started_ms' not in existing:
+        existing['coverage_started_ms'] = now_ms
+        _save_meta(conn,existing)
 
 
 def _meta(conn):
@@ -127,8 +132,15 @@ def cycle(conn, *, contracts, snapshots, analyze, settings, now_ms):
         if w4 is None or w15 is None:
             quality['INCOMPLETE_INDICATOR_WINDOW'] += 1
             continue
+        quality['VALID_INDICATOR_WINDOWS'] += 1
         row = analyze(contract,w4,w15,as_of_ms=stamp+1)
         identity = setup_identity(row)
+        if identity:
+            quality['IDENTIFIED_SETUP'] += 1
+        if row.get('retest_touched') is True and row.get('confirmed') is True:
+            quality['CONFIRMED_AFTER_RETEST'] += 1
+            if study.candidate(row,study.MODEL,candle_ms=w15[-1].time_ms) is None:
+                quality['CONFIRMED_NO_ELIGIBLE_NET_ENTRY'] += 1
         previous = conn.execute('SELECT close_ms,continuous_from_ms FROM pending_live_markets WHERE ticker=?', (contract.contract_name,)).fetchone()
         if previous and previous[0] >= stamp:
             quality['ALREADY_OBSERVED'] += 1
@@ -148,12 +160,15 @@ def cycle(conn, *, contracts, snapshots, analyze, settings, now_ms):
             r = study.candidate(row,model,candle_ms=w15[-1].time_ms)
             if r is None:
                 continue
+            quality['QUALIFIED_'+model] += 1
             inserted = conn.execute('INSERT OR IGNORE INTO pending_live_seen VALUES (?,?)', (r['key'],'FIRST_QUALIFICATION')).rowcount
             if not inserted:
+                quality['ALREADY_CONSUMED_'+model] += 1
                 continue
             breakout_close = row['breakout_time_ms']+16*STEP
             if baseline or breakout_close < meta['capture_start_ms'] or breakout_close <= continuous_from:
                 quality['PRE_CAPTURE_SETUP'] += 1
+                quality['EXCLUDED_SETUP_ORIGIN_'+model] += 1
                 continue
             r.update(observed_ms=now_ms, execution_start_ms=stamp+STEP,
                      next_candle_ms=stamp+STEP, step_size=contract.step_size,
@@ -165,6 +180,10 @@ def cycle(conn, *, contracts, snapshots, analyze, settings, now_ms):
     # Only four pending bars need states; outcome cursors do not reconstruct them.
     conn.execute('DELETE FROM pending_live_states WHERE close_ms < ?', (stamp-12*STEP,))
     meta.update(last_success_ms=now_ms,last_error=None,last_cycle=dict(quality),last_bucket_ms=stamp)
+    conn.execute('INSERT OR IGNORE INTO pending_live_cycles VALUES (?,?,?)',
+                 (stamp,now_ms,_json(dict(bucket_ms=stamp,observed_ms=now_ms,
+                    requested_markets=len(contracts),valid_markets=quality['VALID_INDICATOR_WINDOWS'],
+                    capture_delay_ms=now_ms-stamp,quality=dict(quality)))))
     _save_meta(conn,meta)
 
 
@@ -172,6 +191,41 @@ def record_error(conn, error_type):
     meta = _meta(conn)
     meta['last_error'] = error_type
     _save_meta(conn,meta)
+
+
+def coverage(conn, *, meta, now_ms):
+    """First recorded attempts only; absent history is never reconstructed."""
+    origin = meta['capture_start_ms']
+    if now_ms < origin:
+        return dict(status='WAITING_FOR_CAPTURE_START',started_ms=meta['coverage_started_ms'],cohorts=[])
+    last = now_ms//STEP*STEP
+    evidence = {r[0]:json.loads(r[1]) for r in conn.execute(
+        'SELECT bucket_ms,payload FROM pending_live_cycles WHERE bucket_ms>=? AND bucket_ms<=?',(origin,last))}
+    reports = []
+    for start in range(origin,last+1,WEEK):
+        end = min(last,start+WEEK-STEP)
+        expected = list(range(start,end+1,STEP))
+        found = [evidence[b] for b in expected if b in evidence]
+        overdue = [b for b in expected if b not in evidence and b+120000 <= now_ms]
+        unknown = [b for b in overdue if b < meta['coverage_started_ms']//STEP*STEP]
+        quality = Counter()
+        for item in found:quality.update(item['quality'])
+        requested = sum(item['requested_markets'] for item in found)
+        valid = sum(item['valid_markets'] for item in found)
+        reports.append(dict(start_ms=start,end_ms=start+WEEK,period_complete=now_ms>=start+WEEK,
+                            expected_buckets=len(expected),recorded_buckets=len(found),
+                            overdue_missing_buckets=len(overdue),unrecorded_before_audit_buckets=len(unknown),
+                            pending_current_buckets=len(expected)-len(found)-len(overdue),
+                            bucket_coverage_pct=100*len(found)/len(expected),
+                            requested_market_observations=requested,valid_market_observations=valid,
+                            indicator_coverage_pct=100*valid/requested if requested else None,
+                            late_recorded_buckets=sum(i['capture_delay_ms']>120000 for i in found),
+                            quality=dict(quality),
+                            status='OBSERVATION_HISTORY_INCOMPLETE' if overdue else
+                                   'WAITING_FOR_OBSERVATION' if not found else 'OBSERVATIONS_RECORDED'))
+    return dict(status='OBSERVATION_HISTORY_INCOMPLETE' if any(r['overdue_missing_buckets'] for r in reports) else
+                'OBSERVATIONS_RECORDED' if evidence else 'WAITING_FOR_OBSERVATION',
+                started_ms=meta['coverage_started_ms'],basis='FIRST_RECORDED_ATTEMPT_PER_BUCKET',cohorts=reports)
 
 
 def review(conn, *, now_ms, limit=50):
@@ -199,6 +253,7 @@ def review(conn, *, now_ms, limit=50):
                 notifications_enabled=False,current_entry_status=False,
                 status=status,observation_age_seconds=age/1000 if age is not None else None,
                 meta=meta,total_records=len(rows),cohorts=cohorts,latest=list(reversed(rows))[:limit],
+                coverage=coverage(conn,meta=meta,now_ms=now_ms),
                 cohort_portfolio_scope='INDEPENDENT_PERIOD_SIMULATION',
                 continuous_portfolios=continuous,
                 continuous_capped_filled_count_difference=continuous[study.MODEL]['filled']-continuous['current_next_open']['filled'],

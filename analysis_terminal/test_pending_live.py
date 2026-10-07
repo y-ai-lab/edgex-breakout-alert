@@ -213,6 +213,77 @@ class PendingLiveTests(unittest.TestCase):
         self.assertEqual(continuous['exclusions']['CAPACITY_OR_TICKER'],1)
 
 
+    def test_coverage_current_bucket_grace_and_missing_history_are_not_zero_results(self):
+        before=self.review(now=START-1)['coverage']
+        self.assertEqual(before['status'],'WAITING_FOR_CAPTURE_START')
+        pending=self.review(now=START+119999)['coverage']['cohorts'][0]
+        self.assertEqual(pending['overdue_missing_buckets'],0)
+        self.assertEqual(pending['pending_current_buckets'],1)
+        missing=self.review(now=START+120000)['coverage']['cohorts'][0]
+        self.assertEqual(missing['overdue_missing_buckets'],1)
+        self.assertIsNone(missing['indicator_coverage_pct'])
+        self.assertEqual(missing['status'],'OBSERVATION_HISTORY_INCOMPLETE')
+        self.assertEqual(self.review(now=START+120000)['cohorts'],[])
+
+    def test_first_bucket_evidence_does_not_change_on_repeated_scan(self):
+        self.capture()
+        first=self.conn.execute('SELECT payload FROM pending_live_cycles WHERE bucket_ms=?',(START,)).fetchone()[0]
+        self.cycle(START,delay=60000)
+        second=self.conn.execute('SELECT payload FROM pending_live_cycles WHERE bucket_ms=?',(START,)).fetchone()[0]
+        self.assertEqual(first,second)
+        c=self.review(now=START+120000)['coverage']['cohorts'][0]
+        self.assertEqual(c['expected_buckets'],1)
+        self.assertEqual(c['recorded_buckets'],1)
+        self.assertEqual(c['quality']['CAPTURED_'+study.MODEL],1)
+        self.assertEqual(c['quality']['QUALIFIED_'+study.MODEL],1)
+        self.assertEqual(c['requested_market_observations'],1)
+
+    def test_gap_coverage_keeps_unobserved_bucket_and_late_attempt_separate(self):
+        self.cycle(START-STEP)
+        self.cycle(START)
+        self.cycle(START+2*STEP,delay=120001)
+        c=self.review(now=START+2*STEP+120001)['coverage']['cohorts'][0]
+        self.assertEqual((c['expected_buckets'],c['recorded_buckets'],c['overdue_missing_buckets']),(3,2,1))
+        self.assertEqual(c['late_recorded_buckets'],1)
+        self.assertEqual(c['valid_market_observations'],2)
+
+    def test_indicator_coverage_counts_declared_markets_even_without_usable_prices(self):
+        self.cycle(START,snapshots={})
+        c=self.review(now=START+120000)['coverage']['cohorts'][0]
+        self.assertEqual(c['recorded_buckets'],1)
+        self.assertEqual(c['requested_market_observations'],1)
+        self.assertEqual(c['valid_market_observations'],0)
+        self.assertEqual(c['indicator_coverage_pct'],0)
+        self.assertEqual(c['quality']['INCOMPLETE_INDICATOR_WINDOW'],1)
+        self.assertFalse(live.records(self.conn))
+
+    def test_week_boundary_and_display_limit_cannot_merge_coverage_cohorts(self):
+        self.cycle(START)
+        self.cycle(START+live.WEEK)
+        c=self.review(now=START+live.WEEK+120000)['coverage']
+        self.assertEqual(c,self.review(limit=1,now=START+live.WEEK+120000)['coverage'])
+        first,second=c['cohorts']
+        self.assertEqual(first['expected_buckets'],672)
+        self.assertEqual(first['recorded_buckets'],1)
+        self.assertTrue(first['period_complete'])
+        self.assertEqual(second['expected_buckets'],1)
+        self.assertEqual(second['recorded_buckets'],1)
+        self.assertFalse(second['period_complete'])
+
+    def test_additive_audit_start_never_reconstructs_old_coverage_or_resets_activation(self):
+        meta=live._meta(self.conn);meta.pop('coverage_started_ms')
+        live._save_meta(self.conn,meta)
+        live.initialize(self.conn,now_ms=START+2*STEP)
+        current=live._meta(self.conn)
+        self.assertEqual(current['activated_ms'],meta['activated_ms'])
+        self.assertEqual(current['capture_start_ms'],meta['capture_start_ms'])
+        self.assertEqual(current['coverage_started_ms'],START+2*STEP)
+        self.assertEqual(self.conn.execute('SELECT COUNT(*) FROM pending_live_cycles').fetchone()[0],0)
+        c=self.review(now=START+2*STEP+120000)['coverage']['cohorts'][0]
+        self.assertEqual(c['overdue_missing_buckets'],3)
+        self.assertEqual(c['unrecorded_before_audit_buckets'],2)
+
+
 class PendingLiveStorageTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         from analysis_terminal.test_storage import StorageTests,server
