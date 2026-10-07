@@ -1,0 +1,2348 @@
+{
+  "health": {
+    "ok": true,
+    "service": "edgex-analysis-terminal",
+    "version": "19.0.28",
+    "time_ms": 1791354795981,
+    "storage": {
+      "market_snapshots_48h": 130,
+      "paper_signals": 3,
+      "db_exists": true
+    },
+    "push": {
+      "enabled": true,
+      "subscribers": 1,
+      "daily_summary_hour_jst": 8,
+      "notification_policy": "READY_ONLY",
+      "daily_summary_enabled": false
+    }
+  },
+  "paper": {
+    "mode": "PAPER_ONLY",
+    "real_orders_enabled": false,
+    "eligible_for_live_promotion": false,
+    "automatic_promotion": false,
+    "source": "CURRENT_READY_ONLY",
+    "fill_model": "NEXT_15M_OPEN",
+    "costs_model": "ASSUMED_FEES_SLIPPAGE_NO_FUNDING",
+    "time_ms": 1791354795468,
+    "account": {
+      "mode": "PAPER_ONLY",
+      "policy": {
+        "version": 1,
+        "initial_cash_usdc": 10000,
+        "risk_pct": 1,
+        "max_positions": 3,
+        "max_total_risk_pct": 3,
+        "max_notional_multiple": 1,
+        "daily_loss_pct": 3,
+        "fee_bps": 5,
+        "slippage_bps": 2,
+        "freshness_ms": 120000,
+        "pending_ttl_ms": 1800000,
+        "min_rr": 2
+      },
+      "activated_ms": 1791088062844,
+      "paused": false,
+      "pause_reason": null,
+      "pause_ms": null,
+      "last_cycle_ms": 1791354616237,
+      "last_error": null,
+      "event_tracking_started_ms": 1791114415787,
+      "known_cash_usdc": 9916.532409349533,
+      "daily_start_cash_usdc": 9916.532409349533,
+      "daily_cash_change_usdc": 0,
+      "fees_paid_usdc": 4.251494000475002,
+      "gross_realized_pnl_usdc": -79.2160966499923,
+      "equity_known": true,
+      "cash_usdc": 9916.532409349533,
+      "cycle_age_seconds": 179.231,
+      "collector_stale": false,
+      "active_positions": 0,
+      "reserved_risk_usdc": 0,
+      "reserved_notional_usdc": 0
+    },
+    "tracking": {
+      "state": "WAITING_READY",
+      "active_status_counts": {
+        "PENDING": 0,
+        "OPEN": 0,
+        "AMBIGUOUS": 0
+      },
+      "data_issue_count": 0,
+      "data_issue_counts": {}
+    },
+    "metrics": {
+      "records": 3,
+      "status_counts": {
+        "BASELINED": 1,
+        "SL": 1,
+        "REJECTED": 1
+      },
+      "resolved": 1,
+      "net_pnl_usdc": -83.46759065046729,
+      "sample_status": "INSUFFICIENT SAMPLE"
+    },
+    "latest": [
+      {
+        "order_id": "current:setup-v1:SKHYNIXUSDC:SHORT:1791302400000:1318.7",
+        "setup_id": "setup-v1:SKHYNIXUSDC:SHORT:1791302400000:1318.7",
+        "ticker": "SKHYNIXUSDC",
+        "side": "SHORT",
+        "contract_id": "30000039",
+        "created_ms": 1791334815195,
+        "status": "REJECTED",
+        "reason": "LEVELS_OR_RR_INVALID_AT_FILL",
+        "quality": "WAITING_OPEN",
+        "source_candle_ms": 1791333900000,
+        "source_entry": 1317.86,
+        "stop": 1329.8609158328704,
+        "target": 1292.900457916435,
+        "step_size": 0.01,
+        "min_order_size": 0.05,
+        "quantity": 7.15,
+        "reserved_risk_usdc": 99.05839996942238,
+        "reserved_notional_usdc": 9420.8144602,
+        "execute_ms": 1791335700000,
+        "expires_ms": 1791336615195,
+        "fill_rr": 1.0748708225473993
+      },
+      {
+        "order_id": "current:setup-v1:REUSDC:LONG:1791158400000:0.5207",
+        "setup_id": "setup-v1:REUSDC:LONG:1791158400000:0.5207",
+        "ticker": "REUSDC",
+        "side": "LONG",
+        "contract_id": "30000080",
+        "created_ms": 1791174606783,
+        "status": "SL",
+        "reason": null,
+        "quality": "TRACKING",
+        "source_candle_ms": 1791173700000,
+        "source_entry": 0.5214,
+        "stop": 0.5100155566403846,
+        "target": 0.5450577783201923,
+        "step_size": 1,
+        "min_order_size": 100,
+        "quantity": 8260,
+        "reserved_risk_usdc": 83.46759065046732,
+        "reserved_notional_usdc": 4291.1020487999995,
+        "execute_ms": 1791175500000,
+        "expires_ms": 1791176406783,
+        "fill_price": 0.5195038799999999,
+        "fill_rr": 2.693194292782651,
+        "filled_ms": 1791175500000,
+        "fill_observed_ms": 1791175519435,
+        "entry_fee_usdc": 2.1455510243999996,
+        "price_risk_usdc": 78.37355095042285,
+        "next_candle_ms": 1791205200000,
+        "mfe_r": 0.3684655199337378,
+        "mae_r": 1.2440427621006362,
+        "last_closed_candle_ms": 1791204300000,
+        "last_price": 0.5098,
+        "exit_candle_ms": 1791204300000,
+        "outcome_observed_ms": 1791205226747,
+        "exit_price": 0.5099135535290565,
+        "gross_pnl_usdc": -79.2160966499923,
+        "exit_fee_usdc": 2.1059429760750032,
+        "net_pnl_usdc": -83.46759065046729,
+        "net_r": -0.9999999999999997
+      },
+      {
+        "order_id": "current:setup-v1:VELVETUSDC:LONG:1790971200000:0.07432",
+        "setup_id": "setup-v1:VELVETUSDC:LONG:1790971200000:0.07432",
+        "ticker": "VELVETUSDC",
+        "created_ms": 1791088062844,
+        "status": "BASELINED",
+        "reason": "PRE_EXISTING_SIGNAL"
+      }
+    ]
+  },
+  "btc": {
+    "metrics": {
+      "signals": 3,
+      "resolved": 3,
+      "tp": 0,
+      "sl": 3,
+      "open": 0,
+      "ambiguous": 0,
+      "history_gaps": 0,
+      "data_errors": 0,
+      "win_rate": 0,
+      "avg_gross_r": -1,
+      "avg_net_r": -2.7719991243864723,
+      "expectancy_r": -2.7719991243864723,
+      "profit_factor": 0,
+      "avg_mfe_r": 1.7621333333333333,
+      "avg_mae_r": 1.5558,
+      "max_consecutive_losses": 3,
+      "sample_status": "INSUFFICIENT SAMPLE",
+      "cost_model": "HYPOTHETICAL_TOUCH_5BPS_FEE_2BPS_SLIPPAGE_EACH_SIDE",
+      "real_execution_results": false
+    },
+    "recorded_observations": 280
+  },
+  "candidates": {
+    "events": [
+      {
+        "id": 382,
+        "setup_id": "setup-v1:TSLAUSDC:LONG:1791273600000:381.7",
+        "kind": "NEAR",
+        "created_ms": 1791354616310,
+        "entry": 378.85,
+        "stop": 376.7366606909099,
+        "target": 383.13333034545497,
+        "rr": 2.0268067352133285
+      },
+      {
+        "id": 381,
+        "setup_id": "setup-v1:INTCUSDC:SHORT:1791302400000:113.67",
+        "kind": "NEAR",
+        "created_ms": 1791354616304,
+        "entry": 115.21,
+        "stop": 116.12120864394136,
+        "target": 112.22560432197068,
+        "rr": 3.275205627023616
+      },
+      {
+        "id": 380,
+        "setup_id": "setup-v1:MSFTUSDC:LONG:1791288000000:531.95",
+        "kind": "NEAR",
+        "created_ms": 1791353721393,
+        "entry": 530.07,
+        "stop": 527.671608844032,
+        "target": 534.895804422016,
+        "rr": 2.0121006575627245
+      },
+      {
+        "id": 379,
+        "setup_id": "setup-v1:ENAUSDC:SHORT:1791331200000:0.2324",
+        "kind": "NEAR",
+        "created_ms": 1791353721386,
+        "entry": 0.2368,
+        "stop": 0.24514294932785988,
+        "target": 0.21922147466392997,
+        "rr": 2.1069917418016115
+      },
+      {
+        "id": 378,
+        "setup_id": "setup-v1:INTCUSDC:SHORT:1791302400000:113.67",
+        "kind": "NEAR",
+        "created_ms": 1791352811189,
+        "entry": 114.93,
+        "stop": 116.12120864394136,
+        "target": 112.22560432197068,
+        "rr": 2.2702955454397107
+      },
+      {
+        "id": 377,
+        "setup_id": "setup-v1:TSLAUSDC:LONG:1791273600000:381.7",
+        "kind": "NEAR",
+        "created_ms": 1791347405927,
+        "entry": 378.7,
+        "stop": 376.7366606909099,
+        "target": 383.13333034545497,
+        "rr": 2.258056121491098
+      },
+      {
+        "id": 376,
+        "setup_id": "setup-v1:ZROUSDC:LONG:1791288000000:2.1808",
+        "kind": "NEAR",
+        "created_ms": 1791347405920,
+        "entry": 2.1623,
+        "stop": 2.117700821858225,
+        "target": 2.2724504109291126,
+        "rr": 2.4697856668784066
+      },
+      {
+        "id": 375,
+        "setup_id": "setup-v1:SAMSUNGEMUSDC:LONG:1791273600000:1250.09",
+        "kind": "NEAR",
+        "created_ms": 1791346523646,
+        "entry": 1223.29,
+        "stop": 1211.7763723979967,
+        "target": 1260.5931861989984,
+        "rr": 3.239915992463415
+      },
+      {
+        "id": 374,
+        "setup_id": "setup-v1:QQQUSDC:LONG:1791288000000:761.59",
+        "kind": "NEAR",
+        "created_ms": 1791344731214,
+        "entry": 759.29,
+        "stop": 757.9604649182554,
+        "target": 762.7652324591277,
+        "rr": 2.613870447530934
+      },
+      {
+        "id": 373,
+        "setup_id": "setup-v1:SAMSUNGEMUSDC:LONG:1791273600000:1250.09",
+        "kind": "NEAR",
+        "created_ms": 1791342929775,
+        "entry": 1227.91,
+        "stop": 1217.7864777759448,
+        "target": 1261.0132388879724,
+        "rr": 3.269932949750758
+      },
+      {
+        "id": 372,
+        "setup_id": "setup-v1:LGELUSDC:LONG:1791244800000:161.63",
+        "kind": "NEAR",
+        "created_ms": 1791342019077,
+        "entry": 160.44,
+        "stop": 159.38819064297124,
+        "target": 172.27409532148562,
+        "rr": 11.251178973075106
+      },
+      {
+        "id": 371,
+        "setup_id": "setup-v1:LYTEUSDC:LONG:1791302400000:26.71",
+        "kind": "NEAR",
+        "created_ms": 1791342019045,
+        "entry": 26.39,
+        "stop": 26.321231377515517,
+        "target": 26.830615688757756,
+        "rr": 6.407219933148595
+      },
+      {
+        "id": 370,
+        "setup_id": "setup-v1:PDDUSDC:LONG:1791316800000:78.43",
+        "kind": "NEAR",
+        "created_ms": 1791341107151,
+        "entry": 78.03,
+        "stop": 77.99120451233361,
+        "target": 78.39060225616682,
+        "rr": 9.294953559230716
+      },
+      {
+        "id": 369,
+        "setup_id": "setup-v1:AAOIUSDC:LONG:1791302400000:130.06",
+        "kind": "NEAR",
+        "created_ms": 1791340225204,
+        "entry": 126.39,
+        "stop": 125.98128106960512,
+        "target": 130.37564053480256,
+        "rr": 9.751543758816933
+      },
+      {
+        "id": 368,
+        "setup_id": "setup-v1:LGELUSDC:LONG:1791244800000:161.63",
+        "kind": "NEAR",
+        "created_ms": 1791339313656,
+        "entry": 162.72,
+        "stop": 159.38819064297124,
+        "target": 172.27409532148562,
+        "rr": 2.8675396151734702
+      },
+      {
+        "id": 367,
+        "setup_id": "setup-v1:SAMSUNGEMUSDC:LONG:1791273600000:1250.09",
+        "kind": "NEAR",
+        "created_ms": 1791339313650,
+        "entry": 1226.6,
+        "stop": 1217.7864777759448,
+        "target": 1261.0132388879724,
+        "rr": 3.904595462872626
+      },
+      {
+        "id": 366,
+        "setup_id": "setup-v1:HANMIUSDC:LONG:1791244800000:200.83",
+        "kind": "NEAR",
+        "created_ms": 1791339313644,
+        "entry": 201.09,
+        "stop": 199.25457956788009,
+        "target": 204.77728978394003,
+        "rr": 2.008961935593796
+      },
+      {
+        "id": 365,
+        "setup_id": "setup-v1:QQQUSDC:LONG:1791288000000:761.59",
+        "kind": "NEAR",
+        "created_ms": 1791339313639,
+        "entry": 759.25,
+        "stop": 757.9604649182554,
+        "target": 762.7652324591277,
+        "rr": 2.725968846362814
+      },
+      {
+        "id": 364,
+        "setup_id": "setup-v1:OUSTUSDC:LONG:1791288000000:45.4",
+        "kind": "NEAR",
+        "created_ms": 1791339313633,
+        "entry": 44.58,
+        "stop": 44.05403791498389,
+        "target": 45.93201895749194,
+        "rr": 2.5705635368194413
+      },
+      {
+        "id": 363,
+        "setup_id": "setup-v1:MSFTUSDC:LONG:1791288000000:531.95",
+        "kind": "NEAR",
+        "created_ms": 1791338431834,
+        "entry": 529.97,
+        "stop": 527.6128864740318,
+        "target": 534.866443237016,
+        "rr": 2.077304798038843
+      },
+      {
+        "id": 362,
+        "setup_id": "setup-v1:PDDUSDC:LONG:1791316800000:78.43",
+        "kind": "NEAR",
+        "created_ms": 1791338431827,
+        "entry": 78.05,
+        "stop": 77.99120451233361,
+        "target": 78.39060225616682,
+        "rr": 5.792999933930933
+      },
+      {
+        "id": 361,
+        "setup_id": "setup-v1:TSLAUSDC:LONG:1791273600000:381.7",
+        "kind": "NEAR",
+        "created_ms": 1791338431822,
+        "entry": 379.32,
+        "stop": 377.45717325147973,
+        "target": 383.1185866257399,
+        "rr": 2.039151858194716
+      },
+      {
+        "id": 360,
+        "setup_id": "setup-v1:LYTEUSDC:LONG:1791302400000:26.71",
+        "kind": "NEAR",
+        "created_ms": 1791337520655,
+        "entry": 26.48,
+        "stop": 26.321231377515517,
+        "target": 26.830615688757756,
+        "rr": 2.2083437096774032
+      },
+      {
+        "id": 359,
+        "setup_id": "setup-v1:FILUSDC:LONG:1791259200000:1.2016",
+        "kind": "NEAR",
+        "created_ms": 1791337520646,
+        "entry": 1.1417,
+        "stop": 1.127980921019349,
+        "target": 1.2016904605096743,
+        "rr": 4.372776087540823
+      },
+      {
+        "id": 358,
+        "setup_id": "setup-v1:EWJUSDC:LONG:1791273600000:99.7",
+        "kind": "NEAR",
+        "created_ms": 1791336608411,
+        "entry": 99.34,
+        "stop": 99.15438852046144,
+        "target": 100.00219426023072,
+        "rr": 3.567636343813174
+      },
+      {
+        "id": 357,
+        "setup_id": "setup-v1:MSFTUSDC:LONG:1791288000000:531.95",
+        "kind": "NEAR",
+        "created_ms": 1791336608404,
+        "entry": 529.8,
+        "stop": 527.6128864740318,
+        "target": 534.866443237016,
+        "rr": 2.3164976014555094
+      },
+      {
+        "id": 356,
+        "setup_id": "setup-v1:MSFTUSDC:LONG:1791288000000:531.95",
+        "kind": "NEAR",
+        "created_ms": 1791334815969,
+        "entry": 529.99,
+        "stop": 527.6128864740318,
+        "target": 534.866443237016,
+        "rr": 2.0514136930123574
+      },
+      {
+        "id": 355,
+        "setup_id": "setup-v1:SKHYNIXUSDC:SHORT:1791302400000:1318.7",
+        "kind": "READY",
+        "created_ms": 1791334815392,
+        "entry": 1317.86,
+        "stop": 1329.8609158328704,
+        "target": 1292.900457916435,
+        "rr": 2.0798031109593027
+      },
+      {
+        "id": 354,
+        "setup_id": "setup-v1:FILUSDC:LONG:1791259200000:1.2016",
+        "kind": "NEAR",
+        "created_ms": 1791333025068,
+        "entry": 1.1509,
+        "stop": 1.127980921019349,
+        "target": 1.2016904605096743,
+        "rr": 2.216077729500085
+      },
+      {
+        "id": 353,
+        "setup_id": "setup-v1:DRAMUSDC:SHORT:1791302400000:60.37",
+        "kind": "NEAR",
+        "created_ms": 1791333025061,
+        "entry": 60.53,
+        "stop": 60.79403288229225,
+        "target": 59.67701644114612,
+        "rr": 3.230595944901068
+      },
+      {
+        "id": 352,
+        "setup_id": "setup-v1:SKHYNIXUSDC:SHORT:1791302400000:1318.7",
+        "kind": "NEAR",
+        "created_ms": 1791333025054,
+        "entry": 1319.79,
+        "stop": 1329.8609158328704,
+        "target": 1292.900457916435,
+        "rr": 2.6700195423935678
+      },
+      {
+        "id": 351,
+        "setup_id": "setup-v1:CASHCATUSDC:SHORT:1791316800000:0.13745",
+        "kind": "NEAR",
+        "created_ms": 1791332114826,
+        "entry": 0.14154,
+        "stop": 0.14352555821623106,
+        "target": 0.13646277910811552,
+        "rr": 2.557074806661645
+      },
+      {
+        "id": 350,
+        "setup_id": "setup-v1:SAMSUNGEMUSDC:LONG:1791273600000:1250.09",
+        "kind": "NEAR",
+        "created_ms": 1791332114820,
+        "entry": 1229.95,
+        "stop": 1217.7864777759448,
+        "target": 1261.0132388879724,
+        "rr": 2.5538029458720515
+      },
+      {
+        "id": 349,
+        "setup_id": "setup-v1:SPCXUSDC:LONG:1791288000000:173.63",
+        "kind": "NEAR",
+        "created_ms": 1791331205086,
+        "entry": 169.88,
+        "stop": 167.77615507411628,
+        "target": 175.67807753705813,
+        "rr": 2.75594339949873
+      },
+      {
+        "id": 348,
+        "setup_id": "setup-v1:哈基米USDC:SHORT:1791230400000:0.02578",
+        "kind": "NEAR",
+        "created_ms": 1791330325180,
+        "entry": 0.02785,
+        "stop": 0.028815425453680484,
+        "target": 0.025452712726840243,
+        "rr": 2.4831407376101344
+      },
+      {
+        "id": 347,
+        "setup_id": "setup-v1:NEARUSDC:LONG:1791230400000:5.202",
+        "kind": "NEAR",
+        "created_ms": 1791330325175,
+        "entry": 5.062,
+        "stop": 4.938691764108346,
+        "target": 5.309345882054173,
+        "rr": 2.005915341060471
+      },
+      {
+        "id": 346,
+        "setup_id": "setup-v1:SPCXUSDC:LONG:1791288000000:173.63",
+        "kind": "NEAR",
+        "created_ms": 1791327617839,
+        "entry": 170.31,
+        "stop": 170.05355161827904,
+        "target": 175.70677580913954,
+        "rr": 21.04429660629245
+      },
+      {
+        "id": 345,
+        "setup_id": "setup-v1:NEARUSDC:LONG:1791230400000:5.202",
+        "kind": "NEAR",
+        "created_ms": 1791327617833,
+        "entry": 5.06,
+        "stop": 4.938691764108346,
+        "target": 5.309345882054173,
+        "rr": 2.0554736471221666
+      },
+      {
+        "id": 344,
+        "setup_id": "setup-v1:SPCXUSDC:LONG:1791288000000:173.63",
+        "kind": "NEAR",
+        "created_ms": 1791325828230,
+        "entry": 171.68,
+        "stop": 170.05355161827904,
+        "target": 175.70677580913954,
+        "rr": 2.4758091645544646
+      },
+      {
+        "id": 343,
+        "setup_id": "setup-v1:SAMSUNGEMUSDC:LONG:1791273600000:1250.09",
+        "kind": "NEAR",
+        "created_ms": 1791322217215,
+        "entry": 1241.13,
+        "stop": 1238.4669779352141,
+        "target": 1261.323488967607,
+        "rr": 7.582922137458817
+      },
+      {
+        "id": 342,
+        "setup_id": "setup-v1:ADAUSDC:LONG:1791273600000:0.2762",
+        "kind": "NEAR",
+        "created_ms": 1791321307682,
+        "entry": 0.2704,
+        "stop": 0.2658249722025729,
+        "target": 0.2800624861012864,
+        "rr": 2.112005987530934
+      },
+      {
+        "id": 341,
+        "setup_id": "setup-v1:ADAUSDC:LONG:1791273600000:0.2762",
+        "kind": "NEAR",
+        "created_ms": 1791319516185,
+        "entry": 0.2704,
+        "stop": 0.2658249722025729,
+        "target": 0.2800624861012864,
+        "rr": 2.112005987530934
+      },
+      {
+        "id": 340,
+        "setup_id": "setup-v1:SAMSUNGEMUSDC:LONG:1791273600000:1250.09",
+        "kind": "NEAR",
+        "created_ms": 1791318606249,
+        "entry": 1239.69,
+        "stop": 1238.4669779352141,
+        "target": 1261.323488967607,
+        "rr": 17.68855165453904
+      },
+      {
+        "id": 339,
+        "setup_id": "setup-v1:哈基米USDC:SHORT:1791230400000:0.02578",
+        "kind": "NEAR",
+        "created_ms": 1791318606243,
+        "entry": 0.02772,
+        "stop": 0.028815425453680484,
+        "target": 0.025452712726840243,
+        "rr": 2.069777788659171
+      },
+      {
+        "id": 338,
+        "setup_id": "setup-v1:CLUSDC:SHORT:1791273600000:88.22",
+        "kind": "NEAR",
+        "created_ms": 1791316816440,
+        "entry": 89.645,
+        "stop": 90.42727986069222,
+        "target": 87.10463993034611,
+        "rr": 3.2473801222569625
+      },
+      {
+        "id": 337,
+        "setup_id": "setup-v1:MSFTUSDC:LONG:1791288000000:531.95",
+        "kind": "NEAR",
+        "created_ms": 1791316816436,
+        "entry": 529.97,
+        "stop": 527.6150317809668,
+        "target": 534.8225158904835,
+        "rr": 2.0605441089457606
+      },
+      {
+        "id": 336,
+        "setup_id": "setup-v1:NVDAUSDC:LONG:1791288000000:241.67",
+        "kind": "NEAR",
+        "created_ms": 1791316816430,
+        "entry": 239.49,
+        "stop": 238.28998447833794,
+        "target": 243.094992239169,
+        "rr": 3.004121341843919
+      },
+      {
+        "id": 335,
+        "setup_id": "setup-v1:SPCXUSDC:LONG:1791288000000:173.63",
+        "kind": "NEAR",
+        "created_ms": 1791316816424,
+        "entry": 171.93,
+        "stop": 170.0535517352238,
+        "target": 175.70677586761192,
+        "rr": 2.012725817443394
+      },
+      {
+        "id": 334,
+        "setup_id": "setup-v1:ATOMUSDC:LONG:1791216000000:1.806",
+        "kind": "NEAR",
+        "created_ms": 1791315026201,
+        "entry": 1.777,
+        "stop": 1.7608675208564848,
+        "target": 1.8359337604282424,
+        "rr": 3.6531124512212676
+      },
+      {
+        "id": 333,
+        "setup_id": "setup-v1:EWJUSDC:LONG:1791273600000:99.7",
+        "kind": "NEAR",
+        "created_ms": 1791315026195,
+        "entry": 99.51,
+        "stop": 99.29689445288099,
+        "target": 99.9984472264405,
+        "rr": 2.2920436987391715
+      },
+      {
+        "id": 332,
+        "setup_id": "setup-v1:TEAMUSDC:LONG:1791273600000:197.45",
+        "kind": "NEAR",
+        "created_ms": 1791314116433,
+        "entry": 192.29,
+        "stop": 192.2000505769137,
+        "target": 199.80502528845685,
+        "rr": 83.54723166203185
+      },
+      {
+        "id": 331,
+        "setup_id": "setup-v1:SPCXUSDC:LONG:1791288000000:173.63",
+        "kind": "NEAR",
+        "created_ms": 1791314116427,
+        "entry": 171.94,
+        "stop": 170.07844033024102,
+        "target": 175.71922016512053,
+        "rr": 2.030136463801801
+      },
+      {
+        "id": 330,
+        "setup_id": "setup-v1:CLUSDC:SHORT:1791273600000:88.22",
+        "kind": "NEAR",
+        "created_ms": 1791313207340,
+        "entry": 89.435,
+        "stop": 89.50180128339774,
+        "target": 87.10640064169887,
+        "rr": 34.85860210853393
+      },
+      {
+        "id": 329,
+        "setup_id": "setup-v1:ADAUSDC:LONG:1791273600000:0.2762",
+        "kind": "NEAR",
+        "created_ms": 1791313207334,
+        "entry": 0.2716,
+        "stop": 0.26748843193207095,
+        "target": 0.27999421596603546,
+        "rr": 2.041609387793379
+      },
+      {
+        "id": 328,
+        "setup_id": "setup-v1:ADAUSDC:LONG:1791273600000:0.2762",
+        "kind": "NEAR",
+        "created_ms": 1791311416717,
+        "entry": 0.2713,
+        "stop": 0.26748843193207095,
+        "target": 0.27999421596603546,
+        "rr": 2.281007661699548
+      },
+      {
+        "id": 327,
+        "setup_id": "setup-v1:NVDAUSDC:LONG:1791288000000:241.67",
+        "kind": "NEAR",
+        "created_ms": 1791310507113,
+        "entry": 240.45,
+        "stop": 240.23152192641265,
+        "target": 243.11576096320636,
+        "rr": 12.20150342519728
+      },
+      {
+        "id": 326,
+        "setup_id": "setup-v1:牛来USDC:SHORT:1791216000000:0.07732",
+        "kind": "NEAR",
+        "created_ms": 1791309626899,
+        "entry": 0.08011,
+        "stop": 0.0832023105424409,
+        "target": 0.07375615527122044,
+        "rr": 2.0547240135087432
+      },
+      {
+        "id": 325,
+        "setup_id": "setup-v1:CLUSDC:SHORT:1791273600000:88.22",
+        "kind": "NEAR",
+        "created_ms": 1791308717216,
+        "entry": 89.247,
+        "stop": 89.50180128339774,
+        "target": 87.10640064169887,
+        "rr": 8.401054067532696
+      },
+      {
+        "id": 324,
+        "setup_id": "setup-v1:BANKUSDC:SHORT:1791244800000:0.02814",
+        "kind": "NEAR",
+        "created_ms": 1791308717211,
+        "entry": 0.02861,
+        "stop": 0.028907401379937102,
+        "target": 0.02783370068996855,
+        "rr": 2.6102747411448832
+      },
+      {
+        "id": 323,
+        "setup_id": "setup-v1:PONSUSDC:SHORT:1791216000000:0.3783",
+        "kind": "NEAR",
+        "created_ms": 1791307824211,
+        "entry": 0.4099,
+        "stop": 0.42737906270774445,
+        "target": 0.37003953135387224,
+        "rr": 2.280469457236213
+      },
+      {
+        "id": 322,
+        "setup_id": "setup-v1:PATHUSDC:LONG:1791273600000:13.24",
+        "kind": "NEAR",
+        "created_ms": 1791307824205,
+        "entry": 13.13,
+        "stop": 13.066314765460499,
+        "target": 13.303157382730248,
+        "rr": 2.71895650510391
+      },
+      {
+        "id": 321,
+        "setup_id": "setup-v1:NEARUSDC:LONG:1791230400000:5.202",
+        "kind": "NEAR",
+        "created_ms": 1791306035246,
+        "entry": 5.074,
+        "stop": 4.9909372841689965,
+        "target": 5.307968642084498,
+        "rr": 2.816770915130241
+      },
+      {
+        "id": 320,
+        "setup_id": "setup-v1:NVDAUSDC:LONG:1791288000000:241.67",
+        "kind": "NEAR",
+        "created_ms": 1791305962977,
+        "entry": 240.71,
+        "stop": 240.23152192641265,
+        "target": 243.11576096320636,
+        "rr": 5.027944008320659
+      },
+      {
+        "id": 319,
+        "setup_id": "setup-v1:TEAMUSDC:LONG:1791273600000:197.45",
+        "kind": "NEAR",
+        "created_ms": 1791305962970,
+        "entry": 194.34,
+        "stop": 192.2000505769137,
+        "target": 199.80502528845685,
+        "rr": 2.5538104917334916
+      },
+      {
+        "id": 318,
+        "setup_id": "setup-v1:TZAUSDC:SHORT:1791273600000:44.47",
+        "kind": "NEAR",
+        "created_ms": 1791305962965,
+        "entry": 45.5,
+        "stop": 46.01189120241451,
+        "target": 44.250945601207256,
+        "rr": 2.4400778776840673
+      },
+      {
+        "id": 317,
+        "setup_id": "setup-v1:CLUSDC:SHORT:1791273600000:88.22",
+        "kind": "NEAR",
+        "created_ms": 1791305962959,
+        "entry": 89.388,
+        "stop": 89.50180128339774,
+        "target": 87.10640064169887,
+        "rr": 20.048977394454965
+      },
+      {
+        "id": 316,
+        "setup_id": "setup-v1:HYPEUSDC:LONG:1791216000000:93.761",
+        "kind": "NEAR",
+        "created_ms": 1791305962953,
+        "entry": 91.859,
+        "stop": 91.37035813327647,
+        "target": 94.87217906663824,
+        "rr": 6.166436549619484
+      },
+      {
+        "id": 315,
+        "setup_id": "setup-v1:ZROUSDC:LONG:1791230400000:2.1029",
+        "kind": "NEAR",
+        "created_ms": 1791248413291,
+        "entry": 2.0646,
+        "stop": 2.033084130310287,
+        "target": 2.155642065155144,
+        "rr": 2.8887689297960555
+      },
+      {
+        "id": 314,
+        "setup_id": "setup-v1:XIAOMIUSDC:SHORT:1791172800000:3.039",
+        "kind": "NEAR",
+        "created_ms": 1791246621868,
+        "entry": 3.076,
+        "stop": 3.0934795639880326,
+        "target": 3.0362397819940163,
+        "rr": 2.2746687522186355
+      },
+      {
+        "id": 313,
+        "setup_id": "setup-v1:ALLOUSDC:SHORT:1791216000000:0.25916",
+        "kind": "NEAR",
+        "created_ms": 1791240310419,
+        "entry": 0.26076,
+        "stop": 0.2629036271751094,
+        "target": 0.25539681358755467,
+        "rr": 2.501921264443566
+      },
+      {
+        "id": 312,
+        "setup_id": "setup-v1:PONSUSDC:SHORT:1791216000000:0.3783",
+        "kind": "NEAR",
+        "created_ms": 1791235818122,
+        "entry": 0.39,
+        "stop": 0.39588317914184196,
+        "target": 0.370291589570921,
+        "rr": 3.3499592573869115
+      },
+      {
+        "id": 311,
+        "setup_id": "setup-v1:XIAOMIUSDC:SHORT:1791172800000:3.039",
+        "kind": "NEAR",
+        "created_ms": 1791228622892,
+        "entry": 3.071,
+        "stop": 3.084289893000146,
+        "target": 3.0366449465000724,
+        "rr": 2.585051173816904
+      },
+      {
+        "id": 310,
+        "setup_id": "setup-v1:ADAUSDC:LONG:1791172800000:0.2719",
+        "kind": "NEAR",
+        "created_ms": 1791225917659,
+        "entry": 0.2641,
+        "stop": 0.25913547371127527,
+        "target": 0.2743177368556376,
+        "rr": 2.0581494107189586
+      },
+      {
+        "id": 309,
+        "setup_id": "setup-v1:XIAOMIUSDC:SHORT:1791172800000:3.039",
+        "kind": "NEAR",
+        "created_ms": 1791225917635,
+        "entry": 3.072,
+        "stop": 3.084289893000146,
+        "target": 3.0366449465000724,
+        "rr": 2.876758446921232
+      },
+      {
+        "id": 308,
+        "setup_id": "setup-v1:INTCUSDC:SHORT:1791187200000:116.63",
+        "kind": "NEAR",
+        "created_ms": 1791225005983,
+        "entry": 117.23,
+        "stop": 118.69139687070074,
+        "target": 114.25569843535037,
+        "rr": 2.03524560937609
+      },
+      {
+        "id": 307,
+        "setup_id": "setup-v1:XIAOMIUSDC:SHORT:1791172800000:3.039",
+        "kind": "NEAR",
+        "created_ms": 1791224124295,
+        "entry": 3.07,
+        "stop": 3.084289893000146,
+        "target": 3.0366449465000724,
+        "rr": 2.3341709766186844
+      },
+      {
+        "id": 306,
+        "setup_id": "setup-v1:ADAUSDC:LONG:1791172800000:0.2719",
+        "kind": "NEAR",
+        "created_ms": 1791222332616,
+        "entry": 0.2641,
+        "stop": 0.25913547371127527,
+        "target": 0.2743177368556376,
+        "rr": 2.0581494107189586
+      },
+      {
+        "id": 305,
+        "setup_id": "setup-v1:INTCUSDC:SHORT:1791187200000:116.63",
+        "kind": "NEAR",
+        "created_ms": 1791220512693,
+        "entry": 117.29,
+        "stop": 118.69139687070074,
+        "target": 114.25569843535037,
+        "rr": 2.1651979022419288
+      },
+      {
+        "id": 304,
+        "setup_id": "setup-v1:VIRTUALUSDC:LONG:1791158400000:0.873",
+        "kind": "NEAR",
+        "created_ms": 1791217811443,
+        "entry": 0.8321,
+        "stop": 0.8125175290048868,
+        "target": 0.8770587645024434,
+        "rr": 2.2958677949102047
+      },
+      {
+        "id": 303,
+        "setup_id": "setup-v1:ADAUSDC:LONG:1791172800000:0.2719",
+        "kind": "NEAR",
+        "created_ms": 1791216020792,
+        "entry": 0.2637,
+        "stop": 0.25913547371127527,
+        "target": 0.2743177368556376,
+        "rr": 2.326142119471521
+      },
+      {
+        "id": 302,
+        "setup_id": "setup-v1:ENAUSDC:LONG:1791187200000:0.2574",
+        "kind": "NEAR",
+        "created_ms": 1791215110472,
+        "entry": 0.2466,
+        "stop": 0.24068264012348617,
+        "target": 0.2602913200617431,
+        "rr": 2.3137548412568747
+      },
+      {
+        "id": 301,
+        "setup_id": "setup-v1:PENDLEUSDC:LONG:1791187200000:2.5237",
+        "kind": "NEAR",
+        "created_ms": 1791215110467,
+        "entry": 2.4338,
+        "stop": 2.4198091154453074,
+        "target": 2.517754557722654,
+        "rr": 6.000661172955927
+      },
+      {
+        "id": 300,
+        "setup_id": "setup-v1:INTCUSDC:SHORT:1791187200000:116.63",
+        "kind": "NEAR",
+        "created_ms": 1791215110461,
+        "entry": 117.28,
+        "stop": 118.34573497485754,
+        "target": 114.22786748742877,
+        "rr": 2.8638757144844926
+      },
+      {
+        "id": 299,
+        "setup_id": "setup-v1:INTCUSDC:SHORT:1791187200000:116.63",
+        "kind": "NEAR",
+        "created_ms": 1791212423640,
+        "entry": 117.08,
+        "stop": 118.34573497485754,
+        "target": 114.22786748742877,
+        "rr": 2.253340998886634
+      },
+      {
+        "id": 298,
+        "setup_id": "setup-v1:SUIUSDC:LONG:1791115200000:1.2175",
+        "kind": "NEAR",
+        "created_ms": 1791212423633,
+        "entry": 1.184,
+        "stop": 1.159044364530502,
+        "target": 1.254722182265251,
+        "rr": 2.8339163052646468
+      },
+      {
+        "id": 297,
+        "setup_id": "setup-v1:VIRTUALUSDC:LONG:1791158400000:0.873",
+        "kind": "NEAR",
+        "created_ms": 1791211512174,
+        "entry": 0.8398,
+        "stop": 0.8243342644716537,
+        "target": 0.8772671322358269,
+        "rr": 2.422589741506664
+      },
+      {
+        "id": 296,
+        "setup_id": "setup-v1:ENAUSDC:LONG:1791187200000:0.2574",
+        "kind": "NEAR",
+        "created_ms": 1791211512167,
+        "entry": 0.2472,
+        "stop": 0.24068264012348617,
+        "target": 0.2602913200617431,
+        "rr": 2.008684545550323
+      },
+      {
+        "id": 295,
+        "setup_id": "setup-v1:INTCUSDC:SHORT:1791187200000:116.63",
+        "kind": "NEAR",
+        "created_ms": 1791210632009,
+        "entry": 117.13,
+        "stop": 118.34573497485754,
+        "target": 114.22786748742877,
+        "rr": 2.3871424056968507
+      },
+      {
+        "id": 294,
+        "setup_id": "setup-v1:1000RATSUSDC:LONG:1791144000000:0.04174",
+        "kind": "NEAR",
+        "created_ms": 1791210632003,
+        "entry": 0.04073,
+        "stop": 0.0403947207036632,
+        "target": 0.0420273603518316,
+        "rr": 3.8694913942086635
+      },
+      {
+        "id": 293,
+        "setup_id": "setup-v1:XIAOMIUSDC:SHORT:1791172800000:3.039",
+        "kind": "NEAR",
+        "created_ms": 1791209722203,
+        "entry": 3.07,
+        "stop": 3.0724275713916116,
+        "target": 3.0367137856958055,
+        "rr": 13.711734459885148
+      },
+      {
+        "id": 292,
+        "setup_id": "setup-v1:TSMUSDC:LONG:1791187200000:479.77",
+        "kind": "NEAR",
+        "created_ms": 1791209722197,
+        "entry": 477.62,
+        "stop": 476.05216467065634,
+        "target": 481.38108233532813,
+        "rr": 2.398901380097492
+      },
+      {
+        "id": 291,
+        "setup_id": "setup-v1:LITEUSDC:LONG:1791158400000:1093.77",
+        "kind": "NEAR",
+        "created_ms": 1791208811557,
+        "entry": 1085.16,
+        "stop": 1079.7898747153738,
+        "target": 1109.524937357687,
+        "rr": 4.5371264293291835
+      },
+      {
+        "id": 290,
+        "setup_id": "setup-v1:VSTUSDC:LONG:1791144000000:147.77",
+        "kind": "NEAR",
+        "created_ms": 1791208811551,
+        "entry": 144.23,
+        "stop": 144.06001239512932,
+        "target": 150.89500619756467,
+        "rr": 39.20877762020093
+      },
+      {
+        "id": 289,
+        "setup_id": "setup-v1:1000RATSUSDC:LONG:1791144000000:0.04174",
+        "kind": "NEAR",
+        "created_ms": 1791207930714,
+        "entry": 0.04087,
+        "stop": 0.0403947207036632,
+        "target": 0.0420273603518316,
+        "rr": 2.43511627952643
+      },
+      {
+        "id": 288,
+        "setup_id": "setup-v1:INTCUSDC:SHORT:1791187200000:116.63",
+        "kind": "NEAR",
+        "created_ms": 1791207930709,
+        "entry": 117.45,
+        "stop": 118.34573497485754,
+        "target": 114.22786748742877,
+        "rr": 3.59719403954693
+      },
+      {
+        "id": 287,
+        "setup_id": "setup-v1:1000RATSUSDC:LONG:1791144000000:0.04174",
+        "kind": "NEAR",
+        "created_ms": 1791206108799,
+        "entry": 0.04084,
+        "stop": 0.0403947207036632,
+        "target": 0.0420273603518316,
+        "rr": 2.666551895854364
+      },
+      {
+        "id": 286,
+        "setup_id": "setup-v1:HYPEUSDC:LONG:1791187200000:92.875",
+        "kind": "NEAR",
+        "created_ms": 1791206108792,
+        "entry": 92.106,
+        "stop": 91.82628395505056,
+        "target": 93.38514197752527,
+        "rr": 4.573001801725348
+      },
+      {
+        "id": 285,
+        "setup_id": "setup-v1:SAMSUNGEMUSDC:LONG:1791129600000:1175.55",
+        "kind": "NEAR",
+        "created_ms": 1791202520475,
+        "entry": 1162.93,
+        "stop": 1156.3593701840666,
+        "target": 1177.8696850920335,
+        "rr": 2.2737067085723557
+      },
+      {
+        "id": 284,
+        "setup_id": "setup-v1:LITEUSDC:LONG:1791158400000:1093.77",
+        "kind": "NEAR",
+        "created_ms": 1791201608349,
+        "entry": 1086.1,
+        "stop": 1079.7898751685505,
+        "target": 1109.5249375842752,
+        "rr": 3.712277999244355
+      },
+      {
+        "id": 283,
+        "setup_id": "setup-v1:EDGEUSDC:SHORT:1791129600000:0.4621",
+        "kind": "NEAR",
+        "created_ms": 1791199814126,
+        "entry": 0.4656,
+        "stop": 0.4721360995081359,
+        "target": 0.4506180497540679,
+        "rr": 2.2921851522124435
+      },
+      {
+        "id": 282,
+        "setup_id": "setup-v1:VSTUSDC:LONG:1791144000000:147.77",
+        "kind": "NEAR",
+        "created_ms": 1791199814120,
+        "entry": 146.5,
+        "stop": 144.71193645549693,
+        "target": 150.94096822774847,
+        "rr": 2.4836747225237295
+      },
+      {
+        "id": 281,
+        "setup_id": "setup-v1:AVGOUSDC:LONG:1791144000000:358.11",
+        "kind": "NEAR",
+        "created_ms": 1791199814115,
+        "entry": 355.64,
+        "stop": 355.40458668967517,
+        "target": 360.2022933448375,
+        "rr": 19.37992944639635
+      },
+      {
+        "id": 280,
+        "setup_id": "setup-v1:LITEUSDC:LONG:1791158400000:1093.77",
+        "kind": "NEAR",
+        "created_ms": 1791199814109,
+        "entry": 1088.51,
+        "stop": 1087.6448655661313,
+        "target": 1109.6574327830656,
+        "rr": 24.444100194347428
+      },
+      {
+        "id": 279,
+        "setup_id": "setup-v1:SPCXUSDC:LONG:1791158400000:159.76",
+        "kind": "NEAR",
+        "created_ms": 1791198931611,
+        "entry": 159.31,
+        "stop": 158.7997259828679,
+        "target": 160.67986299143396,
+        "rr": 2.684563480486444
+      },
+      {
+        "id": 278,
+        "setup_id": "setup-v1:REUSDC:LONG:1791158400000:0.5207",
+        "kind": "NEAR",
+        "created_ms": 1791198931604,
+        "entry": 0.5179,
+        "stop": 0.5066037311847926,
+        "target": 0.5451018655923963,
+        "rr": 2.4080398614254124
+      },
+      {
+        "id": 277,
+        "setup_id": "setup-v1:AVGOUSDC:LONG:1791144000000:358.11",
+        "kind": "NEAR",
+        "created_ms": 1791198019986,
+        "entry": 355.71,
+        "stop": 355.40458668967517,
+        "target": 360.2022933448375,
+        "rr": 14.708898377938946
+      },
+      {
+        "id": 276,
+        "setup_id": "setup-v1:LGELUSDC:LONG:1791144000000:159.59",
+        "kind": "NEAR",
+        "created_ms": 1791197107986,
+        "entry": 158.18,
+        "stop": 157.47922368995134,
+        "target": 159.69461184497567,
+        "rr": 2.1613342563912807
+      },
+      {
+        "id": 275,
+        "setup_id": "setup-v1:SAMSUNGEMUSDC:LONG:1791129600000:1175.55",
+        "kind": "NEAR",
+        "created_ms": 1791197107981,
+        "entry": 1162.05,
+        "stop": 1158.0012469435774,
+        "target": 1177.895623471789,
+        "rr": 3.9137046026190325
+      },
+      {
+        "id": 274,
+        "setup_id": "setup-v1:EDGEUSDC:SHORT:1791129600000:0.4621",
+        "kind": "NEAR",
+        "created_ms": 1791197107975,
+        "entry": 0.4651,
+        "stop": 0.4721360995081359,
+        "target": 0.4506180497540679,
+        "rr": 2.0582355649158406
+      },
+      {
+        "id": 273,
+        "setup_id": "setup-v1:LGELUSDC:LONG:1791144000000:159.59",
+        "kind": "NEAR",
+        "created_ms": 1791194431362,
+        "entry": 158.09,
+        "stop": 157.47922368995134,
+        "target": 159.69461184497567,
+        "rr": 2.627167783976129
+      },
+      {
+        "id": 272,
+        "setup_id": "setup-v1:REUSDC:LONG:1791158400000:0.5207",
+        "kind": "NEAR",
+        "created_ms": 1791194431357,
+        "entry": 0.519,
+        "stop": 0.5066037311847926,
+        "target": 0.5451018655923963,
+        "rr": 2.1056227467716107
+      },
+      {
+        "id": 271,
+        "setup_id": "setup-v1:LITEUSDC:LONG:1791158400000:1093.77",
+        "kind": "NEAR",
+        "created_ms": 1791192607984,
+        "entry": 1094.83,
+        "stop": 1087.6448655661313,
+        "target": 1109.6574327830656,
+        "rr": 2.0636263551553786
+      },
+      {
+        "id": 270,
+        "setup_id": "setup-v1:LTCUSDC:LONG:1791115200000:71.28",
+        "kind": "NEAR",
+        "created_ms": 1791189931932,
+        "entry": 69.93,
+        "stop": 68.95544845989076,
+        "target": 71.91272422994538,
+        "rr": 2.0344990986552793
+      },
+      {
+        "id": 269,
+        "setup_id": "setup-v1:LITEUSDC:LONG:1791158400000:1093.77",
+        "kind": "NEAR",
+        "created_ms": 1791189931927,
+        "entry": 1092.22,
+        "stop": 1087.6448655661313,
+        "target": 1109.6574327830656,
+        "rr": 3.8113487232156813
+      },
+      {
+        "id": 268,
+        "setup_id": "setup-v1:AVGOUSDC:LONG:1791144000000:358.11",
+        "kind": "NEAR",
+        "created_ms": 1791189020192,
+        "entry": 356.68,
+        "stop": 355.40458668967517,
+        "target": 360.2022933448375,
+        "rr": 2.7616877731505127
+      },
+      {
+        "id": 267,
+        "setup_id": "setup-v1:哈基米USDC:SHORT:1791129600000:0.02892",
+        "kind": "NEAR",
+        "created_ms": 1791188108440,
+        "entry": 0.02954,
+        "stop": 0.03005366313672438,
+        "target": 0.02837183156836219,
+        "rr": 2.274191679564936
+      },
+      {
+        "id": 266,
+        "setup_id": "setup-v1:SAMSUNGEMUSDC:LONG:1791129600000:1175.55",
+        "kind": "NEAR",
+        "created_ms": 1791177313130,
+        "entry": 1165.43,
+        "stop": 1159.3301908011017,
+        "target": 1177.910095400551,
+        "rr": 2.0459812747593564
+      },
+      {
+        "id": 265,
+        "setup_id": "setup-v1:1000RATSUSDC:LONG:1791144000000:0.04174",
+        "kind": "NEAR",
+        "created_ms": 1791174607188,
+        "entry": 0.04099,
+        "stop": 0.04070651004952523,
+        "target": 0.041763255024762615,
+        "rr": 2.7276276406540356
+      },
+      {
+        "id": 264,
+        "setup_id": "setup-v1:LTCUSDC:LONG:1791115200000:71.28",
+        "kind": "NEAR",
+        "created_ms": 1791174607183,
+        "entry": 70.17,
+        "stop": 69.42855994359186,
+        "target": 71.90427997179593,
+        "rr": 2.339069702003348
+      },
+      {
+        "id": 263,
+        "setup_id": "setup-v1:REUSDC:LONG:1791158400000:0.5207",
+        "kind": "READY",
+        "created_ms": 1791174606841,
+        "entry": 0.5214,
+        "stop": 0.5100155566403846,
+        "target": 0.5450577783201923,
+        "rr": 2.078079496105599
+      },
+      {
+        "id": 262,
+        "setup_id": "setup-v1:PIEVERSEUSDC:SHORT:1791115200000:1.3322",
+        "kind": "NEAR",
+        "created_ms": 1791173724795,
+        "entry": 1.3619,
+        "stop": 1.369037590854872,
+        "target": 1.329818795427436,
+        "rr": 4.494682481087653
+      },
+      {
+        "id": 261,
+        "setup_id": "setup-v1:LTCUSDC:LONG:1791115200000:71.28",
+        "kind": "NEAR",
+        "created_ms": 1791172812905,
+        "entry": 70.07,
+        "stop": 69.42855994359186,
+        "target": 71.90427997179593,
+        "rr": 2.8596280407983117
+      },
+      {
+        "id": 260,
+        "setup_id": "setup-v1:REUSDC:LONG:1791158400000:0.5207",
+        "kind": "NEAR",
+        "created_ms": 1791172812900,
+        "entry": 0.521,
+        "stop": 0.5100155550665603,
+        "target": 0.5450577775332801,
+        "rr": 2.190167794463735
+      },
+      {
+        "id": 259,
+        "setup_id": "setup-v1:ZAMAUSDC:LONG:1791086400000:0.09008",
+        "kind": "NEAR",
+        "created_ms": 1791171021589,
+        "entry": 0.08476,
+        "stop": 0.08191877553924737,
+        "target": 0.09154438776962369,
+        "rr": 2.387839420411902
+      },
+      {
+        "id": 258,
+        "setup_id": "setup-v1:ZAMAUSDC:LONG:1791086400000:0.09008",
+        "kind": "NEAR",
+        "created_ms": 1791169229434,
+        "entry": 0.08502,
+        "stop": 0.08191877553924737,
+        "target": 0.09154438776962369,
+        "rr": 2.103810237598958
+      },
+      {
+        "id": 257,
+        "setup_id": "setup-v1:BANKUSDC:SHORT:1791115200000:0.02868",
+        "kind": "NEAR",
+        "created_ms": 1791168318201,
+        "entry": 0.02914,
+        "stop": 0.029143211296243296,
+        "target": 0.028271605648121645,
+        "rr": 270.41863661474366
+      },
+      {
+        "id": 256,
+        "setup_id": "setup-v1:哈基米USDC:SHORT:1791129600000:0.02892",
+        "kind": "NEAR",
+        "created_ms": 1791168318196,
+        "entry": 0.02934,
+        "stop": 0.029766467306496916,
+        "target": 0.028373233653248457,
+        "rr": 2.2669178434632
+      },
+      {
+        "id": 255,
+        "setup_id": "setup-v1:BANKUSDC:SHORT:1791115200000:0.02868",
+        "kind": "NEAR",
+        "created_ms": 1791164733260,
+        "entry": 0.02907,
+        "stop": 0.029143211296243296,
+        "target": 0.028271605648121645,
+        "rr": 10.905343749482489
+      },
+      {
+        "id": 254,
+        "setup_id": "setup-v1:LTCUSDC:LONG:1791115200000:71.28",
+        "kind": "NEAR",
+        "created_ms": 1791164733253,
+        "entry": 70.26,
+        "stop": 69.50844901773748,
+        "target": 71.89422450886873,
+        "rr": 2.1744692608197074
+      },
+      {
+        "id": 253,
+        "setup_id": "setup-v1:XLEUSDC:LONG:1791072000000:63.1",
+        "kind": "NEAR",
+        "created_ms": 1791162029349,
+        "entry": 62.67,
+        "stop": 62.38993247025623,
+        "target": 63.434966235128115,
+        "rr": 2.731363524461252
+      },
+      {
+        "id": 252,
+        "setup_id": "setup-v1:BANKUSDC:SHORT:1791115200000:0.02868",
+        "kind": "NEAR",
+        "created_ms": 1791161118242,
+        "entry": 0.02891,
+        "stop": 0.029143211296243296,
+        "target": 0.028271605648121645,
+        "rr": 2.73740750196063
+      },
+      {
+        "id": 251,
+        "setup_id": "setup-v1:哈基米USDC:SHORT:1791129600000:0.02892",
+        "kind": "NEAR",
+        "created_ms": 1791161118229,
+        "entry": 0.02939,
+        "stop": 0.029766467306496916,
+        "target": 0.028373233653248457,
+        "rr": 2.7008091518296844
+      },
+      {
+        "id": 250,
+        "setup_id": "setup-v1:PIEVERSEUSDC:SHORT:1791115200000:1.3322",
+        "kind": "NEAR",
+        "created_ms": 1791156624056,
+        "entry": 1.3513,
+        "stop": 1.357513427651117,
+        "target": 1.3302067138255584,
+        "rr": 3.3947906628718156
+      },
+      {
+        "id": 249,
+        "setup_id": "setup-v1:LTCUSDC:LONG:1791115200000:71.28",
+        "kind": "NEAR",
+        "created_ms": 1791149428741,
+        "entry": 70.53,
+        "stop": 70.07371418163332,
+        "target": 71.89185709081666,
+        "rr": 2.98465794026112
+      },
+      {
+        "id": 248,
+        "setup_id": "setup-v1:PIEVERSEUSDC:SHORT:1791115200000:1.3322",
+        "kind": "NEAR",
+        "created_ms": 1791144914568,
+        "entry": 1.3508,
+        "stop": 1.357513427651117,
+        "target": 1.3302067138255584,
+        "rr": 3.0674771882013796
+      },
+      {
+        "id": 247,
+        "setup_id": "setup-v1:ARGUSUSDC:SHORT:1791057600000:0.01349",
+        "kind": "NEAR",
+        "created_ms": 1791142211726,
+        "entry": 0.01495,
+        "stop": 0.01564579362475673,
+        "target": 0.013502896812378366,
+        "rr": 2.079787937303366
+      },
+      {
+        "id": 246,
+        "setup_id": "setup-v1:ZAMAUSDC:LONG:1791086400000:0.09008",
+        "kind": "NEAR",
+        "created_ms": 1791141330841,
+        "entry": 0.08497,
+        "stop": 0.08195281113346338,
+        "target": 0.09150640556673169,
+        "rr": 2.166389263604404
+      },
+      {
+        "id": 245,
+        "setup_id": "setup-v1:ARGUSUSDC:SHORT:1791057600000:0.01349",
+        "kind": "NEAR",
+        "created_ms": 1791140420499,
+        "entry": 0.01496,
+        "stop": 0.01564579362475673,
+        "target": 0.013502896812378366,
+        "rr": 2.1246963153652896
+      },
+      {
+        "id": 244,
+        "setup_id": "setup-v1:ZAMAUSDC:LONG:1791086400000:0.09008",
+        "kind": "NEAR",
+        "created_ms": 1791137718355,
+        "entry": 0.08484,
+        "stop": 0.08195281113346338,
+        "target": 0.09150640556673169,
+        "rr": 2.308960679364388
+      },
+      {
+        "id": 243,
+        "setup_id": "setup-v1:ARGUSUSDC:SHORT:1791057600000:0.01349",
+        "kind": "NEAR",
+        "created_ms": 1791135927871,
+        "entry": 0.01508,
+        "stop": 0.01564579362475673,
+        "target": 0.013502896812378366,
+        "rr": 2.7874177414065526
+      },
+      {
+        "id": 242,
+        "setup_id": "setup-v1:ZAMAUSDC:LONG:1791086400000:0.09008",
+        "kind": "NEAR",
+        "created_ms": 1791135017690,
+        "entry": 0.08512,
+        "stop": 0.08195281113346338,
+        "target": 0.09150640556673169,
+        "rr": 2.0164271332878667
+      },
+      {
+        "id": 241,
+        "setup_id": "setup-v1:ZAMAUSDC:LONG:1791086400000:0.09008",
+        "kind": "NEAR",
+        "created_ms": 1791129611611,
+        "entry": 0.08374,
+        "stop": 0.08195281131643138,
+        "target": 0.09150640565821569,
+        "rr": 4.34559916903006
+      },
+      {
+        "id": 240,
+        "setup_id": "setup-v1:ARGUSUSDC:SHORT:1791057600000:0.01349",
+        "kind": "NEAR",
+        "created_ms": 1791127819833,
+        "entry": 0.01497,
+        "stop": 0.015420470057430328,
+        "target": 0.013510235028715165,
+        "rr": 3.2405371837852113
+      },
+      {
+        "id": 239,
+        "setup_id": "setup-v1:ARGUSUSDC:SHORT:1791057600000:0.01349",
+        "kind": "NEAR",
+        "created_ms": 1791125118405,
+        "entry": 0.01481,
+        "stop": 0.015420470057430328,
+        "target": 0.013510235028715165,
+        "rr": 2.129121576832089
+      },
+      {
+        "id": 238,
+        "setup_id": "setup-v1:INTCUSDC:SHORT:1791072000000:117.51",
+        "kind": "NEAR",
+        "created_ms": 1791124207785,
+        "entry": 119.12,
+        "stop": 120.00546099076027,
+        "target": 117.23273049538014,
+        "rr": 2.1313976835946646
+      },
+      {
+        "id": 237,
+        "setup_id": "setup-v1:ARGUSUSDC:SHORT:1791057600000:0.01349",
+        "kind": "NEAR",
+        "created_ms": 1791119715228,
+        "entry": 0.01479,
+        "stop": 0.015420470057430328,
+        "target": 0.013510235028715165,
+        "rr": 2.0298584464120366
+      },
+      {
+        "id": 236,
+        "setup_id": "setup-v1:INTCUSDC:SHORT:1791072000000:117.51",
+        "kind": "NEAR",
+        "created_ms": 1791114314029,
+        "entry": 118.85,
+        "stop": 119.00011241052974,
+        "target": 117.24005620526486,
+        "rr": 10.724921337640723
+      },
+      {
+        "id": 235,
+        "setup_id": "setup-v1:OPUSDC:LONG:1791028800000:0.1358",
+        "kind": "NEAR",
+        "created_ms": 1791113403791,
+        "entry": 0.1317,
+        "stop": 0.12877833876358993,
+        "target": 0.13783916938179497,
+        "rr": 2.101259826186528
+      },
+      {
+        "id": 234,
+        "setup_id": "setup-v1:牛来USDC:SHORT:1791043200000:0.08098",
+        "kind": "NEAR",
+        "created_ms": 1791112524147,
+        "entry": 0.08347,
+        "stop": 0.08550234829708428,
+        "target": 0.07839117414854214,
+        "rr": 2.4989938283434148
+      },
+      {
+        "id": 233,
+        "setup_id": "setup-v1:OUSTUSDC:LONG:1791072000000:45.08",
+        "kind": "NEAR",
+        "created_ms": 1791111613163,
+        "entry": 44.4,
+        "stop": 44.170646677516075,
+        "target": 44.90532333875804,
+        "rr": 2.203252751193344
+      },
+      {
+        "id": 232,
+        "setup_id": "setup-v1:ZAMAUSDC:LONG:1791086400000:0.09008",
+        "kind": "NEAR",
+        "created_ms": 1791109822729,
+        "entry": 0.08787,
+        "stop": 0.08626905932177636,
+        "target": 0.09150452966088819,
+        "rr": 2.270246306016139
+      },
+      {
+        "id": 231,
+        "setup_id": "setup-v1:ZAMAUSDC:LONG:1791086400000:0.09008",
+        "kind": "NEAR",
+        "created_ms": 1791108030945,
+        "entry": 0.08784,
+        "stop": 0.08626905932177636,
+        "target": 0.09150452966088819,
+        "rr": 2.332697670692384
+      },
+      {
+        "id": 230,
+        "setup_id": "setup-v1:INTCUSDC:SHORT:1791072000000:117.51",
+        "kind": "NEAR",
+        "created_ms": 1791107119902,
+        "entry": 118.45,
+        "stop": 119.00011241052974,
+        "target": 117.24005620526486,
+        "rr": 2.1994482792526244
+      },
+      {
+        "id": 229,
+        "setup_id": "setup-v1:牛来USDC:SHORT:1791043200000:0.08098",
+        "kind": "NEAR",
+        "created_ms": 1791105324254,
+        "entry": 0.08335,
+        "stop": 0.08550234829708428,
+        "target": 0.07839117414854214,
+        "rr": 2.3039142215855137
+      },
+      {
+        "id": 228,
+        "setup_id": "setup-v1:牛来USDC:SHORT:1791043200000:0.08098",
+        "kind": "NEAR",
+        "created_ms": 1791101710756,
+        "entry": 0.08371,
+        "stop": 0.08550234829708428,
+        "target": 0.07839117414854214,
+        "rr": 2.967518009814462
+      },
+      {
+        "id": 227,
+        "setup_id": "setup-v1:INTCUSDC:SHORT:1791072000000:117.51",
+        "kind": "NEAR",
+        "created_ms": 1791099008705,
+        "entry": 118.17,
+        "stop": 118.59012101596142,
+        "target": 117.24506050798071,
+        "rr": 2.2016025308865848
+      },
+      {
+        "id": 226,
+        "setup_id": "setup-v1:PONSUSDC:SHORT:1791043200000:0.4092",
+        "kind": "NEAR",
+        "created_ms": 1791098128956,
+        "entry": 0.4247,
+        "stop": 0.43218880909469887,
+        "target": 0.40754440454734947,
+        "rr": 2.2908309232765194
+      },
+      {
+        "id": 225,
+        "setup_id": "setup-v1:PONSUSDC:SHORT:1791043200000:0.4092",
+        "kind": "NEAR",
+        "created_ms": 1791094518331,
+        "entry": 0.4292,
+        "stop": 0.43218880909469887,
+        "target": 0.40754440454734947,
+        "rr": 7.245559942607382
+      },
+      {
+        "id": 224,
+        "setup_id": "setup-v1:PONSUSDC:SHORT:1791043200000:0.4092",
+        "kind": "NEAR",
+        "created_ms": 1791092727764,
+        "entry": 0.4261,
+        "stop": 0.43218880909469887,
+        "target": 0.40754440454734947,
+        "rr": 3.047491744946578
+      },
+      {
+        "id": 223,
+        "setup_id": "setup-v1:EDGEUSDC:SHORT:1791043200000:0.4711",
+        "kind": "NEAR",
+        "created_ms": 1791081028627,
+        "entry": 0.4903,
+        "stop": 0.4980591290511275,
+        "target": 0.47152956452556377,
+        "rr": 2.419142064882751
+      },
+      {
+        "id": 222,
+        "setup_id": "setup-v1:EDGEUSDC:SHORT:1791043200000:0.4711",
+        "kind": "NEAR",
+        "created_ms": 1791079206755,
+        "entry": 0.4902,
+        "stop": 0.4980591290511275,
+        "target": 0.47152956452556377,
+        "rr": 2.375636708975765
+      },
+      {
+        "id": 221,
+        "setup_id": "setup-v1:XMRUSDC:LONG:1791043200000:555.68",
+        "kind": "NEAR",
+        "created_ms": 1791076509059,
+        "entry": 550.92,
+        "stop": 546.9712855624283,
+        "target": 561.6106427812142,
+        "rr": 2.7073729818225836
+      },
+      {
+        "id": 220,
+        "setup_id": "setup-v1:EDGEUSDC:SHORT:1791043200000:0.4711",
+        "kind": "NEAR",
+        "created_ms": 1791072924833,
+        "entry": 0.4897,
+        "stop": 0.4980591290511275,
+        "target": 0.47152956452556377,
+        "rr": 2.1737235258959755
+      },
+      {
+        "id": 219,
+        "setup_id": "setup-v1:EDGEUSDC:SHORT:1791043200000:0.4711",
+        "kind": "NEAR",
+        "created_ms": 1791068420928,
+        "entry": 0.4807,
+        "stop": 0.48521368638319934,
+        "target": 0.47140684319159964,
+        "rr": 2.05888402946891
+      },
+      {
+        "id": 218,
+        "setup_id": "setup-v1:EDGEUSDC:SHORT:1791043200000:0.4711",
+        "kind": "NEAR",
+        "created_ms": 1791066626354,
+        "entry": 0.4809,
+        "stop": 0.48521368638319934,
+        "target": 0.47140684319159964,
+        "rr": 2.200706302009728
+      },
+      {
+        "id": 217,
+        "setup_id": "setup-v1:ALLOUSDC:SHORT:1791028800000:0.26408",
+        "kind": "NEAR",
+        "created_ms": 1791058522279,
+        "entry": 0.26855,
+        "stop": 0.2712279572656735,
+        "target": 0.2615839786328368,
+        "rr": 2.6012444098548064
+      },
+      {
+        "id": 216,
+        "setup_id": "setup-v1:LITUSDC:SHORT:1791000000000:3.4759",
+        "kind": "NEAR",
+        "created_ms": 1791051329681,
+        "entry": 3.61,
+        "stop": 3.6378713816606285,
+        "target": 3.461335690830314,
+        "rr": 5.333941136462944
+      },
+      {
+        "id": 215,
+        "setup_id": "setup-v1:LITUSDC:SHORT:1791000000000:3.4759",
+        "kind": "NEAR",
+        "created_ms": 1791047719091,
+        "entry": 3.5924,
+        "stop": 3.6378713816606285,
+        "target": 3.461335690830314,
+        "rr": 2.8823471903245146
+      },
+      {
+        "id": 214,
+        "setup_id": "setup-v1:CRCLUSDC:SHORT:1790956800000:81.28",
+        "kind": "NEAR",
+        "created_ms": 1791045928901,
+        "entry": 82.3,
+        "stop": 83.14246147550494,
+        "target": 80.56623073775248,
+        "rr": 2.0579804687310457
+      },
+      {
+        "id": 213,
+        "setup_id": "setup-v1:EULUSDC:SHORT:1790956800000:1.3371",
+        "kind": "NEAR",
+        "created_ms": 1791042318593,
+        "entry": 1.3925,
+        "stop": 1.4206452468527007,
+        "target": 1.3251726234263503,
+        "rr": 2.39214020491668
+      },
+      {
+        "id": 212,
+        "setup_id": "setup-v1:NVDAUSDC:LONG:1790942400000:235.64",
+        "kind": "NEAR",
+        "created_ms": 1791042318588,
+        "entry": 234.41,
+        "stop": 232.88103542695137,
+        "target": 237.58051771347567,
+        "rr": 2.0736371328433933
+      },
+      {
+        "id": 211,
+        "setup_id": "setup-v1:NVDAUSDC:LONG:1790942400000:235.64",
+        "kind": "NEAR",
+        "created_ms": 1791040528388,
+        "entry": 234.29,
+        "stop": 232.88103542695137,
+        "target": 237.58051771347567,
+        "rr": 2.3354155075424523
+      },
+      {
+        "id": 210,
+        "setup_id": "setup-v1:CRCLUSDC:SHORT:1790956800000:81.28",
+        "kind": "NEAR",
+        "created_ms": 1791039618270,
+        "entry": 82.34,
+        "stop": 83.09380477184209,
+        "target": 80.58690238592105,
+        "rr": 2.325665317552822
+      },
+      {
+        "id": 209,
+        "setup_id": "setup-v1:NVDAUSDC:LONG:1790942400000:235.64",
+        "kind": "NEAR",
+        "created_ms": 1791038707909,
+        "entry": 234.3,
+        "stop": 232.88103542695137,
+        "target": 237.58051771347567,
+        "rr": 2.311909525991533
+      },
+      {
+        "id": 208,
+        "setup_id": "setup-v1:ATOMUSDC:SHORT:1790956800000:1.69",
+        "kind": "NEAR",
+        "created_ms": 1791037828132,
+        "entry": 1.714,
+        "stop": 1.7491381777910502,
+        "target": 1.619069088895525,
+        "rr": 2.7016458186586463
+      },
+      {
+        "id": 207,
+        "setup_id": "setup-v1:NVDAUSDC:LONG:1790942400000:235.64",
+        "kind": "NEAR",
+        "created_ms": 1791036918198,
+        "entry": 234.22,
+        "stop": 232.88103542695137,
+        "target": 237.58051771347567,
+        "rr": 2.5097883701465395
+      },
+      {
+        "id": 206,
+        "setup_id": "setup-v1:ATOMUSDC:SHORT:1790956800000:1.69",
+        "kind": "NEAR",
+        "created_ms": 1791036007851,
+        "entry": 1.709,
+        "stop": 1.7491381777910502,
+        "target": 1.619069088895525,
+        "rr": 2.2405329801625316
+      },
+      {
+        "id": 205,
+        "setup_id": "setup-v1:CRCLUSDC:SHORT:1790956800000:81.28",
+        "kind": "NEAR",
+        "created_ms": 1791035128138,
+        "entry": 82.28,
+        "stop": 83.09380477184209,
+        "target": 80.58690238592105,
+        "rr": 2.0804714750523554
+      },
+      {
+        "id": 204,
+        "setup_id": "setup-v1:PENGUSDC:LONG:1790956800000:61.03",
+        "kind": "NEAR",
+        "created_ms": 1791032428186,
+        "entry": 60.23,
+        "stop": 59.657695304376645,
+        "target": 62.068847652188325,
+        "rr": 3.2130570765026887
+      },
+      {
+        "id": 203,
+        "setup_id": "setup-v1:NVDAUSDC:LONG:1790942400000:235.64",
+        "kind": "NEAR",
+        "created_ms": 1791030606051,
+        "entry": 234.19,
+        "stop": 232.88103542695137,
+        "target": 237.58051771347567,
+        "rr": 2.5902287833344744
+      },
+      {
+        "id": 202,
+        "setup_id": "setup-v1:NVDAUSDC:LONG:1790942400000:235.64",
+        "kind": "NEAR",
+        "created_ms": 1791027019814,
+        "entry": 234.33,
+        "stop": 232.8449605274136,
+        "target": 237.5624802637068,
+        "rr": 2.1766965278552166
+      },
+      {
+        "id": 201,
+        "setup_id": "setup-v1:NVDAUSDC:LONG:1790942400000:235.64",
+        "kind": "NEAR",
+        "created_ms": 1791024306118,
+        "entry": 234.29,
+        "stop": 232.8449605274136,
+        "target": 237.5624802637068,
+        "rr": 2.26463036186104
+      },
+      {
+        "id": 200,
+        "setup_id": "setup-v1:PIEVERSEUSDC:SHORT:1790942400000:1.3739",
+        "kind": "NEAR",
+        "created_ms": 1791023426080,
+        "entry": 1.3847,
+        "stop": 1.3994910322530763,
+        "target": 1.3506455161265383,
+        "rr": 2.3023737147472714
+      },
+      {
+        "id": 199,
+        "setup_id": "setup-v1:OPUSDC:SHORT:1790956800000:0.1257",
+        "kind": "NEAR",
+        "created_ms": 1791023426074,
+        "entry": 0.1333,
+        "stop": 0.13722418843287687,
+        "target": 0.12441209421643844,
+        "rr": 2.264902905553324
+      },
+      {
+        "id": 198,
+        "setup_id": "setup-v1:NVDAUSDC:LONG:1790942400000:235.64",
+        "kind": "NEAR",
+        "created_ms": 1791022515775,
+        "entry": 234.17,
+        "stop": 232.8449605274136,
+        "target": 237.5624802637068,
+        "rr": 2.56028619063319
+      },
+      {
+        "id": 197,
+        "setup_id": "setup-v1:NVDAUSDC:LONG:1790942400000:235.64",
+        "kind": "NEAR",
+        "created_ms": 1791018904129,
+        "entry": 234.34,
+        "stop": 232.8449605274136,
+        "target": 237.5624802637068,
+        "rr": 2.1554482826677055
+      },
+      {
+        "id": 196,
+        "setup_id": "setup-v1:NVDAUSDC:LONG:1790942400000:235.64",
+        "kind": "NEAR",
+        "created_ms": 1791015332755,
+        "entry": 234.27,
+        "stop": 232.8449605274136,
+        "target": 237.5624802637068,
+        "rr": 2.310448466196534
+      },
+      {
+        "id": 195,
+        "setup_id": "setup-v1:BTCUSDC:LONG:1790913600000:85577.2",
+        "kind": "NEAR",
+        "created_ms": 1791013508941,
+        "entry": 84515.2,
+        "stop": 83364.68880031875,
+        "target": 86966.74440015937,
+        "rr": 2.1308305393624827
+      },
+      {
+        "id": 194,
+        "setup_id": "setup-v1:VELVETUSDC:LONG:1790971200000:0.07432",
+        "kind": "READY",
+        "created_ms": 1791013508736,
+        "entry": 0.0746,
+        "stop": 0.07113832036736303,
+        "target": 0.09401916018368152,
+        "rr": 5.609750827487406
+      },
+      {
+        "id": 193,
+        "setup_id": "setup-v1:NVDAUSDC:LONG:1790942400000:235.64",
+        "kind": "NEAR",
+        "created_ms": 1791012627677,
+        "entry": 234.2,
+        "stop": 232.79495732600748,
+        "target": 237.53747866300375,
+        "rr": 2.3753575067724615
+      },
+      {
+        "id": 192,
+        "setup_id": "setup-v1:BTCUSDC:LONG:1790913600000:85577.2",
+        "kind": "NEAR",
+        "created_ms": 1791010806821,
+        "entry": 84513.7,
+        "stop": 83364.68880031875,
+        "target": 86966.74440015937,
+        "rr": 2.1349177456580755
+      },
+      {
+        "id": 191,
+        "setup_id": "setup-v1:VELVETUSDC:LONG:1790971200000:0.07432",
+        "kind": "READY",
+        "created_ms": 1791010806615,
+        "entry": 0.07536,
+        "stop": 0.07113832036736303,
+        "target": 0.09401916018368152,
+        "rr": 4.419842765763484
+      },
+      {
+        "id": 190,
+        "setup_id": "setup-v1:NVDAUSDC:LONG:1790942400000:235.64",
+        "kind": "NEAR",
+        "created_ms": 1791009925901,
+        "entry": 234.27,
+        "stop": 232.79495732600748,
+        "target": 237.53747866300375,
+        "rr": 2.215175683127581
+      },
+      {
+        "id": 189,
+        "setup_id": "setup-v1:VELVETUSDC:LONG:1790971200000:0.07432",
+        "kind": "READY",
+        "created_ms": 1791009015362,
+        "entry": 0.07484,
+        "stop": 0.07113832036736303,
+        "target": 0.09401916018368152,
+        "rr": 5.181204773795844
+      },
+      {
+        "id": 188,
+        "setup_id": "setup-v1:VELVETUSDC:LONG:1790971200000:0.07432",
+        "kind": "NEAR",
+        "created_ms": 1791006314042,
+        "entry": 0.07198,
+        "stop": 0.07113832036736303,
+        "target": 0.09401916018368152,
+        "rr": 26.18473743344981
+      },
+      {
+        "id": 187,
+        "setup_id": "setup-v1:VELVETUSDC:LONG:1790971200000:0.07432",
+        "kind": "NEAR",
+        "created_ms": 1791004521201,
+        "entry": 0.07516,
+        "stop": 0.07113832036736303,
+        "target": 0.09401916018368152,
+        "rr": 4.689374069141299
+      },
+      {
+        "id": 186,
+        "setup_id": "setup-v1:MRVLUSDC:LONG:1790928000000:273.07",
+        "kind": "NEAR",
+        "created_ms": 1791003609502,
+        "entry": 272.22,
+        "stop": 269.40020472108233,
+        "target": 278.1851023605412,
+        "rr": 2.1154380976305136
+      },
+      {
+        "id": 185,
+        "setup_id": "setup-v1:AAVEUSDC:LONG:1790913600000:177.82",
+        "kind": "NEAR",
+        "created_ms": 1791002727816,
+        "entry": 177.29,
+        "stop": 173.27775785060538,
+        "target": 185.8288789253027,
+        "rr": 2.1282062765307157
+      },
+      {
+        "id": 184,
+        "setup_id": "setup-v1:BTCUSDC:LONG:1790913600000:85577.2",
+        "kind": "NEAR",
+        "created_ms": 1791001816119,
+        "entry": 84473.2,
+        "stop": 83364.68880031875,
+        "target": 86966.74440015937,
+        "rr": 2.249453502027213
+      },
+      {
+        "id": 183,
+        "setup_id": "setup-v1:MRVLUSDC:LONG:1790928000000:273.07",
+        "kind": "NEAR",
+        "created_ms": 1791000933994,
+        "entry": 272.25,
+        "stop": 269.40020472108233,
+        "target": 278.1851023605412,
+        "rr": 2.0826416565597263
+      },
+      {
+        "id": 182,
+        "setup_id": "setup-v1:CBRSUSDC:SHORT:1790956800000:166.56",
+        "kind": "NEAR",
+        "created_ms": 1791000022164,
+        "entry": 177.59,
+        "stop": 180.78147667348367,
+        "target": 166.73073833674184,
+        "rr": 3.4025821819354602
+      },
+      {
+        "id": 181,
+        "setup_id": "setup-v1:NVDAUSDC:LONG:1790942400000:235.64",
+        "kind": "NEAR",
+        "created_ms": 1790999142206,
+        "entry": 234.29,
+        "stop": 232.74149260399,
+        "target": 237.510746301995,
+        "rr": 2.0799037255448907
+      },
+      {
+        "id": 180,
+        "setup_id": "setup-v1:VELVETUSDC:LONG:1790971200000:0.07432",
+        "kind": "NEAR",
+        "created_ms": 1790998235596,
+        "entry": 0.07891,
+        "stop": 0.07171896075717986,
+        "target": 0.09371948037858993,
+        "rr": 2.0594353442552
+      },
+      {
+        "id": 179,
+        "setup_id": "setup-v1:XMRUSDC:SHORT:1790956800000:536.4",
+        "kind": "NEAR",
+        "created_ms": 1790998235346,
+        "entry": 545.22,
+        "stop": 550.2437473756493,
+        "target": 534.1918736878247,
+        "rr": 2.1951992183424913
+      },
+      {
+        "id": 178,
+        "setup_id": "setup-v1:DRAMUSDC:LONG:1790913600000:62.25",
+        "kind": "NEAR",
+        "created_ms": 1790995537054,
+        "entry": 61.43,
+        "stop": 60.77598503620514,
+        "target": 62.772992518102576,
+        "rr": 2.0534583953706425
+      },
+      {
+        "id": 177,
+        "setup_id": "setup-v1:NVDAUSDC:LONG:1790942400000:235.64",
+        "kind": "NEAR",
+        "created_ms": 1790994615184,
+        "entry": 234.15,
+        "stop": 232.74149260399,
+        "target": 237.510746301995,
+        "rr": 2.3860338337698805
+      },
+      {
+        "id": 176,
+        "setup_id": "setup-v1:SAMSUNGEMUSDC:LONG:1790942400000:1172.59",
+        "kind": "NEAR",
+        "created_ms": 1790994614945,
+        "entry": 1159.36,
+        "stop": 1156.5300364576121,
+        "target": 1171.520018228806,
+        "rr": 4.296881584045513
+      },
+      {
+        "id": 175,
+        "setup_id": "setup-v1:VELVETUSDC:LONG:1790971200000:0.07432",
+        "kind": "READY",
+        "created_ms": 1790992823308,
+        "entry": 0.07855,
+        "stop": 0.07171896075717986,
+        "target": 0.09371948037858993,
+        "rr": 2.2206694822510413
+      },
+      {
+        "id": 174,
+        "setup_id": "setup-v1:NVDAUSDC:LONG:1790942400000:235.64",
+        "kind": "NEAR",
+        "created_ms": 1790991911880,
+        "entry": 234.29,
+        "stop": 232.74149260399,
+        "target": 237.510746301995,
+        "rr": 2.0799037255448907
+      },
+      {
+        "id": 173,
+        "setup_id": "setup-v1:VELVETUSDC:LONG:1790971200000:0.07432",
+        "kind": "READY",
+        "created_ms": 1790991030067,
+        "entry": 0.07817,
+        "stop": 0.07171896075717986,
+        "target": 0.09371948037858993,
+        "rr": 2.410383783651004
+      },
+      {
+        "id": 172,
+        "setup_id": "setup-v1:VELVETUSDC:LONG:1790971200000:0.07432",
+        "kind": "NEAR",
+        "created_ms": 1790990120321,
+        "entry": 0.07637,
+        "stop": 0.07171896075717986,
+        "target": 0.09371948037858993,
+        "rr": 3.730237366922358
+      },
+      {
+        "id": 171,
+        "setup_id": "setup-v1:NVDAUSDC:LONG:1790942400000:235.64",
+        "kind": "NEAR",
+        "created_ms": 1790989209136,
+        "entry": 234.33,
+        "stop": 232.74149260399,
+        "target": 237.510746301995,
+        "rr": 2.002349066793348
+      },
+      {
+        "id": 170,
+        "setup_id": "setup-v1:DRAMUSDC:LONG:1790913600000:62.25",
+        "kind": "NEAR",
+        "created_ms": 1790989208884,
+        "entry": 61.44,
+        "stop": 60.77598503620514,
+        "target": 62.772992518102576,
+        "rr": 2.0074736124687713
+      },
+      {
+        "id": 169,
+        "setup_id": "setup-v1:UNIUSDC:SHORT:1790956800000:8.718",
+        "kind": "NEAR",
+        "created_ms": 1790988309280,
+        "entry": 9.054,
+        "stop": 9.237720707015455,
+        "target": 8.668360353507728,
+        "rr": 2.099053790707605
+      },
+      {
+        "id": 168,
+        "setup_id": "setup-v1:CBRSUSDC:SHORT:1790956800000:166.56",
+        "kind": "NEAR",
+        "created_ms": 1790986524940,
+        "entry": 172.37,
+        "stop": 174.23928257144394,
+        "target": 166.69464128572199,
+        "rr": 3.036115994969168
+      },
+      {
+        "id": 167,
+        "setup_id": "setup-v1:NVDAUSDC:LONG:1790942400000:235.64",
+        "kind": "NEAR",
+        "created_ms": 1790985628930,
+        "entry": 234.3,
+        "stop": 232.74149260399,
+        "target": 237.510746301995,
+        "rr": 2.060141844828535
+      }
+    ]
+  }
+}
