@@ -1,0 +1,111 @@
+{
+  "protocol": "trend_15m_break_retest_net2r_v1",
+  "model": "trend_15m_break_retest_net2r",
+  "registered_utc": "2026-10-07T18:12:18.121127+00:00",
+  "changes_live_rules": false,
+  "real_orders_enabled": false,
+  "automatic_promotion": false,
+  "eligible_for_live_promotion": false,
+  "hypothesis": "Independent continuation family: closed 4H EMA20/50 trend, closed 15M breakout from preceding 20-bar range, a later wick retest that holds the frozen edge, then strict direction+close confirmation. Local structural invalidation comes from the observed post-breakout retest extreme, never an arbitrary stop fitted to RR.",
+  "development": {
+    "start_ms": 1790391600000,
+    "end_ms": 1790996400000,
+    "role": "PREVIOUSLY_VIEWED_MARKET_DEVELOPMENT"
+  },
+  "validation": {
+    "start_ms": 1788577200000,
+    "end_ms": 1789182000000,
+    "role": "NEWLY_FETCHED_HISTORICAL_VALIDATION",
+    "run_only_if_development_not_killed": true,
+    "not_captured_forward": true
+  },
+  "prospective_start_ms": 1791417600000,
+  "production_parameters": {
+    "monitor_interval": "HOUR_4",
+    "entry_interval": "MINUTE_15",
+    "trend_fast_ema": 20,
+    "trend_slow_ema": 50,
+    "atr_period": 14,
+    "roll_lookback": 20,
+    "roll_max_age": 6,
+    "retest_lookback": 4,
+    "atr_stop_buffer": 0.5,
+    "atr_target_buffer": 0.25,
+    "retest_atr_tolerance": 0.35,
+    "min_rr": 2.0
+  },
+  "source_universe_sha256": "1ee2f543d56f61b4adf0560f2ccf12bb29b755358ab686b9c107c778978681cd",
+  "indicator_windows": {
+    "HOUR_4": 180,
+    "MINUTE_15": 180
+  },
+  "rules": {
+    "range_bars": 20,
+    "atr_period": 14,
+    "trend_fast_ema": 20,
+    "trend_slow_ema": 50,
+    "confirmation_bars": 6,
+    "atr_stop_buffer": 0.5,
+    "atr_target_buffer": 0.25,
+    "min_net_rr": 2,
+    "pending_bars": 4,
+    "fee_bps_each_side": 5,
+    "slippage_bps_each_side": 2,
+    "trend": "Use exactly 180 contiguous closed 4H bars; LONG close>EMA20>EMA50, SHORT inverse.",
+    "breakout": "LONG closed 15M close strictly above highest high of preceding 20 closed bars AND close>open; SHORT below preceding minimum low AND close<open. Range excludes breakout bar.",
+    "retest": "Only subsequent 15M candles, at most six after breakout. Wick must touch frozen range edge. Every completed post-breakout candle must hold close strictly beyond edge and 4H trend must still match; otherwise invalidate. Confirmation is first later matching-color close beyond edge after a touch; may be touch candle itself. Breakout candle never qualifies as retest or confirmation.",
+    "stop": "At first qualified confirmation freeze post-breakout minimum low minus .5 ATR15 LONG; maximum high plus .5 ATR15 SHORT. ATR from 180 closed bars at confirmation. Independent local structural-stop model; existing 4H stops unchanged. Never widen later.",
+    "extension": "Frozen prior range high+range width-.25 breakout ATR15 LONG; low-width+.25 breakout ATR15 SHORT. Prior range and breakout ATR known before subsequent confirmation; never stretch extension to fit TP.",
+    "entry_target": "Freeze limit at confirmation close; net 2R target includes original costs and must fit frozen extension. Keep TP, SL and limit fixed.",
+    "identity": "break-retest-v1:ticker:side:breakout_open_ms:frozen_edge. First breakout per (side,last_closed_4H_open_ms,frozen_edge). One active setup per ticker; no replacement. First qualified confirmation only, including room failures. After first confirmation suppress new breakouts through four-bar pending horizon.",
+    "history": "25-hour warmup. Exclude all setups whose breakout close precedes study start. Missing closed indicator windows invalidate active setup; suppress newly seen episodes anchored before last unknown observation. Both grids/OHLC/identity unique and validated.",
+    "pending": "Reuse frozen sweep pending_state: same closed 4H trend, latest closed candle matching direction+strict close beyond frozen edge, last-four-bar retest and original SL validity. Four-bar expiry; no rearm.",
+    "execution": "Model-name adapter to unchanged confirmation_zone evaluator. created_ms=confirmation close+1; no confirmation/bar-before fill or TP/SL. Fill-bar exit contact and later both touches AMBIGUOUS. Gaps stop evaluation; adverse SL gap charged worse open. No real orders."
+  },
+  "portfolio": {
+    "initial_cash_usdc": 10000,
+    "risk_pct": 1,
+    "max_positions": 3,
+    "max_total_risk_pct": 3,
+    "max_notional_multiple": 1,
+    "daily_loss_pct": 3,
+    "quantity": "reserve at creation using net stop risk and known cash; round observed size step; no future profit increases",
+    "uncertain": "freeze capital on ambiguous result/gap; equity and ROI unknown",
+    "daily_loss_timezone": "Asia/Tokyo"
+  },
+  "cost_stress": {
+    "fee_bps_each_side": 10,
+    "slippage_bps_each_side": 5,
+    "rules": "Same fixed nominal fills, same TP/SL touch outcome and stop/target. Reprice both sides only; do not retune target or replay as a new sample. Net R normalized by stressed net stop risk. No claim that assumed costs match exchange fills."
+  },
+  "decision": {
+    "early_kill_minimum_resolved": 20,
+    "early_kill": "Any evaluated period >=20 resolved with base net AvgR<=0 or PF<=1: KILL, skip unused validation and forward activation. Numeric zero tolerance 1e-12.",
+    "positive_sample_minimum": 50,
+    "practical_retrospective": "Two complete registered periods each >=50 resolved, win rate>=40%, base AvgR>0, PF>=1.2, positive stressed AvgR/PF>1, net incremental fills vs current>0 and capped >=20 resolved with known closed ROI>0. Then LIVE_CAPTURE_SHADOW_REQUIRED, never production-ready.",
+    "insufficient": "Below positive sample floor: INSUFFICIENT SAMPLE; do not tune or auto-promote. Weak adequately sampled profitability: PIVOT_NO_LIVE_ADOPTION, not a parameter sweep.",
+    "forward": "Untouched real-time captured Shadow and human reviewed validation still needed before practical use. Historical API retrieval is not captured-live fill evidence.",
+    "censoring": "OPEN/AMBIGUOUS/gaps excluded from resolved metrics and freeze uncertain capital. Never force outcomes to obtain ROI."
+  },
+  "frozen_dependencies_sha256": {
+    "confirmation_zone_replay.py": "fa62fd6571a5a153ef8b1b5a4a8f95551159edece717549d8b4816df696e7602",
+    "pending_entry_replay.py": "111686641afe5e61c64311fa730716b5198d3a74e34440e06f48d99da3c53df8",
+    "pending_entry_protocol.json": "1ed8af4b9bb0dd7281e80a21956677bb6d9e315f47fb0c00689992662a29ee0f",
+    "sweep_reclaim_replay.py": "0c435d928b6827957dd73ec67bafb7565a5cd5673d73194eb991a1b8fb9f8796"
+  },
+  "scanner_sha256": {
+    "published": "b1f4d4d15dc1ce4665f0f9f776de050059b60fb18faa4cf1583b04bf02a6c4af",
+    "local_with_one_extra_eof_newline": "2e24f61e47ee40fdb3ae5f18152129f6632e83d508b73d27bf33fda0919ac9ab",
+    "equivalence": "Exact published bytes + one newline equals local hash; neither app copy changes."
+  },
+  "development_comparator_sha256": "37353c224ff1b1b373e1727f8c5f5e04096042a61bb6db21406d2eccd60630eb",
+  "limitations": [
+    "Development market period already viewed; no untouched-development claim.",
+    "Unused historical validation only fetched if development not killed, with today fixed 182-market universe; coverage/survivorship bias remains.",
+    "New 15M structural risk model is not a loosening of production 4H stops or min_rr.",
+    "Overlapping correlated events are not independent daily trades.",
+    "OHLC fills, costs and stress are hypothetical; exchange tick/spread/queue/funding unvalidated.",
+    "Terminal-bar MFE/MAE ordering is not known.",
+    "Multiple previous failed hypotheses exist; historical positive results alone cannot establish practical robustness."
+  ]
+}
