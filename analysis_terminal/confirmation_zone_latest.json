@@ -1,0 +1,428 @@
+{
+  "version": 1,
+  "decision": "KILL_NO_LIVE_PROMOTION",
+  "decision_basis": "Preregistered stop gate on observed resolved results; OPEN outcomes remain censored and do not establish final whole-cohort profitability.",
+  "registration_commit": "9c93cf647c7f7f08336530fffc76421bcfd0be47",
+  "forward_collection_enabled": false,
+  "changes_live_rules": false,
+  "real_orders_enabled": false,
+  "automatic_promotion": false,
+  "eligible_for_live_promotion": false,
+  "periods": [
+    {
+      "protocol": "confirmation_zone_measured_net2r_v1",
+      "dataset": "ISOLATED_REGISTERED_SHADOW_REPLAY",
+      "role": "development",
+      "start_ms": 1790391600000,
+      "end_ms": 1790996400000,
+      "period_complete": true,
+      "protocol_sha256": "d32ca8eadbf8346d6702925dca5cbf54dcfe68fc201ac354302d03c6714a44b3",
+      "engine_sha256": "fa62fd6571a5a153ef8b1b5a4a8f95551159edece717549d8b4816df696e7602",
+      "baseline_report_sha256": "37353c224ff1b1b373e1727f8c5f5e04096042a61bb6db21406d2eccd60630eb",
+      "first_shadow_seeds": 235,
+      "seed_exclusions": {
+        "FIRST_SEED_NET_ROOM_INELIGIBLE": 30
+      },
+      "source_files_verified": 182,
+      "metrics": {
+        "current_next_open": {
+          "candidates": 2,
+          "filled": 2,
+          "resolved": 1,
+          "tp": 1,
+          "sl": 0,
+          "statuses": {
+            "TP": 1,
+            "OPEN": 1
+          },
+          "win_rate": 100.0,
+          "avg_net_r": 2.487539965833246,
+          "expectancy_net_r": 2.487539965833246,
+          "profit_factor": "INF",
+          "avg_mfe_r": 2.9020737938932344,
+          "avg_mae_r": 0.936294236942566,
+          "max_consecutive_losses": 0,
+          "sample_status": "INSUFFICIENT SAMPLE"
+        },
+        "shadow_v2_next_open": {
+          "candidates": 235,
+          "filled": 0,
+          "resolved": 0,
+          "tp": 0,
+          "sl": 0,
+          "statuses": {
+            "REJECTED_AT_FILL": 235
+          },
+          "win_rate": null,
+          "avg_net_r": null,
+          "expectancy_net_r": null,
+          "profit_factor": null,
+          "avg_mfe_r": null,
+          "avg_mae_r": null,
+          "max_consecutive_losses": null,
+          "sample_status": "INSUFFICIENT SAMPLE"
+        },
+        "confirmed_pullback_cost_2r": {
+          "candidates": 295,
+          "filled": 13,
+          "resolved": 11,
+          "tp": 3,
+          "sl": 8,
+          "statuses": {
+            "EXPIRED": 282,
+            "AMBIGUOUS": 2,
+            "TP": 3,
+            "SL": 8
+          },
+          "win_rate": 27.272727272727273,
+          "avg_net_r": -0.18181818181818363,
+          "expectancy_net_r": -0.18181818181818363,
+          "profit_factor": 0.7499999999999976,
+          "avg_mfe_r": 1.646513011076935,
+          "avg_mae_r": 1.000076234052739,
+          "max_consecutive_losses": 4,
+          "sample_status": "INSUFFICIENT SAMPLE"
+        },
+        "confirmation_zone_measured_net2r": {
+          "candidates": 205,
+          "filled": 205,
+          "resolved": 152,
+          "tp": 22,
+          "sl": 130,
+          "statuses": {
+            "OPEN": 53,
+            "SL": 130,
+            "TP": 22
+          },
+          "win_rate": 14.473684210526315,
+          "avg_net_r": -0.565789473684211,
+          "expectancy_net_r": -0.565789473684211,
+          "profit_factor": 0.3384615384615379,
+          "avg_mfe_r": 0.8321639293498927,
+          "avg_mae_r": 1.0782987768919514,
+          "max_consecutive_losses": 24,
+          "sample_status": "SUFFICIENT SAMPLE"
+        }
+      },
+      "portfolios": {
+        "current_next_open": {
+          "initial_cash_usdc": 10000,
+          "known_cash_usdc": 10248.222119437434,
+          "realized_net_pnl_usdc": 248.6130476074348,
+          "admitted": 2,
+          "filled": 2,
+          "resolved": 1,
+          "active": 1,
+          "uncertain": 0,
+          "exclusions": {},
+          "realized_roi_pct": 2.4861304760743477,
+          "closed_portfolio_roi_pct": null,
+          "equity_usdc": null,
+          "max_known_cash_drawdown_pct": 0.023616453346203343,
+          "profit_factor": "INF",
+          "notes": [
+            "Realized return is not total ROI when positions remain open.",
+            "Cash drawdown excludes unrealized losses; not equity drawdown.",
+            "Intrabar fills booked at bar close; reservations prevent future-profit sizing."
+          ]
+        },
+        "shadow_v2_next_open": {
+          "initial_cash_usdc": 10000,
+          "known_cash_usdc": 10000.0,
+          "realized_net_pnl_usdc": 0.0,
+          "admitted": 197,
+          "filled": 0,
+          "resolved": 0,
+          "active": 0,
+          "uncertain": 0,
+          "exclusions": {
+            "SIZE_OR_RISK_LIMIT": 15,
+            "CAPACITY_OR_TICKER": 23
+          },
+          "realized_roi_pct": 0.0,
+          "closed_portfolio_roi_pct": 0.0,
+          "equity_usdc": 10000.0,
+          "max_known_cash_drawdown_pct": 0.0,
+          "profit_factor": null,
+          "notes": [
+            "Realized return is not total ROI when positions remain open.",
+            "Cash drawdown excludes unrealized losses; not equity drawdown.",
+            "Intrabar fills booked at bar close; reservations prevent future-profit sizing."
+          ]
+        },
+        "confirmed_pullback_cost_2r": {
+          "initial_cash_usdc": 10000,
+          "known_cash_usdc": 9938.073985590689,
+          "realized_net_pnl_usdc": -60.661374060074465,
+          "admitted": 104,
+          "filled": 7,
+          "resolved": 6,
+          "active": 1,
+          "uncertain": 1,
+          "exclusions": {
+            "CAPACITY_OR_TICKER": 82,
+            "SIZE_OR_RISK_LIMIT": 109
+          },
+          "realized_roi_pct": null,
+          "closed_portfolio_roi_pct": null,
+          "equity_usdc": null,
+          "max_known_cash_drawdown_pct": 1.4297423422017494,
+          "profit_factor": 0.7310951186642383,
+          "notes": [
+            "Realized return is not total ROI when positions remain open.",
+            "Cash drawdown excludes unrealized losses; not equity drawdown.",
+            "Intrabar fills booked at bar close; reservations prevent future-profit sizing."
+          ]
+        },
+        "confirmation_zone_measured_net2r": {
+          "initial_cash_usdc": 10000,
+          "known_cash_usdc": 8976.71254783634,
+          "realized_net_pnl_usdc": -1018.7973959819917,
+          "admitted": 22,
+          "filled": 22,
+          "resolved": 19,
+          "active": 3,
+          "uncertain": 0,
+          "exclusions": {
+            "CAPACITY_OR_TICKER": 157,
+            "DAILY_LOSS_LIMIT": 13,
+            "SIZE_OR_RISK_LIMIT": 13
+          },
+          "realized_roi_pct": -10.187973959819917,
+          "closed_portfolio_roi_pct": null,
+          "equity_usdc": null,
+          "max_known_cash_drawdown_pct": 13.080725595100017,
+          "profit_factor": 0.2819064418964593,
+          "notes": [
+            "Realized return is not total ROI when positions remain open.",
+            "Cash drawdown excludes unrealized losses; not equity drawdown.",
+            "Intrabar fills booked at bar close; reservations prevent future-profit sizing."
+          ]
+        }
+      },
+      "comparison": {
+        "shared_filled_setups": 1,
+        "proposal_only_filled_setups": 204,
+        "current_filled_missing_in_proposal": 1,
+        "net_filled_count_difference": 203,
+        "capped_filled_count_difference": 20
+      },
+      "changes_live_rules": false,
+      "real_orders_enabled": false,
+      "automatic_promotion": false,
+      "eligible_for_live_promotion": false,
+      "limitations": [
+        "Retrospective periods already viewed; no untouched validation claim.",
+        "Extra price touches are not live fills; conservative OHLC ambiguity may censor outcomes.",
+        "Cost-adjusted net risk R differs from original Shadow price-stop R.",
+        "No condition tuning after viewing this experiment. Existing frozen strategy protocols and live signals remain unchanged."
+      ]
+    },
+    {
+      "protocol": "confirmation_zone_measured_net2r_v1",
+      "dataset": "ISOLATED_REGISTERED_SHADOW_REPLAY",
+      "role": "validation",
+      "start_ms": 1790996400000,
+      "end_ms": 1791255600000,
+      "period_complete": true,
+      "protocol_sha256": "d32ca8eadbf8346d6702925dca5cbf54dcfe68fc201ac354302d03c6714a44b3",
+      "engine_sha256": "fa62fd6571a5a153ef8b1b5a4a8f95551159edece717549d8b4816df696e7602",
+      "baseline_report_sha256": "2653aa03770e1cbabd2bb80d818b3ae2d70d4f718ffbf72586699e33289b6631",
+      "first_shadow_seeds": 69,
+      "seed_exclusions": {
+        "FIRST_SEED_NET_ROOM_INELIGIBLE": 9
+      },
+      "source_files_verified": 182,
+      "metrics": {
+        "current_next_open": {
+          "candidates": 1,
+          "filled": 1,
+          "resolved": 1,
+          "tp": 0,
+          "sl": 1,
+          "statuses": {
+            "SL": 1
+          },
+          "win_rate": 0.0,
+          "avg_net_r": -1.0,
+          "expectancy_net_r": -1.0,
+          "profit_factor": 0.0,
+          "avg_mfe_r": 0.13019027033567324,
+          "avg_mae_r": 1.2015503870973216,
+          "max_consecutive_losses": 1,
+          "sample_status": "INSUFFICIENT SAMPLE"
+        },
+        "shadow_v2_next_open": {
+          "candidates": 69,
+          "filled": 0,
+          "resolved": 0,
+          "tp": 0,
+          "sl": 0,
+          "statuses": {
+            "REJECTED_AT_FILL": 69
+          },
+          "win_rate": null,
+          "avg_net_r": null,
+          "expectancy_net_r": null,
+          "profit_factor": null,
+          "avg_mfe_r": null,
+          "avg_mae_r": null,
+          "max_consecutive_losses": null,
+          "sample_status": "INSUFFICIENT SAMPLE"
+        },
+        "confirmed_pullback_cost_2r": {
+          "candidates": 85,
+          "filled": 6,
+          "resolved": 4,
+          "tp": 0,
+          "sl": 4,
+          "statuses": {
+            "EXPIRED": 79,
+            "SL": 4,
+            "OPEN": 2
+          },
+          "win_rate": 0.0,
+          "avg_net_r": -1.0,
+          "expectancy_net_r": -1.0,
+          "profit_factor": 0.0,
+          "avg_mfe_r": 0.7414090525291918,
+          "avg_mae_r": 1.5121378229236495,
+          "max_consecutive_losses": 4,
+          "sample_status": "INSUFFICIENT SAMPLE"
+        },
+        "confirmation_zone_measured_net2r": {
+          "candidates": 60,
+          "filled": 60,
+          "resolved": 27,
+          "tp": 8,
+          "sl": 19,
+          "statuses": {
+            "OPEN": 33,
+            "SL": 19,
+            "TP": 8
+          },
+          "win_rate": 29.62962962962963,
+          "avg_net_r": -0.11111111111111238,
+          "expectancy_net_r": -0.11111111111111238,
+          "profit_factor": 0.8421052631578929,
+          "avg_mfe_r": 1.0730053686496812,
+          "avg_mae_r": 0.8992239307462063,
+          "max_consecutive_losses": 10,
+          "sample_status": "SUFFICIENT SAMPLE"
+        }
+      },
+      "portfolios": {
+        "current_next_open": {
+          "initial_cash_usdc": 10000,
+          "known_cash_usdc": 9900.000843697531,
+          "realized_net_pnl_usdc": -99.99915630246743,
+          "admitted": 1,
+          "filled": 1,
+          "resolved": 1,
+          "active": 0,
+          "uncertain": 0,
+          "exclusions": {},
+          "realized_roi_pct": -0.9999915630246742,
+          "closed_portfolio_roi_pct": -0.9999915630246825,
+          "equity_usdc": 9900.000843697531,
+          "max_known_cash_drawdown_pct": 0.999991563024687,
+          "profit_factor": 0.0,
+          "notes": [
+            "Realized return is not total ROI when positions remain open.",
+            "Cash drawdown excludes unrealized losses; not equity drawdown.",
+            "Intrabar fills booked at bar close; reservations prevent future-profit sizing."
+          ]
+        },
+        "shadow_v2_next_open": {
+          "initial_cash_usdc": 10000,
+          "known_cash_usdc": 10000.0,
+          "realized_net_pnl_usdc": 0.0,
+          "admitted": 67,
+          "filled": 0,
+          "resolved": 0,
+          "active": 0,
+          "uncertain": 0,
+          "exclusions": {
+            "SIZE_OR_RISK_LIMIT": 1,
+            "CAPACITY_OR_TICKER": 1
+          },
+          "realized_roi_pct": 0.0,
+          "closed_portfolio_roi_pct": 0.0,
+          "equity_usdc": 10000.0,
+          "max_known_cash_drawdown_pct": 0.0,
+          "profit_factor": null,
+          "notes": [
+            "Realized return is not total ROI when positions remain open.",
+            "Cash drawdown excludes unrealized losses; not equity drawdown.",
+            "Intrabar fills booked at bar close; reservations prevent future-profit sizing."
+          ]
+        },
+        "confirmed_pullback_cost_2r": {
+          "initial_cash_usdc": 10000,
+          "known_cash_usdc": 9664.364323584396,
+          "realized_net_pnl_usdc": -330.8031885808074,
+          "admitted": 44,
+          "filled": 6,
+          "resolved": 4,
+          "active": 2,
+          "uncertain": 0,
+          "exclusions": {
+            "CAPACITY_OR_TICKER": 6,
+            "SIZE_OR_RISK_LIMIT": 35
+          },
+          "realized_roi_pct": -3.308031885808074,
+          "closed_portfolio_roi_pct": null,
+          "equity_usdc": null,
+          "max_known_cash_drawdown_pct": 3.356356764156044,
+          "profit_factor": 0.0,
+          "notes": [
+            "Realized return is not total ROI when positions remain open.",
+            "Cash drawdown excludes unrealized losses; not equity drawdown.",
+            "Intrabar fills booked at bar close; reservations prevent future-profit sizing."
+          ]
+        },
+        "confirmation_zone_measured_net2r": {
+          "initial_cash_usdc": 10000,
+          "known_cash_usdc": 10020.35999024158,
+          "realized_net_pnl_usdc": 23.709605012484047,
+          "admitted": 7,
+          "filled": 7,
+          "resolved": 4,
+          "active": 3,
+          "uncertain": 0,
+          "exclusions": {
+            "CAPACITY_OR_TICKER": 53
+          },
+          "realized_roi_pct": 0.23709605012484047,
+          "closed_portfolio_roi_pct": null,
+          "equity_usdc": null,
+          "max_known_cash_drawdown_pct": 1.7850134927610817,
+          "profit_factor": 1.1193570712382035,
+          "notes": [
+            "Realized return is not total ROI when positions remain open.",
+            "Cash drawdown excludes unrealized losses; not equity drawdown.",
+            "Intrabar fills booked at bar close; reservations prevent future-profit sizing."
+          ]
+        }
+      },
+      "comparison": {
+        "shared_filled_setups": 1,
+        "proposal_only_filled_setups": 59,
+        "current_filled_missing_in_proposal": 0,
+        "net_filled_count_difference": 59,
+        "capped_filled_count_difference": 6
+      },
+      "changes_live_rules": false,
+      "real_orders_enabled": false,
+      "automatic_promotion": false,
+      "eligible_for_live_promotion": false,
+      "limitations": [
+        "Retrospective periods already viewed; no untouched validation claim.",
+        "Extra price touches are not live fills; conservative OHLC ambiguity may censor outcomes.",
+        "Cost-adjusted net risk R differs from original Shadow price-stop R.",
+        "No condition tuning after viewing this experiment. Existing frozen strategy protocols and live signals remain unchanged."
+      ]
+    }
+  ],
+  "action": "Reject this model as specified; no parameter tuning, production adoption or forward activation. Preserve existing frozen experiments unchanged."
+}
