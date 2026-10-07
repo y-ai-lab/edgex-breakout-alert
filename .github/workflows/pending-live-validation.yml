@@ -1,0 +1,79 @@
+name: Pending live capture chronology and regressions
+on:
+  push:
+    branches: [audit/pending-live-v19-0-36]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -r analysis_terminal/test-requirements.txt
+      - name: Full regression and timestamp checks
+        run: |
+          mkdir -p validation-output
+          python -m unittest discover -s analysis_terminal -p 'test_*.py' -q > validation-output/analysis-tests.txt 2>&1
+          python -m unittest discover -s tests -q > validation-output/root-tests.txt 2>&1
+          python -m unittest discover -s .github/scripts -p 'test_*.py' -q > validation-output/review-tests.txt 2>&1
+          python -m compileall -q analysis_terminal
+      - name: Frozen production strategies, UI and research protocols
+        run: |
+          python - <<'PY'
+          import ast,subprocess
+          from pathlib import Path
+          parent='1122a31e1d42c0a47f553e5f41ebd2a38cad32db'
+          def prior(p):return subprocess.check_output(['git','show',parent+':'+p])
+          old=prior('analysis_terminal/server.py').decode();new=Path('analysis_terminal/server.py').read_text()
+          def func(s,name):return ast.dump(next(n for n in ast.parse(s).body if isinstance(n,(ast.FunctionDef,ast.AsyncFunctionDef)) and n.name==name),include_attributes=False)
+          for name in ['analyze_contract','_evaluate_paper_signal','_persist_shadow_v2_signals','_maybe_push_candidate_changes','_persist_scan_result','_simulation_cycle','_recover_simulation_history']:
+              assert func(old,name)==func(new,name),name
+          oldcollector=ast.parse(old);newcollector=ast.parse(new)
+          original=next(n for n in oldcollector.body if isinstance(n,ast.AsyncFunctionDef) and n.name=='_background_collector')
+          updated=next(n for n in newcollector.body if isinstance(n,ast.AsyncFunctionDef) and n.name=='_background_collector')
+          class RemoveCapture(ast.NodeTransformer):
+              def visit_Expr(self,n):
+                  if isinstance(n.value,ast.Call) and isinstance(n.value.func,ast.Name) and n.value.func.id=='_pending_live_cycle':return None
+                  return n
+          updated=RemoveCapture().visit(updated)
+          assert ast.dump(original,include_attributes=False)==ast.dump(updated,include_attributes=False)
+          changed={'analysis_terminal/server.py','analysis_terminal/pending_live.py','analysis_terminal/test_pending_live.py','analysis_terminal/PENDING_LIVE_CAPTURE.md','analysis_terminal/pending_live_protocol.json','.github/workflows/pending-live-validation.yml'}
+          diff=subprocess.check_output(['git','diff','--name-only',parent,'HEAD']).decode().splitlines()
+          assert set(diff)==changed,diff
+          assert subprocess.check_output(['git','show','42c46292c3406e61edfe1bba9bb3deb16095cd6a:analysis_terminal/pending_live_protocol.json'])==Path('analysis_terminal/pending_live_protocol.json').read_bytes()
+          PY
+      - name: Public BTC snapshot supplies complete registered windows
+        run: |
+          python - <<'PY'
+          import asyncio,json,sqlite3,time
+          from pathlib import Path
+          from analysis_terminal import server,pending_live
+          async def main():
+              contracts=await server.CLIENT.get_contracts()
+              btc=next(c for c in contracts.values() if c.contract_name=='BTCUSDC')
+              raw=await server.fetch_snapshots([btc.contract_id],timeout=30)
+              now=int(time.time()*1000);stamp=now//pending_live.STEP*pending_live.STEP
+              for interval in ['HOUR_4','MINUTE_15']:
+                  cs=raw.get((btc.contract_id,interval),[])
+                  assert pending_live._closed_window(btc,cs,interval,stamp) is not None,(interval,len(cs))
+              with sqlite3.connect(':memory:') as conn:
+                  pending_live.initialize(conn,now_ms=now)
+                  pending_live.cycle(conn,contracts={btc.contract_id:btc},snapshots=raw,analyze=server.analyze_contract,settings=server.SETTINGS,now_ms=now)
+                  report=pending_live.review(conn,now_ms=now)
+                  assert report['meta']['last_error'] is None and report['meta']['last_success_ms']==now
+                  assert report['total_records']==0 and report['status']=='WAITING_FOR_CAPTURE_START'
+                  Path('validation-output/public-baseline.json').write_text(json.dumps(report,indent=2))
+          asyncio.run(main())
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pending-live-validation
+          path: validation-output/
+          retention-days: 14
