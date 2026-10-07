@@ -3951,7 +3951,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="EdgeX Analysis Terminal",
-    version="19.0.34",
+    version="19.0.35",
     lifespan=lifespan,
 )
 
