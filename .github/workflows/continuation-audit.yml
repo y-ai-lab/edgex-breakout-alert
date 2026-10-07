@@ -1,0 +1,90 @@
+name: Frozen continuation diagnostics validation
+on:
+  push:
+    branches: [audit/continuation-v19-0-32]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -r analysis_terminal/test-requirements.txt
+      - name: Regression and chronology checks
+        run: |
+          mkdir -p validation-output
+          python -m unittest discover -s analysis_terminal -p 'test_*.py' -q > validation-output/analysis-tests.txt 2>&1
+          python -m unittest discover -s tests -q > validation-output/root-tests.txt 2>&1
+          python -m compileall -q analysis_terminal
+          python -m analysis_terminal.pending_followup --scheduled --output validation-output/calendar
+      - name: Confirm existing strategies, frozen protocols, UI and notifications unchanged
+        run: |
+          python - <<'PY'
+          import ast,subprocess
+          from pathlib import Path
+          parent='2442f7162f251570e28cda5eb58586dddad3488b'
+          def prior(p):return subprocess.check_output(['git','show',parent+':'+p])
+          old=prior('analysis_terminal/server.py').decode();new=Path('analysis_terminal/server.py').read_text()
+          def function(s,name):return ast.dump(next(n for n in ast.parse(s).body if isinstance(n,(ast.FunctionDef,ast.AsyncFunctionDef)) and n.name==name),include_attributes=False)
+          for name in ['analyze_contract','_evaluate_paper_signal','_persist_shadow_v2_signals','_maybe_push_candidate_changes','_persist_scan_result','_background_collector']:
+              assert function(old,name)==function(new,name),name
+          for p in ['app.py','production_app.py','Dockerfile','requirements.txt','analysis_terminal/index.html','analysis_terminal/btc.html','analysis_terminal/sw.js','analysis_terminal/outcomes.py','analysis_terminal/lifecycle.py','analysis_terminal/paper_execution.py','analysis_terminal/entry_history.py','analysis_terminal/pending_entry_protocol.json','analysis_terminal/pending_entry_replay.py','analysis_terminal/pending_followup.py','analysis_terminal/pending_followup_protocol.json','analysis_terminal/confirmation_zone_protocol.json','analysis_terminal/confirmation_zone_replay.py','.github/workflows/strategy-research.yml']:
+              assert prior(p)==Path(p).read_bytes(),p
+          assert subprocess.check_output(['git','show','97541ec311e45e5cb65f25df5852948cec803d3d:analysis_terminal/continuation_diagnostics_protocol.json'])==Path('analysis_terminal/continuation_diagnostics_protocol.json').read_bytes()
+          PY
+      - name: Download pinned frozen ledgers and market candles
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/y-ai-lab/edgex-breakout-alert/actions/artifacts/11262672328/zip > development.zip
+          gh api repos/y-ai-lab/edgex-breakout-alert/actions/artifacts/11430177364/zip > validation.zip
+          gh api repos/y-ai-lab/edgex-breakout-alert/actions/artifacts/11431586665/zip > frozen.zip
+          gh api repos/y-ai-lab/edgex-breakout-alert/actions/artifacts/11475358678/zip > zone.zip
+          python - <<'PY'
+          import hashlib,zipfile
+          from pathlib import Path
+          digests={'development':'163fb6eb7947f1284dcb953d0bb8e39f1f1535a71b5778260c2a373c4f7c8a9c','validation':'820cc3a94c876f569e9eb410829d89f5d4af7fc5c90470d4d50071046ca0b1df','frozen':'21b77e1ef3396504d15db3c3832190834b77519ff545540389d28bd8ddeb634b','zone':'c81c4af9eb3d1c600fdc3e926775885984af34a4e0ec4a7994887b501d244c0b'}
+          for name,digest in digests.items():
+              raw=Path(name+'.zip').read_bytes();assert hashlib.sha256(raw).hexdigest()==digest
+              out=Path('source-input')/name;out.mkdir(parents=True)
+              with zipfile.ZipFile(Path(name+'.zip')) as z:
+                  for info in z.infolist():assert (out/info.filename).resolve().is_relative_to(out.resolve())
+                  z.extractall(out)
+          PY
+      - name: Reproduce original ledgers then diagnose safe preterminal paths
+        run: |
+          python - <<'PY'
+          import hashlib,json
+          from pathlib import Path
+          from analysis_terminal import continuation_diagnostics as diagnostic,server
+          expected=json.loads(Path('analysis_terminal/continuation_diagnostics_latest.json').read_text())
+          protocol=json.loads(diagnostic.PROTOCOL.read_text())
+          out=Path('validation-output/continuation');out.mkdir()
+          for role,registered in protocol['periods'].items():
+              sources=list((Path('source-input')/role).rglob('replay-report.json'));assert len(sources)==1
+              controls=list(Path('source-input/frozen').rglob(role+'/report.json'));assert len(controls)==1
+              ledgers=list(Path('source-input/zone').rglob('confirmation-zone/'+role+'.json'));assert len(ledgers)==1
+              original=ledgers[0].read_bytes();assert hashlib.sha256(original).hexdigest()==registered['report_sha256']
+              result=diagnostic.build(sources[0].parent,ledgers[0],server.analyze_contract,server.SETTINGS,baseline_path=controls[0])
+              wanted=next(p for p in expected['periods'] if p['role']==role)
+              assert {k:v for k,v in result.items() if k!='records'}==wanted
+              assert result['source_files_verified']==182 and ledgers[0].read_bytes()==original
+              assert not result['changes_live_rules'] and not result['automatic_promotion'] and not result['real_orders_enabled']
+              (out/(role+'.json')).write_text(json.dumps(result,indent=2,allow_nan=False)+'\n')
+              print(json.dumps({'role':role,'summary':result['summary']}))
+          rejected=json.loads(Path('analysis_terminal/confirmation_zone_latest.json').read_text())
+          assert rejected['decision']=='KILL_NO_LIVE_PROMOTION' and not rejected['forward_collection_enabled']
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: continuation-diagnostics-validation
+          path: validation-output/
+          retention-days: 14
