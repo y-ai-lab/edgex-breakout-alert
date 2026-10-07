@@ -1,0 +1,458 @@
+{
+  "version": 1,
+  "decision": "CONTINUE_FROZEN_PROTOCOL_INSUFFICIENT_SAMPLE_NO_LIVE_PROMOTION",
+  "diagnosis": "Deep structural-target entry prices mostly recross roll; a one-hour extra observation does not demonstrate a large safe fill increase.",
+  "periods": [
+    {
+      "dataset": "DESCRIPTIVE_FROZEN_ENTRY_PRICE_DIAGNOSTICS",
+      "source_role": "VIEWED_DEVELOPMENT",
+      "start_ms": 1790391600000,
+      "end_ms": 1790996400000,
+      "source_report_sha256": "37353c224ff1b1b373e1727f8c5f5e04096042a61bb6db21406d2eccd60630eb",
+      "source_manifest_sha256": "f7395ff494b4c34c44f1f8c7f1c66c39fe1204dc4897a22d386631d5926043a0",
+      "source_files_verified": 182,
+      "original_candidates_reproduced": 295,
+      "original_metrics": {
+        "candidates": 295,
+        "filled": 13,
+        "resolved": 11,
+        "tp": 3,
+        "sl": 8,
+        "statuses": {
+          "EXPIRED": 282,
+          "AMBIGUOUS": 2,
+          "TP": 3,
+          "SL": 8
+        },
+        "win_rate": 27.272727272727273,
+        "avg_net_r": -0.18181818181818363,
+        "expectancy_net_r": -0.18181818181818363,
+        "profit_factor": 0.7499999999999976,
+        "avg_mfe_r": 1.646513011076935,
+        "avg_mae_r": 1.000076234052739,
+        "max_consecutive_losses": 4,
+        "sample_status": "INSUFFICIENT SAMPLE"
+      },
+      "original_portfolio": {
+        "initial_cash_usdc": 10000,
+        "known_cash_usdc": 9938.073985590689,
+        "realized_net_pnl_usdc": -60.661374060074465,
+        "admitted": 104,
+        "filled": 7,
+        "resolved": 6,
+        "active": 1,
+        "uncertain": 1,
+        "exclusions": {
+          "CAPACITY_OR_TICKER": 82,
+          "SIZE_OR_RISK_LIMIT": 109
+        },
+        "realized_roi_pct": null,
+        "closed_portfolio_roi_pct": null,
+        "equity_usdc": null,
+        "max_known_cash_drawdown_pct": 1.4297423422017494,
+        "profit_factor": 0.7310951186642383,
+        "notes": [
+          "Realized return is not total ROI when positions remain open.",
+          "Cash drawdown excludes unrealized losses; not equity drawdown.",
+          "Intrabar fills booked at bar close; reservations prevent future-profit sizing."
+        ]
+      },
+      "observation": {
+        "original_pending_bars": 4,
+        "extra_observation_bars": 4,
+        "distance_r_basis": "TRIGGER_TO_FROZEN_STOP_PRICE_DISTANCE",
+        "bins": [
+          0.25,
+          0.5,
+          1
+        ]
+      },
+      "summary": {
+        "candidates": 295,
+        "expired": 282,
+        "trigger_on_confirmed_side_of_roll": 0,
+        "trigger_across_roll": 295,
+        "target_behind_signal_close": 108,
+        "expired_target_touched_before_expiry": 168,
+        "expired_closest_distance_bins": {
+          "(0.5, 1]R": 45,
+          "(0.25, 0.5]R": 13,
+          "> 1R": 218,
+          "<= 0.25R": 6
+        },
+        "expired_closest_distance_median_r": 1.6750024673453896,
+        "expired_later_observations": {
+          "NO_TOUCH_IN_FIXED_EXTRA_WINDOW": 269,
+          "LATE_PRICE_TOUCH": 10,
+          "SETUP_CHANGED": 3
+        },
+        "late_price_touches": 10,
+        "late_touches_after_prior_target": 3,
+        "late_touches_with_exit_same_bar": 5,
+        "late_touches_without_prior_target_or_same_bar_exit": 5,
+        "counterfactual_fills": null,
+        "counterfactual_win_rate": null,
+        "counterfactual_avg_r": null,
+        "counterfactual_portfolio_roi_pct": null
+      },
+      "changes_live_rules": false,
+      "real_orders_enabled": false,
+      "automatic_promotion": false,
+      "eligible_for_live_promotion": false,
+      "limitations": [
+        "Descriptive diagnostics of previously viewed retrospective periods; not untouched validation.",
+        "Four extra bars measure prices only; expiry and all frozen entries/outcomes stay unchanged.",
+        "A late touch is not a fill, incremental setup, profitable trade or an expiry-extension backtest.",
+        "Unknown candle/indicator history stops observation; signal-bar extrema are excluded.",
+        "Stop/target on a touch bar has unknown intrabar order; never infer profit.",
+        "Do not select parameters from these counts; insufficient resolved samples stay insufficient."
+      ]
+    },
+    {
+      "dataset": "DESCRIPTIVE_FROZEN_ENTRY_PRICE_DIAGNOSTICS",
+      "source_role": "RECENT_RETROSPECTIVE_VALIDATION",
+      "start_ms": 1790996400000,
+      "end_ms": 1791255600000,
+      "source_report_sha256": "2653aa03770e1cbabd2bb80d818b3ae2d70d4f718ffbf72586699e33289b6631",
+      "source_manifest_sha256": "a83555edfb2bf0da7cbd40345aff568367fc3e80f16b7825ca6f26a8bbbb3aca",
+      "source_files_verified": 182,
+      "original_candidates_reproduced": 85,
+      "original_metrics": {
+        "candidates": 85,
+        "filled": 6,
+        "resolved": 4,
+        "tp": 0,
+        "sl": 4,
+        "statuses": {
+          "EXPIRED": 79,
+          "SL": 4,
+          "OPEN": 2
+        },
+        "win_rate": 0.0,
+        "avg_net_r": -1.0,
+        "expectancy_net_r": -1.0,
+        "profit_factor": 0.0,
+        "avg_mfe_r": 0.7414090525291918,
+        "avg_mae_r": 1.5121378229236495,
+        "max_consecutive_losses": 4,
+        "sample_status": "INSUFFICIENT SAMPLE"
+      },
+      "original_portfolio": {
+        "initial_cash_usdc": 10000,
+        "known_cash_usdc": 9664.364323584396,
+        "realized_net_pnl_usdc": -330.8031885808074,
+        "admitted": 44,
+        "filled": 6,
+        "resolved": 4,
+        "active": 2,
+        "uncertain": 0,
+        "exclusions": {
+          "CAPACITY_OR_TICKER": 6,
+          "SIZE_OR_RISK_LIMIT": 35
+        },
+        "realized_roi_pct": -3.308031885808074,
+        "closed_portfolio_roi_pct": null,
+        "equity_usdc": null,
+        "max_known_cash_drawdown_pct": 3.356356764156044,
+        "profit_factor": 0.0,
+        "notes": [
+          "Realized return is not total ROI when positions remain open.",
+          "Cash drawdown excludes unrealized losses; not equity drawdown.",
+          "Intrabar fills booked at bar close; reservations prevent future-profit sizing."
+        ]
+      },
+      "observation": {
+        "original_pending_bars": 4,
+        "extra_observation_bars": 4,
+        "distance_r_basis": "TRIGGER_TO_FROZEN_STOP_PRICE_DISTANCE",
+        "bins": [
+          0.25,
+          0.5,
+          1
+        ]
+      },
+      "summary": {
+        "candidates": 85,
+        "expired": 79,
+        "trigger_on_confirmed_side_of_roll": 2,
+        "trigger_across_roll": 83,
+        "target_behind_signal_close": 27,
+        "expired_target_touched_before_expiry": 41,
+        "expired_closest_distance_bins": {
+          "> 1R": 59,
+          "(0.5, 1]R": 13,
+          "(0.25, 0.5]R": 5,
+          "<= 0.25R": 2
+        },
+        "expired_closest_distance_median_r": 1.6160753339001683,
+        "expired_later_observations": {
+          "NO_TOUCH_IN_FIXED_EXTRA_WINDOW": 73,
+          "LATE_PRICE_TOUCH": 4,
+          "SETUP_CHANGED": 1,
+          "RIGHT_CENSORED": 1
+        },
+        "late_price_touches": 4,
+        "late_touches_after_prior_target": 2,
+        "late_touches_with_exit_same_bar": 1,
+        "late_touches_without_prior_target_or_same_bar_exit": 2,
+        "counterfactual_fills": null,
+        "counterfactual_win_rate": null,
+        "counterfactual_avg_r": null,
+        "counterfactual_portfolio_roi_pct": null
+      },
+      "changes_live_rules": false,
+      "real_orders_enabled": false,
+      "automatic_promotion": false,
+      "eligible_for_live_promotion": false,
+      "limitations": [
+        "Descriptive diagnostics of previously viewed retrospective periods; not untouched validation.",
+        "Four extra bars measure prices only; expiry and all frozen entries/outcomes stay unchanged.",
+        "A late touch is not a fill, incremental setup, profitable trade or an expiry-extension backtest.",
+        "Unknown candle/indicator history stops observation; signal-bar extrema are excluded.",
+        "Stop/target on a touch bar has unknown intrabar order; never infer profit.",
+        "Do not select parameters from these counts; insufficient resolved samples stay insufficient."
+      ]
+    }
+  ],
+  "live": {
+    "observed_ms": 1791361264499,
+    "production_version": "19.0.29",
+    "health": {
+      "ok": true,
+      "service": "edgex-analysis-terminal",
+      "version": "19.0.29",
+      "time_ms": 1791361264499,
+      "storage": {
+        "market_snapshots_48h": 130,
+        "paper_signals": 3,
+        "db_exists": true
+      },
+      "push": {
+        "enabled": true,
+        "subscribers": 1,
+        "daily_summary_hour_jst": 8,
+        "notification_policy": "READY_ONLY",
+        "daily_summary_enabled": false
+      }
+    },
+    "readiness": {
+      "universe": 183,
+      "scanned": 181,
+      "confirmed_after_retest": 10,
+      "current_ready": 0,
+      "shadow_v2_candidates": 7,
+      "entry_bands": {
+        "evaluated": 79,
+        "counts": {
+          "COMPATIBLE": 12,
+          "NO_OVERLAP": 67,
+          "INVALID_STRUCTURE": 0,
+          "INVALID_INPUT": 0
+        }
+      }
+    },
+    "shadow": {
+      "metrics": {
+        "tracked": 428,
+        "setup_tracked": 131,
+        "legacy_unidentified_signals": 297,
+        "duplicate_setup_signals": 0,
+        "sample_basis": "unique_setup_first_entry",
+        "unverified_results": 13,
+        "unverified_results_basis": "all_records_including_legacy",
+        "setup_unverified_results": 0,
+        "legacy_unverified_results": 13,
+        "sample_status": "SUFFICIENT SAMPLE",
+        "open": 51,
+        "resolved": 80,
+        "tp": 26,
+        "sl": 54,
+        "win_rate": 32.5,
+        "avg_r": -0.025,
+        "profit_factor": 0.963,
+        "decision_ready": true,
+        "promotion_pass": false,
+        "minimum_resolved": 20
+      },
+      "cost_adjusted": {
+        "cost_model": "LINEAR_5BPS_FEE_2BPS_SLIPPAGE_EACH_SIDE",
+        "r_basis": "ORIGINAL_ENTRY_TO_STOP_PRICE_DISTANCE",
+        "fee_bps_each_side": 5,
+        "slippage_bps_each_side": 2,
+        "signals": 131,
+        "priced_signals": 131,
+        "unpriced_signals": 0,
+        "projected_tp_nonpositive": 0,
+        "projected_net_rr_below_2": 131,
+        "resolved": 80,
+        "tp": 26,
+        "sl": 54,
+        "net_wins": 26,
+        "net_losses": 54,
+        "net_flat": 0,
+        "tp_hit_rate": 32.5,
+        "net_win_rate": 32.5,
+        "avg_net_r": -0.1152,
+        "expectancy_net_r": -0.1152,
+        "profit_factor": 0.8437,
+        "avg_assumed_cost_r": 0.0902,
+        "max_consecutive_net_losses": 8,
+        "streak_samples": 80,
+        "excluded_resolved": {
+          "unverified": 0,
+          "invalid_prices": 0,
+          "inconsistent_r": 0
+        },
+        "minimum_resolved": 20,
+        "completion": {
+          "status": "PARTIALLY_RESOLVED",
+          "estimate_scope": "VERIFIED_RESOLVED_SIGNALS_ONLY",
+          "total_signals": 131,
+          "verified_resolved": 80,
+          "resolved_pct": 61.07,
+          "unresolved_or_excluded": 51,
+          "open_signals": 51,
+          "modeled_open_signals": 51,
+          "blocked_signals": 0,
+          "status_counts": {
+            "TP": 26,
+            "SL": 54,
+            "OPEN": 51
+          },
+          "cohort_complete": false,
+          "observed_metrics_are_provisional": true,
+          "sensitivity": {
+            "status": "HYPOTHETICAL_OPEN_OUTCOMES",
+            "available": true,
+            "assumes_no_new_entries": true,
+            "real_execution_results": false,
+            "portfolio_roi_pct": null,
+            "scenarios": {
+              "all_open_tp": {
+                "signals": 131,
+                "sum_net_r": 89.1211,
+                "avg_net_r": 0.6803,
+                "net_win_rate": 58.78,
+                "profit_factor": 2.5112
+              },
+              "all_open_sl": {
+                "signals": 131,
+                "sum_net_r": -63.9104,
+                "avg_net_r": -0.4879,
+                "net_win_rate": 19.85,
+                "profit_factor": 0.4377
+              }
+            },
+            "limitations": [
+              "Scenarios assign every currently open entry its frozen TP or SL; they are not forecasts, probabilities or confidence bounds.",
+              "Full-position TP/SL assumption; funding, actual fills, gap losses and partial position sizing are unmodeled.",
+              "Exclude AMBIGUOUS and incomplete/error histories; never rewrite recorded outcomes."
+            ]
+          }
+        },
+        "sample_status": "SUFFICIENT SAMPLE",
+        "real_execution_results": false,
+        "eligible_for_live_promotion": false,
+        "automatic_promotion": false,
+        "portfolio_roi_pct": null,
+        "limitations": [
+          "Hypothetical signal-close entry and TP/SL-touch exits; not actual fills.",
+          "Linear fee/slippage assumption; funding, spread, liquidity and gaps beyond the recorded exit are unmodeled.",
+          "R uses the original price stop distance; not the net-stop-risk unit in the pullback portfolio study.",
+          "Signal R cannot determine capital return, portfolio ROI or an equity curve."
+        ],
+        "sample_basis": "unique_setup_first_recorded_entry_all_history",
+        "exclusions": {
+          "records": 428,
+          "legacy_unidentified": 297,
+          "invalid_identity": 0,
+          "duplicates": 0
+        }
+      }
+    },
+    "current": {
+      "cost_adjusted": {
+        "cost_model": "LINEAR_5BPS_FEE_2BPS_SLIPPAGE_EACH_SIDE",
+        "r_basis": "ORIGINAL_ENTRY_TO_STOP_PRICE_DISTANCE",
+        "fee_bps_each_side": 5,
+        "slippage_bps_each_side": 2,
+        "signals": 3,
+        "priced_signals": 3,
+        "unpriced_signals": 0,
+        "projected_tp_nonpositive": 0,
+        "projected_net_rr_below_2": 2,
+        "resolved": 3,
+        "tp": 1,
+        "sl": 2,
+        "net_wins": 1,
+        "net_losses": 2,
+        "net_flat": 0,
+        "tp_hit_rate": 33.33,
+        "net_win_rate": 33.33,
+        "avg_net_r": -0.0507,
+        "expectancy_net_r": -0.0507,
+        "profit_factor": 0.9268,
+        "avg_assumed_cost_r": 0.0773,
+        "max_consecutive_net_losses": 2,
+        "streak_samples": 3,
+        "excluded_resolved": {
+          "unverified": 0,
+          "invalid_prices": 0,
+          "inconsistent_r": 0
+        },
+        "minimum_resolved": 20,
+        "completion": {
+          "status": "ALL_RESOLVED",
+          "estimate_scope": "VERIFIED_RESOLVED_SIGNALS_ONLY",
+          "total_signals": 3,
+          "verified_resolved": 3,
+          "resolved_pct": 100,
+          "unresolved_or_excluded": 0,
+          "open_signals": 0,
+          "modeled_open_signals": 0,
+          "blocked_signals": 0,
+          "status_counts": {
+            "SL": 2,
+            "TP": 1
+          },
+          "cohort_complete": true,
+          "observed_metrics_are_provisional": false,
+          "sensitivity": {
+            "status": "NOT_NEEDED_ALL_RESOLVED",
+            "available": false,
+            "assumes_no_new_entries": true,
+            "real_execution_results": false,
+            "portfolio_roi_pct": null,
+            "scenarios": null,
+            "limitations": [
+              "Scenarios assign every currently open entry its frozen TP or SL; they are not forecasts, probabilities or confidence bounds.",
+              "Full-position TP/SL assumption; funding, actual fills, gap losses and partial position sizing are unmodeled.",
+              "Exclude AMBIGUOUS and incomplete/error histories; never rewrite recorded outcomes."
+            ]
+          }
+        },
+        "sample_status": "INSUFFICIENT SAMPLE",
+        "real_execution_results": false,
+        "eligible_for_live_promotion": false,
+        "automatic_promotion": false,
+        "portfolio_roi_pct": null,
+        "limitations": [
+          "Hypothetical signal-close entry and TP/SL-touch exits; not actual fills.",
+          "Linear fee/slippage assumption; funding, spread, liquidity and gaps beyond the recorded exit are unmodeled.",
+          "R uses the original price stop distance; not the net-stop-risk unit in the pullback portfolio study.",
+          "Signal R cannot determine capital return, portfolio ROI or an equity curve."
+        ]
+      }
+    },
+    "history_totals": {
+      "setups": 86,
+      "ready": 3,
+      "near": 86
+    }
+  },
+  "changes_live_rules": false,
+  "real_orders_enabled": false,
+  "automatic_promotion": false,
+  "eligible_for_live_promotion": false,
+  "next_research": "Study entries inside the confirmation price zone with cost-adjusted >=2R room; preregister a separate experiment before testing new rules. Keep existing weekly cohort unchanged."
+}

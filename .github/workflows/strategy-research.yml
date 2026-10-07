@@ -6,6 +6,8 @@ on:
     paths:
       - "analysis_terminal/pending_entry*"
       - "analysis_terminal/pending_followup*"
+      - "analysis_terminal/pending_fill_diagnostics*"
+      - "analysis_terminal/test_pending_fill_diagnostics.py"
       - "analysis_terminal/execution_funnel.py"
       - "analysis_terminal/test_execution_funnel.py"
       - "analysis_terminal/test_pending_entry_replay.py"
@@ -68,6 +70,7 @@ jobs:
           python -m analysis_terminal.run_replay --end-ms "${{ steps.window.outputs.end_ms }}" --days "${{ steps.window.outputs.days }}" --universe-manifest analysis_terminal/replay_latest.json --output strategy-output/source
           python -m analysis_terminal.pending_entry_replay --source strategy-output/source --role prospective --output strategy-output/review
           python -m analysis_terminal.execution_funnel --report strategy-output/review/pending-entry-report.json --output strategy-output/review/execution-funnel.json
+          python -m analysis_terminal.pending_fill_diagnostics --source strategy-output/source --report strategy-output/review/pending-entry-report.json --output strategy-output/review/pending-fill-diagnostics.json
       - name: Seal the first complete weekly cohort without changing entries
         id: seal
         if: steps.window.outputs.days == '7'

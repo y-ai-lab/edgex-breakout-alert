@@ -1,0 +1,88 @@
+name: Pending price diagnostics validation
+on:
+  push:
+    branches: [audit/pending-fill-diagnostics-v19-0-30]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -r analysis_terminal/test-requirements.txt
+      - name: Regression and chronology checks
+        run: |
+          mkdir -p validation-output
+          python -m unittest discover -s analysis_terminal -p 'test_*.py' -q > validation-output/analysis-tests.txt 2>&1
+          python -m unittest discover -s tests -q > validation-output/root-tests.txt 2>&1
+          python -m compileall -q analysis_terminal
+          python -m analysis_terminal.pending_followup --scheduled --output validation-output/calendar
+      - name: Confirm existing strategies, frozen protocols, UI and notifications unchanged
+        run: |
+          python - <<'PY'
+          import ast,subprocess
+          from pathlib import Path
+          parent='7ecb64529aa80b1baa3b3615c9262d48a6705fc5'
+          def prior(p):return subprocess.check_output(['git','show',parent+':'+p])
+          old=prior('analysis_terminal/server.py').decode();new=Path('analysis_terminal/server.py').read_text()
+          def function(s,name):return ast.dump(next(n for n in ast.parse(s).body if isinstance(n,(ast.FunctionDef,ast.AsyncFunctionDef)) and n.name==name),include_attributes=False)
+          for name in ['analyze_contract','_evaluate_paper_signal','_persist_shadow_v2_signals','_maybe_push_candidate_changes','_persist_scan_result','_background_collector']:
+              assert function(old,name)==function(new,name),name
+          for p in ['app.py','production_app.py','Dockerfile','requirements.txt','analysis_terminal/index.html','analysis_terminal/btc.html','analysis_terminal/sw.js','analysis_terminal/outcomes.py','analysis_terminal/lifecycle.py','analysis_terminal/paper_execution.py','analysis_terminal/entry_history.py','analysis_terminal/pending_entry_protocol.json','analysis_terminal/pending_entry_replay.py','analysis_terminal/pending_followup.py','analysis_terminal/pending_followup_protocol.json']:
+              assert prior(p)==Path(p).read_bytes(),p
+          PY
+      - name: Download pinned frozen ledgers and market candles
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/y-ai-lab/edgex-breakout-alert/actions/artifacts/11262672328/zip > development.zip
+          gh api repos/y-ai-lab/edgex-breakout-alert/actions/artifacts/11430177364/zip > validation.zip
+          gh api repos/y-ai-lab/edgex-breakout-alert/actions/artifacts/11431586665/zip > frozen.zip
+          python - <<'PY'
+          import hashlib,zipfile
+          from pathlib import Path
+          digests={'development':'163fb6eb7947f1284dcb953d0bb8e39f1f1535a71b5778260c2a373c4f7c8a9c','validation':'820cc3a94c876f569e9eb410829d89f5d4af7fc5c90470d4d50071046ca0b1df','frozen':'21b77e1ef3396504d15db3c3832190834b77519ff545540389d28bd8ddeb634b'}
+          for name,digest in digests.items():
+              raw=Path(name+'.zip').read_bytes();assert hashlib.sha256(raw).hexdigest()==digest
+              out=Path('source-input')/name;out.mkdir(parents=True)
+              with zipfile.ZipFile(Path(name+'.zip')) as z:
+                  for info in z.infolist():assert (out/info.filename).resolve().is_relative_to(out.resolve())
+                  z.extractall(out)
+          PY
+      - name: Reconstruct every candidate and verify descriptive evidence with immutable originals
+        run: |
+          python - <<'PY'
+          import hashlib,json
+          from pathlib import Path
+          from analysis_terminal import pending_fill_diagnostics as diag,server
+          expected=json.loads(Path('analysis_terminal/pending_fill_diagnostics_latest.json').read_text())
+          hashes={'development':'37353c224ff1b1b373e1727f8c5f5e04096042a61bb6db21406d2eccd60630eb','validation':'2653aa03770e1cbabd2bb80d818b3ae2d70d4f718ffbf72586699e33289b6631'}
+          out=Path('validation-output/diagnostics');out.mkdir()
+          for role,digest in hashes.items():
+              sources=list((Path('source-input')/role).rglob('replay-report.json'));assert len(sources)==1
+              ledgers=list(Path('source-input/frozen').rglob(role+'/report.json'));assert len(ledgers)==1
+              original=ledgers[0].read_bytes();assert hashlib.sha256(original).hexdigest()==digest
+              result=diag.build(sources[0].parent,ledgers[0],server.analyze_contract,server.SETTINGS)
+              wanted=next(p for p in expected['periods'] if p['source_report_sha256']==digest)
+              assert result['summary']==wanted['summary']
+              assert result['original_metrics']==wanted['original_metrics']
+              assert result['original_portfolio']==wanted['original_portfolio']
+              assert result['source_files_verified']==182
+              assert ledgers[0].read_bytes()==original
+              assert not result['changes_live_rules'] and not result['automatic_promotion'] and not result['real_orders_enabled']
+              (out/(role+'.json')).write_text(json.dumps(result,indent=2,allow_nan=False)+'\n')
+              print(json.dumps({'role':role,'reproduced':result['original_candidates_reproduced'],'summary':result['summary']}))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pending-price-diagnostics-validation
+          path: validation-output/
+          retention-days: 14
