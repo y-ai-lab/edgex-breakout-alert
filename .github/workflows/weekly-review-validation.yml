@@ -1,0 +1,74 @@
+name: Frozen weekly review validation
+on:
+  push:
+    branches: [audit/weekly-review-2026-10-07]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -r analysis_terminal/test-requirements.txt
+      - name: All regressions and research reporting gates
+        run: |
+          mkdir -p validation-output
+          python -m unittest discover -s analysis_terminal -p 'test_*.py' -q > validation-output/analysis-tests.txt 2>&1
+          python -m unittest discover -s tests -q > validation-output/root-tests.txt 2>&1
+          python -m unittest discover -s .github/scripts -p 'test_*.py' -q > validation-output/review-tests.txt 2>&1
+          python -m compileall -q .github/scripts
+      - name: Existing research rules and collection paths remain identical
+        run: |
+          python - <<'PY'
+          import subprocess
+          from pathlib import Path
+          parent='3340e1ab2dd2db8a335093ff176e96b39996bf02'
+          allowed={'.github/RESEARCH_REVIEW.md','.github/scripts/research_summary.py','.github/scripts/test_research_summary.py','.github/workflows/strategy-research.yml','.github/workflows/weekly-review-validation.yml'}
+          changed=set(subprocess.check_output(['git','diff','--name-only',parent,'HEAD']).decode().splitlines())
+          assert changed==allowed,changed
+          original=subprocess.check_output(['git','show',parent+':.github/workflows/strategy-research.yml']).decode()
+          new=Path('.github/workflows/strategy-research.yml').read_text()
+          new=new.replace('      - ".github/scripts/research_summary.py"\n      - ".github/scripts/test_research_summary.py"\n','')
+          new=new.replace("      - run: python -m unittest discover -s .github/scripts -p 'test_*.py' -q\n",'')
+          new=new.replace('      - name: Review verified weekly ledger without combining daily samples\n        if: always() && steps.window.outcome == \'success\'\n        run: |\n          python .github/scripts/research_summary.py --research-dir strategy-output --output strategy-output/review/decision-summary.json --markdown strategy-output/review/decision-summary.md\n          cat strategy-output/review/decision-summary.md >> "$GITHUB_STEP_SUMMARY"\n','')
+          assert original==new
+          print('Production and frozen research unchanged; original workflow blocks identical')
+          PY
+      - name: Reproduce actual preceding main research waiting state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/y-ai-lab/edgex-breakout-alert/actions/artifacts/11470126862/zip > previous.zip
+          python - <<'PY'
+          import hashlib,zipfile
+          from pathlib import Path
+          raw=Path('previous.zip').read_bytes()
+          assert hashlib.sha256(raw).hexdigest()=='80b71d0ff8238e941944fbac7deed5ae6b95e02bd892a518448fa48f2973da56'
+          out=Path('validation-output/preceding-main');out.mkdir()
+          with zipfile.ZipFile('previous.zip') as z:
+              for info in z.infolist():assert (out/info.filename).resolve().is_relative_to(out.resolve())
+              z.extractall(out)
+          PY
+          python .github/scripts/research_summary.py --research-dir validation-output/preceding-main --output validation-output/preceding-main/review/decision-summary.json --markdown validation-output/preceding-main/review/decision-summary.md
+          cat validation-output/preceding-main/review/decision-summary.md >> "$GITHUB_STEP_SUMMARY"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path('validation-output/preceding-main/review/decision-summary.json').read_text())
+          assert r['decision']=='WAITING_FOR_FIRST_COMPLETED_DAY'
+          assert not any(r[k] for k in ['real_orders_enabled','automatic_promotion','eligible_for_live_promotion','changes_live_rules','independent_sample_counts_added'])
+          assert 'metrics' not in r
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: weekly-review-validation
+          path: validation-output/
+          retention-days: 14
