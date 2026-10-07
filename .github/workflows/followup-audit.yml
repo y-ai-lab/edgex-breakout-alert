@@ -36,6 +36,16 @@ jobs:
           for p in ['app.py','production_app.py','Dockerfile','requirements.txt','analysis_terminal/index.html','analysis_terminal/btc.html','analysis_terminal/sw.js','analysis_terminal/pending_entry_protocol.json']:
               assert subprocess.check_output(['git','show','f2c0bc924e0829cab74f6b025f2a2ca83e721265:'+p])==Path(p).read_bytes(),p
           PY
+      - name: Read-only GitHub archive filter smoke
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY'
+          from analysis_terminal.pending_followup import gh_json
+          listing=gh_json('repos/y-ai-lab/edgex-breakout-alert/actions/artifacts?name=edgex-followup-readonly-filter-probe-never-produced&per_page=100')
+          assert listing['total_count']==0 and listing['artifacts']==[]
+          print('PASS: authenticated read-only archive query supports exact name filtering')
+          PY
       - name: Obtain exact SHA-verified frozen ledger and subsequent market data
         env:
           GH_TOKEN: ${{ github.token }}

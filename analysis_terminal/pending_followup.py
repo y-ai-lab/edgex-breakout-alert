@@ -123,8 +123,10 @@ def extend(base, source, candles_by_ticker, *, end_ms):
                              "Seven-day follow-up cutoff can still leave OPEN; never force expiry or release uncertain capital."])
 
 
-async def public_candles(base, source, *, end_ms, output):
-    from analysis_terminal import server
+async def public_candles(base, source, *, end_ms, output, get_json=None):
+    if get_json is None:
+        from analysis_terminal import server
+        get_json=server.CLIENT._get_json_sync
     contracts=validate_base(base,source)
     output.mkdir(parents=True,exist_ok=True)
     found,sources={},[]
@@ -132,7 +134,7 @@ async def public_candles(base, source, *, end_ms, output):
     def get_public(path,params):
         time.sleep(max(0,.2-(time.monotonic()-last[0])))
         last[0]=time.monotonic()
-        return server.CLIENT._get_json_sync(path,params)
+        return get_json(path,params)
     for ticker in sorted({r["ticker"] for r in base["records"] if r["status"]=="OPEN"}):
         contract=contracts[ticker]
         candles=await fetch_history(get_public,contract,"MINUTE_15",base["end_ms"],end_ms)

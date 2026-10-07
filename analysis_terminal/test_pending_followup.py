@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch,AsyncMock
+from unittest.mock import patch,AsyncMock,Mock
 import zipfile
 
 from analysis_terminal import pending_followup as follow
@@ -195,6 +195,25 @@ class FollowupTests(unittest.TestCase):
             self.assertEqual(len(result["records"]),len(base["records"]))
             artifacts[1]["digest"]="sha256:modified"
             with self.assertRaises(ValueError):follow.scheduled(Path(d),now_ms=end+follow.DAY)
+
+
+class PublicFollowupTests(unittest.IsolatedAsyncioTestCase):
+    async def test_fetches_only_public_15m_quotes_after_cohort_boundary(self):
+        base,source=fixture();start=base["end_ms"]
+        get=Mock(return_value={"code":"SUCCESS","data":{"dataList":[]}})
+        with tempfile.TemporaryDirectory() as d:
+            found=await follow.public_candles(base,source,end_ms=start+STEP,output=Path(d),get_json=get)
+            self.assertEqual(found,{"TESTUSDC":[]})
+            self.assertEqual(get.call_count,1)
+            path,params=get.call_args.args
+            self.assertEqual(path,"/api/v2/public/quote/getKline")
+            self.assertEqual(params["klineType"],"MINUTE_15")
+            self.assertEqual(params["priceType"],"LAST_PRICE")
+            self.assertEqual(int(params["filterBeginKlineTimeInclusive"]),start)
+            self.assertEqual(int(params["filterEndKlineTimeExclusive"]),start+STEP)
+            manifest=json.loads((Path(d)/"manifest.json").read_text())
+            raw=(Path(d)/manifest["sources"][0]["file"]).read_bytes()
+            self.assertEqual(follow.sha(raw),manifest["sources"][0]["sha256"])
 
 
 if __name__=="__main__":unittest.main()
