@@ -1,0 +1,87 @@
+name: Sweep reclaim preregistered research validation
+on:
+  push:
+    branches: [audit/sweep-reclaim-v19-0-34]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -r analysis_terminal/test-requirements.txt
+      - name: Regression and chronology checks
+        run: |
+          mkdir -p validation-output
+          python -m unittest discover -s analysis_terminal -p 'test_*.py' -q > validation-output/analysis-tests.txt 2>&1
+          python -m unittest discover -s tests -q > validation-output/root-tests.txt 2>&1
+          python -m compileall -q analysis_terminal
+          python -m analysis_terminal.pending_followup --scheduled --output validation-output/calendar
+      - name: Confirm existing strategies, frozen protocols, UI and notifications unchanged
+        run: |
+          python - <<'PY'
+          import ast,subprocess
+          from pathlib import Path
+          parent='4d19e8f5673d9d490d07e60676f5c56029c2fee6'
+          def prior(p):return subprocess.check_output(['git','show',parent+':'+p])
+          old=prior('analysis_terminal/server.py').decode();new=Path('analysis_terminal/server.py').read_text()
+          def function(s,name):return ast.dump(next(n for n in ast.parse(s).body if isinstance(n,(ast.FunctionDef,ast.AsyncFunctionDef)) and n.name==name),include_attributes=False)
+          for name in ['analyze_contract','_evaluate_paper_signal','_persist_shadow_v2_signals','_maybe_push_candidate_changes','_persist_scan_result','_background_collector']:
+              assert function(old,name)==function(new,name),name
+          for p in ['app.py','production_app.py','Dockerfile','requirements.txt','analysis_terminal/index.html','analysis_terminal/btc.html','analysis_terminal/sw.js','analysis_terminal/outcomes.py','analysis_terminal/lifecycle.py','analysis_terminal/paper_execution.py','analysis_terminal/entry_history.py','analysis_terminal/pending_entry_protocol.json','analysis_terminal/pending_entry_replay.py','analysis_terminal/pending_followup.py','analysis_terminal/pending_followup_protocol.json','analysis_terminal/confirmation_zone_protocol.json','analysis_terminal/confirmation_zone_replay.py','.github/workflows/strategy-research.yml','analysis_terminal/confirmation_zone_latest.json','analysis_terminal/continuation_diagnostics_protocol.json','analysis_terminal/continuation_diagnostics.py','analysis_terminal/continuation_diagnostics_latest.json','analysis_terminal/two_close_protocol.json','analysis_terminal/two_close_replay.py','analysis_terminal/two_close_latest.json']:
+              assert prior(p)==Path(p).read_bytes(),p
+          assert subprocess.check_output(['git','show','b4284e0a5faaa651d8e27f97b88ac46084693790:analysis_terminal/sweep_reclaim_protocol.json'])==Path('analysis_terminal/sweep_reclaim_protocol.json').read_bytes()
+          PY
+      - name: Download pinned frozen ledgers and market candles
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/y-ai-lab/edgex-breakout-alert/actions/artifacts/11262672328/zip > development.zip
+          gh api repos/y-ai-lab/edgex-breakout-alert/actions/artifacts/11431586665/zip > frozen.zip
+          python - <<'PY'
+          import hashlib,zipfile
+          from pathlib import Path
+          digests={'development':'163fb6eb7947f1284dcb953d0bb8e39f1f1535a71b5778260c2a373c4f7c8a9c','frozen':'21b77e1ef3396504d15db3c3832190834b77519ff545540389d28bd8ddeb634b'}
+          for name,digest in digests.items():
+              raw=Path(name+'.zip').read_bytes();assert hashlib.sha256(raw).hexdigest()==digest
+              out=Path('source-input')/name;out.mkdir(parents=True)
+              with zipfile.ZipFile(Path(name+'.zip')) as z:
+                  for info in z.infolist():assert (out/info.filename).resolve().is_relative_to(out.resolve())
+                  z.extractall(out)
+          PY
+      - name: Reproduce immutable controls and registered independent entry study
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from analysis_terminal import sweep_reclaim_replay as study,server
+          expected=json.loads(Path('analysis_terminal/sweep_reclaim_latest.json').read_text())
+          out=Path('validation-output/sweep-reclaim');out.mkdir()
+          sources=list(Path('source-input/development').rglob('replay-report.json'));assert len(sources)==1
+          controls=list(Path('source-input/frozen').rglob('development/report.json'));assert len(controls)==1
+          result=study.build(sources[0].parent,server.analyze_contract,server.SETTINGS,role='development',baseline_path=controls[0])
+          assert {k:v for k,v in result.items() if k not in ('records','source_strategy_comparison')}==expected['periods'][0]
+          assert result['source_files_verified']==182
+          assert not result['changes_live_rules'] and not result['automatic_promotion'] and not result['real_orders_enabled']
+          (out/'development.json').write_text(json.dumps(result,indent=2,allow_nan=False)+'\n')
+          assert study.decision([result])==expected['decision']=='KILL_NO_LIVE_PROMOTION'
+          assert expected['validation_status']=='NOT_RUN_DEVELOPMENT_KILL'
+          assert not expected['forward_collection_enabled']
+          for file in ['confirmation_zone_latest.json','two_close_latest.json']:
+              old=json.loads(Path('analysis_terminal',file).read_text())
+              assert old['decision']=='KILL_NO_LIVE_PROMOTION' and not old['forward_collection_enabled']
+          print(json.dumps({'role':'development','metrics':result['metrics'][study.MODEL],'comparison':result['comparison'],'exclusions':result['exclusions']}))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sweep-reclaim-validation
+          path: validation-output/
+          retention-days: 14
