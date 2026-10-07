@@ -6,6 +6,8 @@ on:
     paths:
       - "analysis_terminal/pending_entry*"
       - "analysis_terminal/pending_followup*"
+      - "analysis_terminal/execution_funnel.py"
+      - "analysis_terminal/test_execution_funnel.py"
       - "analysis_terminal/test_pending_entry_replay.py"
       - "analysis_terminal/test_pending_followup.py"
       - ".github/workflows/strategy-research.yml"
@@ -65,6 +67,7 @@ jobs:
         run: |
           python -m analysis_terminal.run_replay --end-ms "${{ steps.window.outputs.end_ms }}" --days "${{ steps.window.outputs.days }}" --universe-manifest analysis_terminal/replay_latest.json --output strategy-output/source
           python -m analysis_terminal.pending_entry_replay --source strategy-output/source --role prospective --output strategy-output/review
+          python -m analysis_terminal.execution_funnel --report strategy-output/review/pending-entry-report.json --output strategy-output/review/execution-funnel.json
       - name: Seal the first complete weekly cohort without changing entries
         id: seal
         if: steps.window.outputs.days == '7'
@@ -85,7 +88,11 @@ jobs:
           python - <<'PY'
           import json,os
           from pathlib import Path
+          from analysis_terminal.execution_funnel import write_report
           state=json.loads(Path('strategy-output/followup/run-status.json').read_text())
+          ledger=Path('strategy-output/followup/followup-report.json')
+          if ledger.exists():
+              write_report(ledger,ledger.with_name('execution-funnel.json'))
           complete=state.get('end_ms',0)-state.get('cohort_end_ms',0)==7*86400000
           with open(os.environ['GITHUB_OUTPUT'],'a') as f:
               f.write(f'complete={str(complete).lower()}\ncohort_end_ms={state.get("cohort_end_ms",0)}\n')
@@ -106,7 +113,11 @@ jobs:
           python - <<'PY'
           import json,os
           from pathlib import Path
+          from analysis_terminal.execution_funnel import write_report
           state=json.loads(Path('strategy-output/recovery/run-status.json').read_text())
+          ledger=Path('strategy-output/recovery/followup-report.json')
+          if ledger.exists():
+              write_report(ledger,ledger.with_name('execution-funnel.json'))
           complete=state.get('end_ms',0)-state.get('cohort_end_ms',0)==7*86400000
           with open(os.environ['GITHUB_OUTPUT'],'a') as f:
               f.write(f'complete={str(complete).lower()}\ncohort_end_ms={state.get("cohort_end_ms",0)}\n')
