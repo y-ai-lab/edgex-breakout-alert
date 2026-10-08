@@ -96,7 +96,7 @@ class EdgeXOrders:
             if str(p.get("accountId")) != self.config.account_id:
                 raise ExecutionError("ACCOUNT_ID_MISMATCH")
             cid, size = str(p.get("contractId")), decimal(p.get("openSize"))
-            if cid in positions or not cid.isdigit():
+            if cid in positions or not cid.isdigit() or int(cid) <= 0:
                 raise ExecutionError("AMBIGUOUS_POSITION")
             positions[cid] = size
         return dict(
@@ -126,6 +126,10 @@ class EdgeXOrders:
                 for order in result:
                     if str(order.get("accountId")) != self.config.account_id:
                         raise ExecutionError("ACCOUNT_ID_MISMATCH")
+                    if self.config.account_policy == "COEXISTING_CONTRACTS":
+                        cid = str(order.get("contractId"))
+                        if not cid.isdigit() or int(cid) <= 0:
+                            raise ExecutionError("ACTIVE_ORDER_CONTRACT_UNKNOWN")
                 return result
             if offset in seen:
                 raise ExecutionError("ORDER_PAGINATION_LOOP")
@@ -197,7 +201,7 @@ class EdgeXOrders:
                 trigger_price_type="LAST_PRICE",
                 time_in_force="IMMEDIATE_OR_CANCEL",
                 expire_time=intent["protection_deadline_ms"],
-                is_position_tpsl=True,
+                is_position_tpsl=not intent.get("isolated_contract", False),
             )
         elif kind == "close":
             params.update(type="MARKET", price="0", time_in_force="IMMEDIATE_OR_CANCEL")

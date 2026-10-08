@@ -1,7 +1,7 @@
 """Opt-in current-READY execution with durable, at-most-once order attempts.
 
 Default OFF. No public write API, strategy changes or Shadow promotion. A
-dedicated flat account is required to arm; only one position can be managed.
+dedicated flat account is the default; opt-in coexistence isolates contracts.
 """
 
 import asyncio
@@ -26,6 +26,7 @@ TERMINAL = {"NO_FILL", "CLOSED", "SKIPPED"}
 @dataclass
 class Config:
     mode: str = "OFF"
+    account_policy: str = "DEDICATED"
     account_id: str = field(default="", repr=False)
     api_key: str = field(default="", repr=False)
     api_secret: str = field(default="", repr=False)
@@ -43,6 +44,7 @@ class Config:
     def from_env(cls):
         names = dict(
             mode="MODE",
+            account_policy="ACCOUNT_POLICY",
             account_id="ACCOUNT_ID",
             api_key="API_KEY",
             api_secret="API_SECRET",
@@ -68,6 +70,8 @@ class Config:
         errors = []
         if self.mode not in {"OFF", "READ_ONLY", "LIVE"}:
             errors.append("INVALID_MODE")
+        if self.account_policy not in {"DEDICATED", "COEXISTING_CONTRACTS"}:
+            errors.append("INVALID_ACCOUNT_POLICY")
         if not (
             self.account_id.isdigit()
             and int(self.account_id) > 0
@@ -146,6 +150,9 @@ class Config:
                 "fee_bps",
             )
         }
+        # Preserve the fingerprint and order IDs of existing dedicated ledgers.
+        if self.account_policy != "DEDICATED":
+            policy["account_policy"] = self.account_policy
         return hashlib.sha256(json.dumps(policy, sort_keys=True).encode()).hexdigest()
 
 
@@ -271,6 +278,8 @@ def report(conn, config, *, now_ms):
         protective_management_enabled=config.mode == "LIVE" and not errors,
         source="CURRENT_READY_ONLY",
         automatic_promotion=False,
+        account_policy=config.account_policy,
+        same_contract_coexistence=False,
         credentials_configured="CREDENTIALS_REQUIRED" not in errors,
         signing_configured=bool(config.signer_key),
         configuration_errors=errors,
@@ -308,6 +317,31 @@ def flat_account_blockers(account, active_exchange_orders, ledger):
         blockers.append("ACTIVE_EXCHANGE_ORDERS")
     if any(r["status"] not in TERMINAL for r in ledger):
         blockers.append("UNRESOLVED_EXECUTION_LEDGER")
+    return blockers
+
+
+def occupied_contracts(account, active):
+    """No missing order identity may be interpreted as an unoccupied contract."""
+    if not isinstance(active, list):
+        raise ExecutionError("INCOMPLETE_ORDER_PAGE")
+    occupied = {str(k) for k, v in account["positions"].items() if decimal(v)}
+    for order in active:
+        cid = str(order.get("contractId")) if isinstance(order, dict) else ""
+        if not cid.isdigit() or int(cid) <= 0:
+            raise ExecutionError("ACTIVE_ORDER_CONTRACT_UNKNOWN")
+        occupied.add(cid)
+    return occupied
+
+
+def arm_blockers(config, account, active, ledger):
+    if config.account_policy == "DEDICATED":
+        return flat_account_blockers(account, active, ledger)
+    occupied_contracts(account, active)
+    blockers = []
+    if any(r["status"] not in TERMINAL for r in ledger):
+        blockers.append("UNRESOLVED_EXECUTION_LEDGER")
+    if decimal(account["available"]) <= 0:
+        blockers.append("NO_AVAILABLE_COLLATERAL")
     return blockers
 
 
@@ -429,8 +463,10 @@ def prepare(row, meta, account, quote, config, *, now_ms, armed_ms, snapshot_ms)
         or not 0 <= now_ms - account["observed_ms"] < 5000
     ):
         raise ExecutionError("STALE_ACCOUNT_OR_SCAN")
-    if any(account["positions"].values()):
+    if config.account_policy == "DEDICATED" and any(account["positions"].values()):
         raise ExecutionError("ACCOUNT_NOT_FLAT")
+    if decimal(account["positions"].get(cid, 0)):
+        raise ExecutionError("CONTRACT_ALREADY_OCCUPIED")
     long = row["direction"] == "LONG"
     tick, step = decimal(meta["tickSize"]), decimal(meta["stepSize"])
     if tick <= 0 or step <= 0:
@@ -474,7 +510,7 @@ def prepare(row, meta, account, quote, config, *, now_ms, armed_ms, snapshot_ms)
     token = hashlib.sha256(
         (config.fingerprint() + ":" + identity).encode()
     ).hexdigest()[:32]
-    return dict(
+    intent = dict(
         setup_id=identity,
         contract_id=cid,
         ticker=row["ticker"],
@@ -499,6 +535,9 @@ def prepare(row, meta, account, quote, config, *, now_ms, armed_ms, snapshot_ms)
             for kind in ("entry", "sl", "tp", "close")
         }
     )
+    if config.account_policy == "COEXISTING_CONTRACTS":
+        intent["isolated_contract"] = True
+    return intent
 
 
 def verify_order(order, r, kind):
@@ -543,6 +582,11 @@ def verify_order(order, r, kind):
     ):
         raise ExecutionError("UNSAFE_EXIT_ORDER")
     if kind in ("sl", "tp"):
+        # The documented order-query schema may omit this flag. The request
+        # always sets false; reject an explicit position-wide response.
+        if (r.get("isolated_contract") and "isPositionTpsl" in order
+                and order["isPositionTpsl"] is not False):
+            raise ExecutionError("POSITION_WIDE_PROTECTION_FORBIDDEN")
         if (
             order.get("type")
             != ("STOP_MARKET" if kind == "sl" else "TAKE_PROFIT_MARKET")
@@ -572,7 +616,90 @@ class Engine:
         with self.db_connect() as conn:
             pause(conn, reason)
 
+    async def quarantine(self, r):
+        # A net position cannot identify manual lots. Never close it or release
+        # this ledger's capital after detected same-contract interference.
+        self.halt("CONTRACT_OWNERSHIP_CONFLICT")
+        self.update(r, "OWNERSHIP_CONFLICT", ownership_quarantined=True)
+        for kind in ("sl", "tp"):
+            if r.get(kind + "_attempted") and not r.get(kind + "_cancel_attempted"):
+                self.update(r, **{kind + "_cancel_attempted": True})
+                await self.adapter.cancel(r[kind + "_client_id"])
+
+    async def isolated_account(self, r):
+        a = await self.adapter.account()
+        active = await self.adapter.active_orders()
+        occupied_contracts(a, active)
+        if not 0 <= self.clock() - a["observed_ms"] < 5000:
+            raise ExecutionError("STALE_ACCOUNT_OR_SCAN")
+        owned = {r[k + "_client_id"] for k in ("entry", "sl", "tp", "close")}
+        if any(str(o["contractId"]) == r["contract_id"]
+               and o.get("clientOrderId") not in owned for o in active):
+            await self.quarantine(r)
+            raise ExecutionError("CONTRACT_OWNERSHIP_CONFLICT")
+        return a
+
+    async def assert_owned_position(self, r, quantity):
+        if r.get("ownership_quarantined"):
+            raise ExecutionError("CONTRACT_OWNERSHIP_CONFLICT")
+        a = await self.isolated_account(r)
+        exited = decimal(0)
+        for kind in ("sl", "tp", "close"):
+            if r.get(kind + "_attempted"):
+                o = await self.adapter.order(r[kind + "_client_id"])
+                if o is None:
+                    continue  # No fill is inferred; the account must still match.
+                fill = decimal(o.get("cumFillSize"))
+                if fill:
+                    verify_order(o, r, kind)
+                exited += fill
+        remaining = decimal(r["filled_size"]) - exited
+        expected = remaining if r["side"] == "LONG" else -remaining
+        if not 0 <= self.clock() - a["observed_ms"] < 5000:
+            raise ExecutionError("STALE_ACCOUNT_OR_SCAN")
+        if remaining == 0 and a["positions"].get(r["contract_id"], decimal(0)) == 0:
+            raise ExecutionError("OWNED_EXIT_ALREADY_FILLED")
+        if (remaining <= 0 or remaining != decimal(quantity)
+                or a["positions"].get(r["contract_id"], decimal(0)) != expected):
+            await self.quarantine(r)
+            raise ExecutionError("CONTRACT_OWNERSHIP_CONFLICT")
+
+    async def entry_guard(self, r):
+        a = await self.adapter.account()
+        active = await self.adapter.active_orders()
+        if not 0 <= self.clock() - a["observed_ms"] < 5000:
+            raise ExecutionError("STALE_ACCOUNT_OR_SCAN")
+        if r["contract_id"] in occupied_contracts(a, active):
+            raise ExecutionError("CONTRACT_ALREADY_OCCUPIED")
+        cost = decimal(r["notional_reserved_usdc"]) * (
+            1 + decimal(self.config.fee_bps) / 10000
+        )
+        if (cost > self.config.notional_limit(a["equity"], a["available"])
+                or decimal(r["risk_reserved_usdc"]) > self.config.risk_budget(a["equity"])):
+            raise ExecutionError("ACCOUNT_BUDGET_CHANGED")
+
     async def send(self, r, kind):
+        if r.get("isolated_contract"):
+            if kind == "entry":
+                try:
+                    await self.entry_guard(r)
+                except ExecutionError:
+                    # No network mutation occurred; only an unattempted intent
+                    # can become terminal. Never erase an uncertain prior send.
+                    with self.db_connect() as conn:
+                        stored = conn.execute(
+                            "SELECT payload FROM live_execution_orders WHERE setup_id=?",
+                            (r["setup_id"],),
+                        ).fetchone()
+                        if stored and not json.loads(stored[0]).get("entry_attempted"):
+                            r["status"] = "SKIPPED"
+                            save(conn, r, self.clock())
+                    raise
+            else:
+                await self.assert_owned_position(
+                    r, r.get("close_size", r["filled_size"]) if kind == "close"
+                    else r["filled_size"],
+                )
         # Commit BEFORE the network call: lost ACK/restart never resends this ID.
         with self.db_connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
@@ -608,9 +735,21 @@ class Engine:
 
     async def emergency_close(self, r, quantity=None):
         self.halt("PROTECTION_OR_FILL_INVALID")
+        if r.get("ownership_quarantined"):
+            await self.quarantine(r)
+            return
         if not r.get("close_attempted"):
             self.update(r, close_size=str(quantity or r["filled_size"]))
-            await self.send(r, "close")
+            try:
+                await self.send(r, "close")
+            except ExecutionError:
+                if r.get("isolated_contract") and not r.get("close_attempted"):
+                    # An unreadable account is not evidence of owned size.
+                    if not r.get("ownership_quarantined"):
+                        self.update(r, "OWNERSHIP_UNVERIFIED")
+                    self.halt("EXIT_OWNERSHIP_UNVERIFIED")
+                    return
+                raise
         close = await self.adapter.order(r["close_client_id"])
         if close is not None:
             verify_order(close, r, "close")
@@ -618,6 +757,9 @@ class Engine:
         self.update(r, "CLOSE_PENDING")
 
     async def reconcile(self, r):
+        if r.get("ownership_quarantined"):
+            await self.quarantine(r)
+            return
         entry = await self.adapter.order(r["entry_client_id"])
         if entry is None:
             self.halt("ENTRY_ACK_UNRESOLVED")
@@ -653,7 +795,8 @@ class Engine:
             entry_fill_price=str(price),
             entry_fee_usdc=str(fee),
         )
-        a = await self.adapter.account()
+        a = (await self.isolated_account(r) if r.get("isolated_contract")
+             else await self.adapter.account())
         position = a["positions"].get(r["contract_id"], decimal(0))
         if position == 0:
             # Filled entry plus a flat account is closed only if an owned exit
@@ -668,6 +811,9 @@ class Engine:
                     if decimal(order.get("cumFillSize")) > 0:
                         exits.append(order)
             if sum((decimal(x["cumFillSize"]) for x in exits), decimal(0)) != filled:
+                if r.get("isolated_contract"):
+                    await self.quarantine(r)
+                    return
                 self.halt("UNEXPLAINED_FLAT_POSITION")
                 return
             for kind in ("sl", "tp"):
@@ -713,9 +859,14 @@ class Engine:
             ):
                 await self.emergency_close(r, quantity=abs(position))
                 return
+            if r.get("isolated_contract"):
+                await self.quarantine(r)
+                return
             await self.emergency_close(r)
             return
-        if any(v for k, v in a["positions"].items() if k != r["contract_id"]):
+        if not r.get("isolated_contract") and any(
+            v for k, v in a["positions"].items() if k != r["contract_id"]
+        ):
             self.halt("POSITION_MISMATCH")
             return
         if r.get("close_attempted"):
@@ -810,7 +961,7 @@ class Engine:
             s = state(conn)
             s.update(
                 last_preflight_ms=self.clock(), last_success_ms=self.clock(),
-                last_preflight_arm_blockers=flat_account_blockers(a, active, orders(conn)),
+                last_preflight_arm_blockers=arm_blockers(self.config, a, active, orders(conn)),
             )
             save_state(conn, s)
         return a, active
@@ -824,8 +975,10 @@ class Engine:
         a, active = await self.preflight()
         with self.db_connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
-            if flat_account_blockers(a, active, orders(conn)):
-                raise ExecutionError("DEDICATED_FLAT_ACCOUNT_REQUIRED")
+            if arm_blockers(self.config, a, active, orders(conn)):
+                raise ExecutionError("DEDICATED_FLAT_ACCOUNT_REQUIRED"
+                                     if self.config.account_policy == "DEDICATED"
+                                     else "ACCOUNT_PRECONDITIONS_REQUIRED")
             s = state(conn)
             if s.get("control_epoch", 0) != epoch:
                 raise ExecutionError("PAUSED_DURING_ARM_CHECK")
@@ -910,9 +1063,13 @@ class Engine:
                 or any(r["status"] not in TERMINAL for r in items)
             ):
                 return
-            if active or any(a["positions"].values()):
+            if self.config.account_policy == "DEDICATED" and (
+                active or any(a["positions"].values())
+            ):
                 self.halt("EXTERNAL_ACCOUNT_ACTIVITY")
                 return
+            occupied = (occupied_contracts(a, active)
+                        if self.config.account_policy == "COEXISTING_CONTRACTS" else set())
             self.metadata = await self.adapter.metadata()
             metas = {str(m["contractId"]): m for m in self.metadata["contractList"]}
             seen = {r["setup_id"] for r in items}
@@ -922,6 +1079,8 @@ class Engine:
                 identity = setup_identity(row)
                 if identity in seen or row.get("stage") != "READY":
                     continue
+                if str(row.get("contract_id")) in occupied:
+                    continue  # Never merge with or cancel a manual position/order.
                 try:
                     quote = await self.adapter.quote(
                         str(row["contract_id"]), row["entry_reference"]
