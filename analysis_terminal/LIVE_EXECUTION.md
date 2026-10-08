@@ -1,4 +1,4 @@
-# EdgeX V2 API execution — v19.0.40
+# EdgeX V2 API execution — v19.0.41
 
 ユーザーの自動取引実装依頼に対応した、分析サービス内の任意機能です。既定は **OFF**。
 本リリースで実注文は送信していません。SDKの認証・署名・注文本文と異常系を
@@ -32,18 +32,39 @@ Railwayの **分析サービスだけ** に秘密変数を設定します。通�
 | `EDGEX_EXEC_API_SECRET` | API secret |
 | `EDGEX_EXEC_API_PASSPHRASE` | API passphrase |
 | `EDGEX_EXEC_SIGNER_KEY` | SDK Signer private key。LIVE時に必須 |
-| `EDGEX_EXEC_RISK_PCT` | 1取引の口座リスク%。明示必須、0超〜1以下 |
-| `EDGEX_EXEC_MAX_RISK_USDC` | 1取引の費用込み想定SL損失上限。明示必須 |
-| `EDGEX_EXEC_MAX_NOTIONAL_USDC` | 想定元本上限。明示必須、さらに残高・利用可能額以内 |
-| `EDGEX_EXEC_DAILY_LOSS_USDC` | 日次equity減少による新規停止額。明示必須 |
+| `EDGEX_EXEC_RISK_PCT` | 1取引の口座リスク%。明示必須、0超〜3以下 |
+| `EDGEX_EXEC_MAX_RISK_USDC` | 費用込み想定SL損失の正数上限、または明示的な `ACCOUNT_RISK_PCT` |
+| `EDGEX_EXEC_MAX_NOTIONAL_USDC` | 想定元本の正数上限、または明示的な `ACCOUNT_EQUITY`。残高・利用可能額も適用 |
+| `EDGEX_EXEC_DAILY_LOSS_USDC` | 日次equity減少の正数停止額、または明示的な `DISABLED` |
 | `EDGEX_EXEC_SLIPPAGE_BPS` | 片道想定スリッページ。既定2、0〜25 |
 | `EDGEX_EXEC_FEE_BPS` | 片道費用予算。既定5、契約の標準fee以上が必要 |
 | `EDGEX_EXEC_CONTROL_REQUEST` | 任意の管理操作。`check:<UUIDv4>` / `arm:<UUIDv4>` / `pause:<UUIDv4>` |
 
-金額はこのリリースでは設定していません。資金配分を明示せずLIVEにはできません。
+正数の固定上限と、v41の残高連動指定を選べます。資金配分を明示せずLIVEにはできません。
 同時保有は1ポジション、元本は口座equity以下です。SLを近づける方向で丸め、
 グリッド調整・現在価格でもgross RR >= 2を要求します。これはnet RR 2の保証ではありません。
 費用・スリッページ予算は仮定であり、ギャップ時の損失上限を保証しません。
+
+### 最新の取引口座残高を使う明示的な資金方針（v19.0.41）
+
+`MAX_RISK_USDC=ACCOUNT_RISK_PCT` は、各注文直前のAPI口座 `totalEquity`
+× `RISK_PCT / 100` を、SL到達時の往復費用と想定スリッページを含む損失予算にします。
+`MAX_NOTIONAL_USDC=ACCOUNT_EQUITY` は、同じAPIの `totalEquity` と
+`availableAmount` の小さい方まで元本を制限します。丸め、最小注文量、取引所の
+サイズ上限も適用されるため、必ず指定リスク率いっぱいの注文になるわけではありません。
+これはEdgeX Perps V2のUSDC取引口座の資本で、チェーン上の別ウォレット残高や
+EDGEトークンの数量を元本として読み替えません。入金・送金機能は追加しません。
+
+`DAILY_LOSS_USDC=DISABLED` のときだけ、arm時と通常運用時の日次損失停止を無効にします。
+空欄・0・負数・不明な文字列を無効化として扱いません。正数の場合は従来通り
+日次上限と日初equityの3%の小さい方を使い、再armでも日次基準をリセットしません。
+日次停止を無効にしても、未照合注文・外部の建玉・保護注文異常・残高不足・
+通信エラー等の停止は維持します。損失が続く日の累積損失に日次上限はありません。
+
+公開ステータスの `live_configuration_errors` は、READ_ONLYでもLIVEに必要な
+署名鍵の形式と資金方針を検証します。鍵・残高・資金設定値は返しません。
+形式検査と読み取り接続は、署名者の取引権限や実注文受付の証明ではありません。
+資金方針は従来のfingerprintに含まれ、変更しても自動armしません。
 
 先に `READ_ONLY` で接続確認し、専用口座が空であることを確認します。
 Railwayコンテナ内の `/app` で、既存の `/data/analysis_terminal.db` を用います。
@@ -85,7 +106,7 @@ READ_ONLYでデプロイします。`GET /api/live-execution` の `operator_cont
 `READ_ONLY`、最新 `last_preflight_ms` を確認します。REFUSEDなら新規は停止したままです。
 鍵はRailwayの秘密変数だけに保存し、操作IDには鍵・口座ID・金額を含めません。
 
-開始は、認証情報・署名者鍵・4つの資金上限をすべて設定したLIVEモードで、
+開始は、認証情報・署名者鍵・4つの明示的な資金設定をすべて指定したLIVEモードで、
 **新しいUUIDの `arm` 操作**を指定します。設定済みという理由だけで自動armはしません。
 停止は新しいUUIDの `pause` 操作です。LIVEのまま停止すれば既存の保護管理は継続します。
 管理用の公開POST APIはありません。

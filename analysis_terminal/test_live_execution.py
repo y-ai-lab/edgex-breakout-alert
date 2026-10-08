@@ -682,7 +682,7 @@ class SizingTests(unittest.TestCase):
     def test_live_configuration_requires_explicit_small_risk_limits(self):
         for name, value in [
             ("risk_pct", ""),
-            ("risk_pct", "1.01"),
+            ("risk_pct", "3.01"),
             ("max_risk_usdc", "0"),
             ("daily_loss_usdc", "NaN"),
             ("slippage_bps", "26"),

@@ -6,7 +6,7 @@ dedicated flat account is required to arm; only one position can be managed.
 
 import asyncio
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from decimal import ROUND_CEILING, ROUND_FLOOR
 import hashlib
@@ -90,13 +90,16 @@ class Config:
                 except ValueError:
                     errors.append("INVALID_SIGNER_KEY")
             try:
-                if not 0 < decimal(self.risk_pct) <= 1:
+                if not 0 < decimal(self.risk_pct) <= 3:
                     raise ExecutionError("BAD")
-                if any(
-                    decimal(getattr(self, k)) <= 0
-                    for k in ("max_risk_usdc", "max_notional_usdc", "daily_loss_usdc")
+                for name, explicit_mode in (
+                    ("max_risk_usdc", "ACCOUNT_RISK_PCT"),
+                    ("max_notional_usdc", "ACCOUNT_EQUITY"),
+                    ("daily_loss_usdc", "DISABLED"),
                 ):
-                    raise ExecutionError("BAD")
+                    value = getattr(self, name)
+                    if value != explicit_mode and decimal(value) <= 0:
+                        raise ExecutionError("BAD")
                 if (
                     not 0 <= decimal(self.slippage_bps) <= 25
                     or not 0 < decimal(self.fee_bps) <= 100
@@ -105,6 +108,29 @@ class Config:
             except ExecutionError:
                 errors.append("EXPLICIT_RISK_LIMITS_REQUIRED")
         return errors
+
+    def risk_budget(self, equity):
+        budget = decimal(equity) * decimal(self.risk_pct) / 100
+        return (
+            budget
+            if self.max_risk_usdc == "ACCOUNT_RISK_PCT"
+            else min(budget, decimal(self.max_risk_usdc))
+        )
+
+    def notional_limit(self, equity, available):
+        budget = min(decimal(equity), decimal(available))
+        return (
+            budget
+            if self.max_notional_usdc == "ACCOUNT_EQUITY"
+            else min(budget, decimal(self.max_notional_usdc))
+        )
+
+    def daily_loss_limit(self, day_start_equity):
+        if self.daily_loss_usdc == "DISABLED":
+            return None
+        return min(
+            decimal(self.daily_loss_usdc), decimal(day_start_equity) * decimal(".03")
+        )
 
     def fingerprint(self):
         # Bind the ledger to account and risk policy, never store credentials.
@@ -243,6 +269,9 @@ def report(conn, config, *, now_ms):
         credentials_configured="CREDENTIALS_REQUIRED" not in errors,
         signing_configured=bool(config.signer_key),
         configuration_errors=errors,
+        # Validate all LIVE prerequisites without enabling orders or exposing
+        # keys, balances, or the private account policy in the public report.
+        live_configuration_errors=replace(config, mode="LIVE").errors(),
         last_success_ms=s["last_success_ms"],
         last_error=s["last_error"],
         reason=s["reason"],
@@ -411,13 +440,8 @@ def prepare(row, meta, account, quote, config, *, now_ms, armed_ms, snapshot_ms)
         raise ExecutionError("LIVE_RR_BELOW_2")
     stop_exit = stop * (1 - slip if long else 1 + slip)
     cost_risk = abs(limit - stop_exit) + (limit + stop_exit) * fee
-    budget = min(
-        account["equity"] * decimal(config.risk_pct) / 100,
-        decimal(config.max_risk_usdc),
-    )
-    notional = min(
-        account["equity"], account["available"], decimal(config.max_notional_usdc)
-    )
+    budget = config.risk_budget(account["equity"])
+    notional = config.notional_limit(account["equity"], account["available"])
     maximum = min(
         decimal(meta["maxOrderSize"]),
         decimal(quote["maxBuySize" if long else "maxSellSize"]),
@@ -786,11 +810,11 @@ class Engine:
                 .isoformat()
             )
             if s["day"] == day and s["day_start_equity"] is not None:
-                loss = min(
-                    decimal(self.config.daily_loss_usdc),
-                    decimal(s["day_start_equity"]) * decimal(".03"),
-                )
-                if decimal(s["day_start_equity"]) - a["equity"] >= loss:
+                loss = self.config.daily_loss_limit(s["day_start_equity"])
+                if (
+                    loss is not None
+                    and decimal(s["day_start_equity"]) - a["equity"] >= loss
+                ):
                     raise ExecutionError("DAILY_EQUITY_LOSS_LIMIT")
             s.update(
                 armed=True,
@@ -847,11 +871,11 @@ class Engine:
                 if s["day"] != day:
                     s.update(day=day, day_start_equity=str(a["equity"]))
                 if self.config.mode == "LIVE":
-                    loss = min(
-                        decimal(self.config.daily_loss_usdc),
-                        decimal(s["day_start_equity"]) * decimal(".03"),
-                    )
-                    if decimal(s["day_start_equity"]) - a["equity"] >= loss:
+                    loss = self.config.daily_loss_limit(s["day_start_equity"])
+                    if (
+                        loss is not None
+                        and decimal(s["day_start_equity"]) - a["equity"] >= loss
+                    ):
                         s.update(armed=False, reason="DAILY_EQUITY_LOSS_LIMIT")
                 save_state(conn, s)
                 items = orders(conn)
