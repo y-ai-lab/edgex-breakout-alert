@@ -2,7 +2,7 @@
 const fs=require('fs'),vm=require('vm'),assert=require('assert');
 const html=fs.readFileSync(process.argv[2]||'analysis_terminal/index.html','utf8');
 const script=html.match(/<script>([\s\S]*?)<\/script>/)[1];new Function(script);
-const execution=script.slice(script.indexOf('var liveExecutionSnapshot='),script.indexOf('async function checkApiConnections('));
+const execution=script.slice(script.indexOf('var liveExecutionSnapshot='),script.indexOf('// Private account values'));
 const push=script.slice(script.indexOf('var pushManagementTokens='),script.indexOf('function renderPushEvents('));
 (async()=>{
  let now=100000,requests=[];

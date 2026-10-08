@@ -37,6 +37,7 @@ from analysis_terminal import entry_history
 from analysis_terminal import pending_live
 from analysis_terminal import vwap_live
 from analysis_terminal import live_execution
+from analysis_terminal import account_view
 from analysis_terminal import execution_health
 from analysis_terminal import push_security
 from analysis_terminal.tracking import tracking_summary
@@ -332,6 +333,7 @@ def _init_db() -> None:
         pending_live.initialize(conn, now_ms=int(time.time()*1000))
         vwap_live.initialize(conn, now_ms=int(time.time()*1000))
         live_execution.initialize(conn, now_ms=int(time.time()*1000))
+        account_view.initialize(conn, _live_execution_config, now_ms=int(time.time()*1000))
         conn.commit()
 
     if VAPID_PRIVATE_KEY:
@@ -4046,6 +4048,34 @@ async def _background_live_execution() -> None:
             await adapter.close()
 
 
+async def _background_account_view() -> None:
+    # Separate read-only client, no trading/wallet signing keys or order methods.
+    with _db_connect() as conn:
+        bound = account_view.owner_exists(conn, _live_execution_config)
+    config = _live_execution_config
+    if not bound or not all((config.api_key, config.api_secret, config.passphrase)):
+        return
+    try:
+        reader = account_view.Reader(config)
+    except Exception:
+        return
+    try:
+        while True:
+            with _db_connect() as conn:
+                account_view.authorized_device(conn, config, device_hash=conn.execute(
+                    'SELECT device_hash FROM account_view_owner WHERE id=1').fetchone()[0])
+            await account_view.STORE.collect(reader, now_ms=int(time.time()*1000))
+            await asyncio.sleep(15)
+    except Exception:
+        account_view.STORE.asset = None
+        account_view.STORE.histories = {}
+    finally:
+        try:
+            await reader.close()
+        except Exception:
+            pass
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     global _background_task, _btc_wave_task, _btc_wave_latest, _live_execution_task, _live_execution_scan
@@ -4055,9 +4085,15 @@ async def lifespan(_app: FastAPI):
     _background_task = asyncio.create_task(_background_collector())
     _btc_wave_task = asyncio.create_task(_background_btc_wave())
     _live_execution_task = asyncio.create_task(_background_live_execution())
+    account_task = asyncio.create_task(_background_account_view())
     try:
         yield
     finally:
+        account_task.cancel()
+        try:
+            await account_task
+        except asyncio.CancelledError:
+            pass
         if _live_execution_task is not None:
             _live_execution_task.cancel()
             try:
@@ -4083,7 +4119,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="EdgeX Analysis Terminal",
-    version="19.0.46",
+    version="19.0.47",
     lifespan=lifespan,
 )
 app.add_middleware(push_security.BrowserSecurityMiddleware)
@@ -4555,6 +4591,89 @@ async def live_execution_api():
             "SELECT observed_ms,status FROM live_execution_events ORDER BY id DESC LIMIT 8")]
         report["health"] = execution_health.report(records, report, now_ms=now_ms, events=events)
         return report
+
+
+class AccountViewSessionRequest(BaseModel):
+    subscription: dict[str, Any]
+
+
+@app.get("/api/account/config")
+async def account_view_config_api():
+    # Availability only; no account values, positions, IDs or device material.
+    with _db_connect() as conn:
+        bound = account_view.owner_exists(conn, _live_execution_config)
+    return account_view.STORE.config_report(owner_bound=bound, now_ms=int(time.time()*1000))
+
+
+@app.post("/api/account/session")
+async def account_view_session_api(req: AccountViewSessionRequest):
+    with _db_connect() as conn:
+        device = account_view.authorized_device(conn, _live_execution_config, supplied=req.subscription)
+    return account_view.SESSIONS.create(device, account_view.binding(_live_execution_config.account_id))
+
+
+@app.post("/api/account/logout")
+async def account_view_logout_api(authorization: str | None = Header(default=None)):
+    _account_view_authorize(authorization)
+    account_view.SESSIONS.items.pop(authorization[7:], None)
+    return {"ok": True, "read_only": True}
+
+
+def _account_view_authorize(authorization):
+    with _db_connect() as conn:
+        session = account_view.SESSIONS.authorize(conn, _live_execution_config, authorization)
+    push_security.LIMITER.check("account-view-read:" + session["device_hash"], 60)
+    return session
+
+
+@app.get("/api/account/positions")
+async def account_view_positions_api(authorization: str | None = Header(default=None)):
+    _account_view_authorize(authorization)
+    return account_view.STORE.positions(now_ms=int(time.time()*1000))
+
+
+@app.get("/api/account/overview")
+async def account_view_overview_api(authorization: str | None = Header(default=None)):
+    session = _account_view_authorize(authorization)
+    result = account_view.STORE.positions(now_ms=int(time.time()*1000))
+    result["histories"] = {}
+    start, end = account_view.STORE.window
+    for kind in ("positions", "collateral"):
+        page = account_view.STORE.histories.get(kind)
+        result["histories"][kind] = account_view.SESSIONS.page(session, kind, page, start, end) if page else {
+            "items": None, "complete": None, "next_cursor": None, "status": "UNAVAILABLE"}
+    return result
+
+
+_account_history_lock = asyncio.Lock()
+
+
+@app.get("/api/account/history")
+async def account_view_history_api(kind: str = Query(pattern="^(positions|collateral)$"),
+    cursor: str = Query(min_length=32, max_length=32), authorization: str | None = Header(default=None)):
+    session = _account_view_authorize(authorization)
+    async with _account_history_lock:
+        state = session["cursors"].get(cursor)
+        if not state or state["kind"] != kind:
+            raise HTTPException(400, "Invalid account history cursor")
+        if state["pages"] >= 20:
+            raise HTTPException(409, "History page limit reached; completeness unverified")
+        reader = account_view.STORE.reader
+        if not reader:
+            raise HTTPException(503, "History data unavailable")
+        try:
+            page = await reader.history(kind, state["start"], state["end"], state["offset"])
+        except Exception:
+            raise HTTPException(503, "History data unavailable") from None
+        _account_view_authorize(authorization)  # Revocation/expiry also applies after an awaited request.
+        if state["seen_ids"] & page["ids"] or page["offset"] and page["offset"] in state["seen_offsets"]:
+            raise HTTPException(409, "History pagination inconsistency; completeness unverified")
+        value = account_view.SESSIONS.page(session, kind, page, state["start"], state["end"])
+        if value["next_cursor"]:
+            session["cursors"][value["next_cursor"]].update(seen_ids=state["seen_ids"] | page["ids"],
+                seen_offsets=state["seen_offsets"] | {page["offset"]}, pages=state["pages"] + 1)
+        session["cursors"].pop(cursor, None)
+        return value
 
 
 @app.get("/api/paper-execution/events")

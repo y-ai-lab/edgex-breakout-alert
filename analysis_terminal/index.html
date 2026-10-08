@@ -219,6 +219,15 @@ button{-webkit-tap-highlight-color:transparent}
 
 <section id="api" class="panel">
 <div class="dashboardHero"><div><div class="eyebrow">API STATUS</div><h2>接続・自動取引</h2><div class="sub">稼働状態と運用ルールを確認できます。この画面の操作では注文を送りません。</div></div><button class="primary" id="checkApi">再確認</button></div>
+<details class="dashboardDrawer" id="accountViewDetails" open><summary>自分の口座 — 残高・建玉・履歴</summary><div class="drawerBody">
+<div class="row"><button class="primary" id="accountViewOpen">口座情報を表示・更新</button><button class="ghost" id="accountViewLock">非表示・ロック</button></div>
+<div id="accountViewStatus" class="status" role="status">閲覧は登録済み端末限定です。口座情報を表示してください。</div>
+<div id="accountViewData" hidden><div id="accountViewBalances" class="summary"></div>
+<h3>現在のポジション</h3><div id="accountViewPositions"></div>
+<details class="dashboardDrawer"><summary>取引・Funding履歴（直近30日）</summary><div class="drawerBody"><div id="accountViewTrades"></div><button id="accountViewTradesMore" class="ghost" hidden>続きを読む</button></div></details>
+<details class="dashboardDrawer"><summary>入出金・資金増減履歴（直近30日）</summary><div class="drawerBody"><div id="accountViewCash"></div><button id="accountViewCashMore" class="ghost" hidden>続きを読む</button></div></details>
+<p class="sub">EdgeX取引口座のUSDC評価額・利用可能額です。Arcウォレットの未入金残高は含みません。手動・外部の建玉も含みますが、この画面から売買・取消・出金はできません。表示した取引履歴と資金増減を合算すると二重計上になり得ます。取引所のrealized PnL・手数料・Fundingを別々に表示し、費用込み損益や口座ROIを推測しません。</p>
+</div></div></details>
 <details class="dashboardDrawer" id="liveExecutionDetails" open><summary>自動取引の状態・安全ルール</summary><div class="drawerBody">
 <div id="liveExecutionStatus" class="status">接続状態を確認しています。</div>
 <div id="liveExecutionHealth" class="status"></div>
@@ -336,6 +345,48 @@ async function loadLiveExecution(){
  var controller=new AbortController(),timer=setTimeout(function(){controller.abort()},8000);
  try{var j=await jf('/api/live-execution',{signal:controller.signal});j._received_ms=Date.now();liveExecutionSnapshot=j;renderLiveExecution(j)}catch(e){if(liveExecutionSnapshot)liveExecutionSnapshot._fetch_failed=true;renderLiveExecution(liveExecutionSnapshot)}finally{clearTimeout(timer);liveExecutionBusy=false}
 }
+// Private account values and short-lived view tokens stay in memory only.
+var accountViewSession=null,accountViewSnapshot=null,accountViewBusy=false,accountViewEpoch=0,accountViewHistory={};
+function accountMoney(value){if(value==null||value===''||!Number.isFinite(Number(value)))return '未確認';return Number(value).toLocaleString('ja-JP',{maximumFractionDigits:2,minimumFractionDigits:2})}
+function accountExact(value){return value==null?'未確認':lifecycleEscape(String(value))}
+function accountFresh(j){var age=j&&Number.isFinite(j._received_ms)?Date.now()-j._received_ms:Infinity;return !!j&&Number.isFinite(j.snapshot_age_seconds)&&j.snapshot_age_seconds>=0&&age>=0&&age+j.snapshot_age_seconds*1000<30000}
+function clearAccountValues(){accountViewSnapshot=null;accountViewHistory={};document.getElementById('accountViewData').hidden=true;['accountViewBalances','accountViewPositions','accountViewTrades','accountViewCash'].forEach(function(id){document.getElementById(id).innerHTML=''});['accountViewTradesMore','accountViewCashMore'].forEach(function(id){document.getElementById(id).hidden=true})}
+function lockAccountView(message){var old=accountViewSession;accountViewSession=null;accountViewEpoch++;clearAccountValues();document.getElementById('accountViewStatus').textContent=message||'口座情報を非表示にしました。';if(old)fetch('/api/account/logout',{method:'POST',headers:{Authorization:'Bearer '+old.token,'Content-Type':'application/json'},body:'{}',keepalive:true}).catch(function(){})}
+async function accountRequest(url){if(!accountViewSession||Date.now()>=accountViewSession.expires)throw new Error('AUTH');var controller=new AbortController(),timer=setTimeout(function(){controller.abort()},8000);try{var response=await fetch(url,{headers:{Authorization:'Bearer '+accountViewSession.token},signal:controller.signal});if(!response.ok){var failure=new Error('ACCOUNT_REQUEST');failure.status=response.status;throw failure}return await response.json()}finally{clearTimeout(timer)}}
+function renderAccountPositions(j){
+ var st=document.getElementById('accountViewStatus');
+ if(!j||j.source!=='EDGEX_TRADING_ACCOUNT'||j.read_only!==true||j.positions_scope!=='ALL_ACCOUNT_POSITIONS'||!j.balance||!Array.isArray(j.positions)||!accountFresh(j)){document.getElementById('accountViewBalances').innerHTML='';document.getElementById('accountViewPositions').innerHTML='';st.textContent='残高・建玉の最新状態を確認できません。取引所で確認してください。';return}
+ document.getElementById('accountViewData').hidden=false;var b=j.balance;
+ document.getElementById('accountViewBalances').innerHTML=card('USDC評価額',accountMoney(b.equity_usdc))+card('利用可能USDC',accountMoney(b.available_usdc))+card('USDC担保残高',accountMoney(b.cash_usdc))+(b.legacy_cash_usdc!=null&&Number(b.legacy_cash_usdc)!==0?card('従来のUSDC残高',accountMoney(b.legacy_cash_usdc)):'')+card('未実現損益 USDC',accountMoney(b.unrealized_pnl_usdc))+card('必要証拠金 USDC',accountMoney(b.initial_margin_usdc))+card('注文拘束 USDC',accountMoney(b.order_frozen_usdc));
+ var el=document.getElementById('accountViewPositions');el.innerHTML=j.positions.length?'<div class="scroll"><table><thead><tr><th>銘柄 / 方向</th><th>数量</th><th>平均Entry</th><th>未実現損益 USDC</th><th>必要証拠金 USDC</th><th>清算価格</th></tr></thead><tbody>'+j.positions.map(function(p){return '<tr><td>'+lifecycleEscape(p.ticker)+' / '+lifecycleEscape(p.direction)+'</td><td>'+accountExact(p.quantity)+'</td><td>'+accountExact(p.entry_price)+'</td><td>'+accountMoney(p.unrealized_pnl_usdc)+'</td><td>'+accountMoney(p.margin_usdc)+'</td><td>'+accountExact(p.liquidation_price)+'</td></tr>'}).join('')+'</tbody></table></div>':'取得時点で口座の建玉はありません。';
+ st.textContent='読取専用 / 取得 '+new Date(j.observed_ms).toLocaleString('ja-JP')+' / 30秒以上古い残高・建玉は非表示にします。';
+}
+function accountType(value){return ({BUY_POSITION:'買い取引',SELL_POSITION:'売り取引',SETTLE_FUNDING_FEE:'Funding精算',POSITION_BUY:'買い取引の資金増減',POSITION_SELL:'売り取引の資金増減',POSITION_FUNDING:'Fundingの資金増減',FILL_FEE_INCOME:'手数料収入',DEPOSIT:'入金',WITHDRAW:'出金',TRANSFER_IN:'振替入',TRANSFER_OUT:'振替出'}[value])||lifecycleEscape(value||'未確認')}
+function accountTransactionStatus(value){return ({INIT:'処理中',CENSOR_SUCCESS:'検査承認',CENSOR_FAILURE:'検査拒否',L2_APPROVED:'L2承認',L2_REJECT:'L2拒否',L2_REJECT_APPROVED:'L2拒否確定'}[value])||'状態未確認'}
+function renderAccountHistory(kind){
+ var h=accountViewHistory[kind],trade=kind==='positions',el=document.getElementById(trade?'accountViewTrades':'accountViewCash'),more=document.getElementById(trade?'accountViewTradesMore':'accountViewCashMore');
+ if(!h||!Array.isArray(h.items)){el.textContent='履歴を取得できません。0件とは判断できません。';more.hidden=true;return}
+ var note='期間 '+new Date(h.window_start_ms).toLocaleString('ja-JP')+' ～ '+new Date(h.window_end_ms).toLocaleString('ja-JP')+'（終端を含まない） / '+(h.complete?'指定期間の末尾まで取得':'続きあり・全件未取得')+' / '+h.items.length+'件表示';
+ el.innerHTML='<p class="sub">'+lifecycleEscape(note)+'</p>'+(h.items.length?'<div class="scroll"><table><thead><tr><th>時刻 / 状態</th><th>種類'+(trade?' / 銘柄':'')+'</th>'+(trade?'<th>約定価格 / 新規量 / 決済量</th><th>realized PnL USDC（費用込みか未確認）</th><th>新規手数料 / 決済手数料 USDC</th><th>Funding増減 USDC</th>':'<th>資金増減 USDC</th><th>変更前USDC</th>')+'</tr></thead><tbody>'+h.items.map(function(r){return '<tr><td>'+lifecycleEscape(new Date(r.time_ms).toLocaleString('ja-JP'))+' / '+accountTransactionStatus(r.status)+'</td><td>'+accountType(r.type)+(trade?' / '+lifecycleEscape(r.ticker):'')+'</td>'+(trade?'<td>'+accountExact(r.price)+' / '+accountExact(r.open_quantity)+' / '+accountExact(r.close_quantity)+'</td><td>'+accountMoney(r.realized_pnl_usdc)+'</td><td>'+accountMoney(r.open_fee_usdc)+' / '+accountMoney(r.close_fee_usdc)+'</td><td>'+accountMoney(r.funding_delta_usdc)+'</td>':'<td>'+accountMoney(r.delta_usdc)+'</td><td>'+accountMoney(r.before_usdc)+'</td>')+'</tr>'}).join('')+'</tbody></table></div>':'指定期間の履歴はありません。');more.hidden=!h.next_cursor;
+}
+async function loadAccountView(){
+ if(accountViewBusy)return;accountViewBusy=true;var epoch=++accountViewEpoch,st=document.getElementById('accountViewStatus');st.textContent='登録端末と口座を確認中…';
+ try{
+  if(!accountViewSession||Date.now()>=accountViewSession.expires){var deviceTimer,sub;try{sub=await Promise.race([currentPushSubscription(),new Promise(function(_,reject){deviceTimer=setTimeout(function(){reject(new Error('DEVICE'))},8000)})])}finally{clearTimeout(deviceTimer)};if(epoch!==accountViewEpoch)return;if(!sub)throw new Error('DEVICE');var controller=new AbortController(),timer=setTimeout(function(){controller.abort()},8000),s;try{s=await jf('/api/account/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({subscription:sub.toJSON()}),signal:controller.signal})}finally{clearTimeout(timer)}if(epoch!==accountViewEpoch)return;if(s.read_only!==true||typeof s.view_token!=='string'||!/^[A-Za-z0-9_-]{43}$/.test(s.view_token)||s.expires_in_seconds!==600)throw new Error('AUTH');accountViewSession={token:s.view_token,expires:Date.now()+600000}}
+  var j=await accountRequest('/api/account/overview');if(epoch!==accountViewEpoch)return;j._received_ms=Date.now();accountViewSnapshot=j;renderAccountPositions(j);accountViewHistory=j.histories||{};renderAccountHistory('positions');renderAccountHistory('collateral');
+ }catch(e){if(epoch===accountViewEpoch)lockAccountView(e.status===503?'取引所の最新口座データを取得できません。時間をおいて再取得してください。欠損をゼロ残高・建玉なしとは扱いません。':'口座を取得できません。登録済みの元の端末で再確認してください。欠損をゼロ残高・建玉なしとは扱いません。')}finally{accountViewBusy=false}
+}
+async function refreshAccountPositions(){
+ if(accountViewBusy||!accountViewSession)return;if(Date.now()>=accountViewSession.expires){lockAccountView('閲覧期限が切れました。再度表示してください。');return}accountViewBusy=true;var epoch=accountViewEpoch;
+ try{var j=await accountRequest('/api/account/positions');if(epoch!==accountViewEpoch)return;j._received_ms=Date.now();accountViewSnapshot=j;renderAccountPositions(j)}catch(e){if(epoch===accountViewEpoch){if(e.status===401||e.status===403)lockAccountView('閲覧認証が無効になりました。口座情報をロックしました。');else{accountViewSnapshot=null;renderAccountPositions(null)}}}finally{accountViewBusy=false}
+}
+async function moreAccountHistory(kind){
+ var h=accountViewHistory[kind];if(accountViewBusy||!h||!h.next_cursor)return;accountViewBusy=true;var epoch=accountViewEpoch;
+ try{var j=await accountRequest('/api/account/history?kind='+kind+'&cursor='+encodeURIComponent(h.next_cursor));if(epoch!==accountViewEpoch)return;if(!Array.isArray(j.items)||j.window_start_ms!==h.window_start_ms||j.window_end_ms!==h.window_end_ms||j.items.some(function(r){return h.items.some(function(p){return p.record_key===r.record_key})}))throw new Error('PAGE');accountViewHistory[kind]=Object.assign({},h,j,{items:h.items.concat(j.items)});renderAccountHistory(kind)}catch(e){if(epoch===accountViewEpoch){if(e.status===401||e.status===403)lockAccountView('閲覧認証が無効になりました。口座情報をロックしました。');else document.getElementById('accountViewStatus').textContent='履歴の続きを確認できません。取得済み分は保持し、全件取得とは判断しません。'}}finally{accountViewBusy=false}
+}
+document.getElementById('accountViewOpen').onclick=loadAccountView;document.getElementById('accountViewLock').onclick=function(){lockAccountView()};document.getElementById('accountViewTradesMore').onclick=function(){moreAccountHistory('positions')};document.getElementById('accountViewCashMore').onclick=function(){moreAccountHistory('collateral')};
+setInterval(function(){if(accountViewSnapshot&&!accountFresh(accountViewSnapshot))renderAccountPositions(accountViewSnapshot);if(accountViewSession&&document.visibilityState==='visible'&&document.getElementById('api').classList.contains('active'))refreshAccountPositions()},15000);
+document.addEventListener('visibilitychange',function(){if(document.visibilityState!=='visible'&&accountViewSession)lockAccountView('画面を離れたため口座情報をロックしました。再度表示してください。')});
 async function checkApiConnections(){
  var st=document.getElementById('apiCheckStatus'),out=document.getElementById('apiCheckResults'),button=document.getElementById('checkApi');if(!st||!out||!button)return;
  var version=++apiCheckRequest;button.disabled=true;st.textContent='APIを確認中…';out.innerHTML='';
