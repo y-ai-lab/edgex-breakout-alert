@@ -305,10 +305,10 @@
     }
   ],
   "pinned_development_artifact": {
-    "id": 11528362552,
-    "digest": "sha256:cf10f705e4bc9e5dbd25d7f75c03185dcb42eacb20f412a89ecac8d2370b41ab",
-    "head_sha": "dd9f92a53908c4fe64db70eb3ae4f9b8a02821d2",
-    "run_id": 37727351635
+    "id": 11528518560,
+    "digest": "sha256:a6beed5eefa941044f140edc15a62ebce8e0d3c6aed681f3f562cbc3f1917117",
+    "head_sha": "03314993c2b05f08df45b8d2a2d9f7847d608e60",
+    "run_id": 37728427447
   },
   "validation_status": "WAITING_FOR_REGISTERED_COMPLETE_WEEK_PAIR",
   "scheduled_public_research_enabled": true,

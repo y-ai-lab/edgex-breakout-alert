@@ -56,7 +56,7 @@ def report(role='validation_1', *, count=50, avg=.3, pf=1.5, win=45, stress=.2,
     p = json.loads(study.PROTOCOL.read_text())
     period = p['development'] if role == 'development' else p['validation_periods'][int(role[-1])-1]
     return dict(role=role, start_ms=period['start_ms'], end_ms=period['end_ms'], period_complete=True,
-                coverage=dict(failed_markets=failure),
+                coverage=dict(failed_markets=failure, valid_points=100),
                 metrics={study.MODEL:dict(resolved=count, avg_net_r=avg, profit_factor=pf, win_rate=win)},
                 stress_metrics={study.MODEL:dict(avg_net_r=stress, profit_factor=stress_pf)},
                 comparison=dict(net_filled_count_difference=extra, capped_filled_count_difference=cap_extra),

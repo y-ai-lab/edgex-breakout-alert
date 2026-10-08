@@ -14,9 +14,21 @@ import time
 import zipfile
 
 from analysis_terminal import vwap_reclaim_replay as study
+from analysis_terminal.replay import rule_fingerprint
 
 REPO = 'y-ai-lab/edgex-breakout-alert'
 LATEST = Path(__file__).with_name('vwap_reclaim_latest.json')
+ORIGINAL_ANALYZER = '9b2df54f9d908d4b653fc270992ad3e1ada2e812f2d38133581f476516e55afd'
+
+
+def original_strategy_check(server):
+    if rule_fingerprint(server.analyze_contract, server.SETTINGS) != ORIGINAL_ANALYZER:
+        raise ValueError('Frozen production comparator changed; do not reinterpret the experiment')
+    raw = Path(server.scanner.__file__).read_bytes()
+    if hashlib.sha256(raw).hexdigest() not in {
+            'b1f4d4d15dc1ce4665f0f9f776de050059b60fb18faa4cf1583b04bf02a6c4af',
+            '2e24f61e47ee40fdb3ae5f18152129f6632e83d508b73d27bf33fda0919ac9ab'}:
+        raise ValueError('Frozen scanner changed')
 
 
 def gh(path, *, binary=False):
@@ -84,11 +96,13 @@ def scheduled(output, *, now_ms, head_branch=None):
     dev_path.write_bytes(raw)
     study.validation_gate(dev_path, p)  # Before importing transport or fetching future prices.
     from analysis_terminal import server, run_replay
+    original_strategy_check(server)
     universe = json.loads(Path(__file__).with_name('replay_latest.json').read_text())['manifest']['universe']
     if hashlib.sha256(json.dumps(universe, sort_keys=True, separators=(',', ':')).encode()).hexdigest() != p['source_universe_sha256']:
         raise ValueError('Registered universe changed')
     contracts = {c['contract_id']: server.scanner.Contract(**c) for c in universe}
     reports = [development]
+    quality_blocked = False
     for i, period in enumerate(periods, 1):
         role = f'validation_{i}'
         source = output / role / 'source'
@@ -97,10 +111,11 @@ def scheduled(output, *, now_ms, head_branch=None):
                              development_path=dev_path, now_ms=now_ms)
         (output / role / 'report.json').write_text(json.dumps(report, indent=2, allow_nan=False) + '\n')
         reports.append(report)
-        result = study.decision(reports)
+        quality_blocked = report['coverage']['valid_points'] == 0
+        result = 'BLOCKED_DATA_QUALITY' if quality_blocked else study.decision(reports)
         if result in {'KILL_NO_LIVE_PROMOTION', 'BLOCKED_DATA_QUALITY'}:
             break  # Keep the second unused period sealed if the first kills this specification.
-    review = dict(state, decision=study.decision(reports), source_development_artifact=pin,
+    review = dict(state, decision='BLOCKED_DATA_QUALITY' if quality_blocked else study.decision(reports), source_development_artifact=pin,
                   periods=[{k: v for k, v in r.items() if k != 'records'} for r in reports],
                   skipped_registered_periods=len(periods) - (len(reports) - 1),
                   limitations=p['limitations'], weekly_portfolios_are_independent=True,

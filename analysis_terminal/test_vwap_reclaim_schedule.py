@@ -78,7 +78,7 @@ class VwapScheduleTests(unittest.TestCase):
                 schedule.gh('repos/test/artifact')
             self.assertNotIn('secret',str(error.exception))
 
-    def experiment(self, *, first_negative=False, first_gap=False, missing_pin=False):
+    def experiment(self, *, first_negative=False, first_gap=False, missing_pin=False, zero_coverage=False):
         """Transport fixture: assert cutoffs and never access the second killed week."""
         d=report('development');d['records']=[]
         stream=BytesIO()
@@ -91,8 +91,10 @@ class VwapScheduleTests(unittest.TestCase):
         async def public(end, days, output, *, universe):
             calls.append(end);self.assertEqual(days,7);output.mkdir(parents=True)
         def build(source, analyze, settings, *, role, development_path, now_ms):
-            return report(role,count=20 if first_negative else 50,avg=-.1 if first_negative else .3,
+            result=report(role,count=20 if first_negative else 50,avg=-.1 if first_negative else .3,
                           pf=.9 if first_negative else 1.5,failure=1 if first_gap else 0)
+            if zero_coverage:result['coverage']['valid_points']=0
+            return result
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory);latest=root/'latest.json'
             latest.write_text(json.dumps(dict(pinned_development_artifact=pin,periods=[report('development')])))
@@ -123,6 +125,11 @@ class VwapScheduleTests(unittest.TestCase):
         self.assertEqual(state['decision'],'BLOCKED_DATA_QUALITY')
         self.assertEqual(len(calls),1);self.assertEqual(review['skipped_registered_periods'],1)
 
+    def test_no_valid_indicator_points_is_not_zero_trade_evidence(self):
+        state,review,calls=self.experiment(zero_coverage=True)
+        self.assertEqual(state['decision'],'BLOCKED_DATA_QUALITY')
+        self.assertEqual(len(calls),1);self.assertEqual(review['skipped_registered_periods'],1)
+
     def test_two_positive_weeks_only_require_live_shadow_no_aggregate_capital_roi(self):
         state,review,calls=self.experiment()
         self.assertEqual(state['decision'],'LIVE_CAPTURE_SHADOW_REQUIRED')
@@ -141,6 +148,16 @@ class VwapScheduleTests(unittest.TestCase):
             raw=(Path(directory)/'run-status.json').read_text();state=json.loads(raw)
             self.assertEqual(state['status'],'FAILED_COLLECTION');self.assertTrue(state['seal'])
             self.assertNotIn('secret',raw)
+
+    def test_original_production_comparator_cannot_silently_drift_in_future(self):
+        from analysis_terminal import server
+        schedule.original_strategy_check(server)
+        with patch.object(schedule,'rule_fingerprint',return_value='changed'):
+            with self.assertRaisesRegex(ValueError,'comparator changed'):
+                schedule.original_strategy_check(server)
+        with patch.object(schedule.Path,'read_bytes',return_value=b'changed scanner'):
+            with self.assertRaisesRegex(ValueError,'scanner changed'):
+                schedule.original_strategy_check(server)
 
 
 if __name__=='__main__':unittest.main()
