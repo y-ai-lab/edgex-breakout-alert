@@ -2,13 +2,25 @@ name: Registered VWAP reclaim research
 
 on:
   push:
-    branches: [feature/research-vwap-20261008]
+    branches: [main, feature/research-vwap-20261008]
     paths:
       - 'analysis_terminal/vwap_reclaim*'
       - 'analysis_terminal/test_vwap_reclaim_replay.py'
+      - 'analysis_terminal/test_vwap_reclaim_schedule.py'
       - 'analysis_terminal/VWAP_RECLAIM_REVIEW.md'
       - '.github/workflows/vwap-reclaim-research.yml'
+  schedule:
+    - cron: '0 1 * * 5'
   workflow_dispatch:
+    inputs:
+      operation:
+        type: choice
+        options: [collect, validate]
+        default: collect
+
+concurrency:
+  group: edgex-vwap-registered-experiment
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -16,6 +28,7 @@ permissions:
 
 jobs:
   validation:
+    if: github.event_name == 'push' || inputs.operation == 'validate'
     runs-on: ubuntu-latest
     timeout-minutes: 12
     env:
@@ -117,4 +130,50 @@ jobs:
         with:
           name: vwap-reclaim-validation
           path: validation-output/
+          retention-days: 90
+  collection:
+    if: github.event_name == 'schedule' || inputs.operation == 'collect'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      EDGEX_EXEC_MODE: 'OFF'
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r analysis_terminal/test-requirements.txt
+      - run: python -m unittest analysis_terminal.test_vwap_reclaim_replay analysis_terminal.test_vwap_reclaim_schedule -q
+      - name: Collect only the complete registered pair, never promote or notify
+        id: collect
+        run: python -m analysis_terminal.vwap_reclaim_schedule --output vwap-output
+      - name: Seal small ledgers or the first blocked attempt
+        id: seal
+        if: always() && steps.collect.outcome != 'skipped'
+        run: |
+          python - <<'PY'
+          import json,os,shutil
+          from pathlib import Path
+          out=Path('vwap-output');state=json.loads((out/'run-status.json').read_text())
+          if state['seal']:
+              dest=out/'frozen';dest.mkdir()
+              for name in ['run-status.json','decision-summary.json','frozen-development.json','validation_1/report.json','validation_2/report.json']:
+                  source=out/name
+                  if source.exists():
+                      target=dest/name;target.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(source,target)
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:
+              f.write(f'seal={str(state["seal"]).lower()}\nname={state.get("artifact_name", "unused")}\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.seal.outputs.seal == 'true'
+        with:
+          name: ${{ steps.seal.outputs.name }}
+          path: vwap-output/frozen/
+          retention-days: 90
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: edgex-vwap-review-${{ github.run_id }}
+          path: vwap-output/
           retention-days: 14

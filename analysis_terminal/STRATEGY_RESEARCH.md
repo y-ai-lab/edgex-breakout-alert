@@ -191,3 +191,18 @@ artifactが複数あっても同じcohortの再取得であり、独立サンプ
 [370件のテスト・既存市場の再現・集計整合性](https://github.com/y-ai-lab/edgex-breakout-alert/actions/runs/37580118199)が通過。
 [検証済みの取得時点の内訳](execution_funnel_latest.json)には、元のledgerのSHA、
 開発/直近検証を別々に保存し、後追いは同じcohortの更新として併記している。
+
+## 2026-10-08: 出来高を伴う当日VWAP回復の独立研究
+
+[VWAP_RECLAIM_REVIEW.md](VWAP_RECLAIM_REVIEW.md)と`vwap_reclaim_protocol.json`に条件・
+未使用2期間・費用・停止基準を事前登録した。既閲覧の開発7日で4仮約定/4決着、
+2TP2SL・net平均R+0.50/PF2.0、高い費用では+0.2924/PF1.5848。
+4件はINSUFFICIENT SAMPLE。資金制約後2約定、現行に対する純増0で、改善を確認したとは扱わない。
+
+既存の押し戻り研究・live捕捉の起点や条件は変更しない。棄却済みモデルも再稼働しない。
+VWAP研究は別の公開足検証であり、本番の実時間Shadow/実約定に加算しない。
+新たな未使用期間は10/9–10/16、10/16–10/23 UTC。両週が完了する10/23以降に
+`.github/workflows/vwap-reclaim-research.yml`で固定の順序で評価する。
+週別の口座・日次の更新・過去の他研究を独立サンプルとして合算しない。
+最初のmainの封印結果または失敗記録を保持し、後の有利な再取得へ差し替えない。
+本番条件・UI・通知・DB・注文を変更せず、十分な負の成績でKILLを記録する。
