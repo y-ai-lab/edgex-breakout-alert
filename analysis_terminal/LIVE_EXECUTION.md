@@ -1,4 +1,4 @@
-# EdgeX V2 API execution — v19.0.41
+# EdgeX V2 API execution — v19.0.42
 
 ユーザーの自動取引実装依頼に対応した、分析サービス内の任意機能です。既定は **OFF**。
 本リリースで実注文は送信していません。SDKの認証・署名・注文本文と異常系を
@@ -65,6 +65,19 @@ EDGEトークンの数量を元本として読み替えません。入金・送�
 署名鍵の形式と資金方針を検証します。鍵・残高・資金設定値は返しません。
 形式検査と読み取り接続は、署名者の取引権限や実注文受付の証明ではありません。
 資金方針は従来のfingerprintに含まれ、変更しても自動armしません。
+
+### 開始拒否の読み取り診断（v19.0.42）
+
+`check` は `preflight_arm_blockers` に専用口座の開始を妨げる理由だけを保存します。
+`EXISTING_ACCOUNT_POSITION` は口座の既存建玉、`ACTIVE_EXCHANGE_ORDERS` は
+取引所の未処理注文、`UNRESOLVED_EXECUTION_LEDGER` はこのアプリの未解決台帳です。
+銘柄・数量・残高・注文ID・秘密情報は公開レスポンスに含めません。
+armも同じ条件を使い、条件を緩和したり既存注文を取り消したりしません。
+
+診断は `last_preflight_ms` 時点の観測であり、30秒以内のものだけ
+`preflight_arm_blockers_current=true` とします。旧DBや失敗した新しいcheckでは
+理由は `null` で、不明を「開始可能」と扱いません。空の配列も、署名権限の証明や
+自動armの許可ではありません。原因が解消しても消費済みarmを自動再試行しません。
 
 先に `READ_ONLY` で接続確認し、専用口座が空であることを確認します。
 Railwayコンテナ内の `/app` で、既存の `/data/analysis_terminal.db` を用います。

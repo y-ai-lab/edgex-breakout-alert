@@ -255,6 +255,11 @@ def report(conn, config, *, now_ms):
     control = conn.execute(
         "SELECT action,status,created_ms,completed_ms,code FROM live_execution_controls ORDER BY rowid DESC LIMIT 1"
     ).fetchone()
+    blockers = s.get("last_preflight_arm_blockers")
+    preflight_age = (
+        None if s.get("last_preflight_ms") is None
+        else (now_ms - s["last_preflight_ms"]) / 1000
+    )
     return dict(
         mode=config.mode,
         status=status,
@@ -279,6 +284,9 @@ def report(conn, config, *, now_ms):
         status_counts=dict(Counter(r["status"] for r in items)),
         account_details_exposed=False,
         last_preflight_ms=s.get("last_preflight_ms"),
+        preflight_arm_blockers=blockers,
+        preflight_arm_blockers_current=blockers is not None
+        and preflight_age is not None and 0 <= preflight_age < 30,
         preflight_is_read_only=True,
         preflight_validates_signer_authorization=False,
         operator_control=(
@@ -289,6 +297,18 @@ def report(conn, config, *, now_ms):
             else None
         ),
     )
+
+
+def flat_account_blockers(account, active_exchange_orders, ledger):
+    """Safe reason codes only; same dedicated-account checks used by arm."""
+    blockers = []
+    if any(account["positions"].values()):
+        blockers.append("EXISTING_ACCOUNT_POSITION")
+    if active_exchange_orders:
+        blockers.append("ACTIVE_EXCHANGE_ORDERS")
+    if any(r["status"] not in TERMINAL for r in ledger):
+        blockers.append("UNRESOLVED_EXECUTION_LEDGER")
+    return blockers
 
 
 def parse_control(request):
@@ -756,6 +776,12 @@ class Engine:
         self.update(r, "PROTECTED")
 
     async def preflight(self):
+        # A failed fresh check must not leave a previous flat-account result
+        # presented as current. Do not change the operator's armed state.
+        with self.db_connect() as conn:
+            s = state(conn)
+            s["last_preflight_arm_blockers"] = None
+            save_state(conn, s)
         if self.config.mode == "OFF" or self.config.errors():
             raise ExecutionError("CONFIGURATION_REQUIRED")
         metadata = await self.adapter.metadata()
@@ -782,7 +808,10 @@ class Engine:
         self.metadata = metadata
         with self.db_connect() as conn:
             s = state(conn)
-            s.update(last_preflight_ms=self.clock(), last_success_ms=self.clock())
+            s.update(
+                last_preflight_ms=self.clock(), last_success_ms=self.clock(),
+                last_preflight_arm_blockers=flat_account_blockers(a, active, orders(conn)),
+            )
             save_state(conn, s)
         return a, active
 
@@ -795,11 +824,7 @@ class Engine:
         a, active = await self.preflight()
         with self.db_connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
-            if (
-                any(a["positions"].values())
-                or active
-                or any(r["status"] not in TERMINAL for r in orders(conn))
-            ):
+            if flat_account_blockers(a, active, orders(conn)):
                 raise ExecutionError("DEDICATED_FLAT_ACCOUNT_REQUIRED")
             s = state(conn)
             if s.get("control_epoch", 0) != epoch:
