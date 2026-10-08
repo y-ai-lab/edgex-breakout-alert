@@ -1,0 +1,31 @@
+# 押し戻りShadowの約定前観測証跡
+
+元のpending_live捕捉・評価器・条件・cohort・口座計算を変更せず、今後の約定前setup観測を
+独立したpending_evidence_* SQLiteテーブルへ保存する。元台帳の成績を変更しない。
+本番READY、実注文、通知へ接続せず、Web UIへタブや候補を追加しない。
+
+導入時刻started_msと次15分bucketのcapture_from_bucket_msは元のcapture_start_msとは別。
+再デプロイで変更しない。起点前の状態・削除済み状態・欠損は再構成しない。
+約定前状態がAPIから取得できない旧記録を、後の公開足から検証済みにしない。
+
+元の収集がコミットした後、そのcycleで新しく観測した状態だけを、次足の開始前に保存する。
+押し戻り案のPENDINGだけを対象とし、元の期限内の足に限る。市場全体の毎足の状態を
+複製しない。signal/setup・元価格・時間のhash、元observed_ms、実際のrecorded_ms、
+元のobserved_setup_idを保持する。異なるsetupやnull状態もそのまま記録し、成功例だけを選ばない。
+同じキー/足は最初の証跡を保持し、再試行で上書きしない。元状態を将来足から作らない。
+
+証跡保存失敗は別のlast_errorへ記録し、元の捕捉・OPENの出口判定を戻したり停止しない。
+期待される観測が導入後にもない場合はMISSING_OBSERVATION_EVIDENCE、hash/時間不一致は
+EVIDENCE_MISMATCH。導入以前の不足はUNAVAILABLE_BEFORE_AUDIT。未開始/未確定足は
+NO_CLOSED_ELIGIBLE_BAR_YETで、0件の検証成功や新サンプルには扱わない。
+
+GET /api/pending-entry-evidenceは読取専用。limitは最新表示だけに適用し、全体summaryは
+全押し戻り台帳から計算する。GET /api/pending-entry-shadowのobservation_evidenceにも
+status/meta/summaryを返す。元のmetrics/portfolios/起点・通知条件は保持する。
+COMPLETE_OBSERVATION_EVIDENCEは必要な状態の時系列証跡がそろう意味で、勝率・利益・
+実約定・板/queue/fundingの証明、本番昇格サンプルの自動承認ではない。
+
+証跡の元setupが候補と異なる場合も、観測自体を欠損扱いにしない。その状態を使って
+元のINVALIDATED判定を独立照合する。既存OPEN/AMBIGUOUS/DATA_GAPの不確かな資金は
+解除しない。研究口座と実口座は区別し、同じcohortの更新を新トレードへ加算しない。
+本番の生台帳とこの証跡は作業環境でのみ保存・突合し、GitHubへエクスポートしない。

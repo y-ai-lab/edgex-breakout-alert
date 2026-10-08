@@ -35,6 +35,7 @@ from analysis_terminal import paper_execution
 from analysis_terminal import btc_wave, btc_wave_store
 from analysis_terminal import entry_history
 from analysis_terminal import pending_live
+from analysis_terminal import pending_evidence
 from analysis_terminal import vwap_live
 from analysis_terminal import live_execution
 from analysis_terminal import account_view
@@ -333,6 +334,7 @@ def _init_db() -> None:
         btc_wave_store.initialize(conn)
         entry_history.initialize(conn)
         pending_live.initialize(conn, now_ms=int(time.time()*1000))
+        pending_evidence.initialize(conn, now_ms=int(time.time()*1000))
         vwap_live.initialize(conn, now_ms=int(time.time()*1000))
         live_execution.initialize(conn, now_ms=int(time.time()*1000))
         account_view.initialize(conn, _live_execution_config, now_ms=int(time.time()*1000))
@@ -3884,12 +3886,24 @@ def _pending_live_cycle(contracts) -> None:
     try:
         with _db_connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
+            observation_ms = int(time.time()*1000)
             pending_live.cycle(conn, contracts=contracts, snapshots=cache[1] if cache else {},
-                               analyze=analyze_contract, settings=SETTINGS, now_ms=int(time.time()*1000))
+                               analyze=analyze_contract, settings=SETTINGS, now_ms=observation_ms)
     except Exception as exc:
         with _db_connect() as conn:
             pending_live.record_error(conn, type(exc).__name__)
         print(f"Pending Shadow capture paused: {type(exc).__name__}", flush=True)
+        return
+    # Commit original capture first; proof failures cannot undo or pause it.
+    try:
+        with _db_connect() as conn:
+            pending_evidence.capture(conn, observation_ms=observation_ms,recorded_ms=int(time.time()*1000))
+    except Exception as exc:
+        try:
+            with _db_connect() as conn:
+                pending_evidence.record_error(conn,type(exc).__name__)
+        except Exception as audit_error:
+            print(f"Pending observation proof unavailable: {type(audit_error).__name__}",flush=True)
 
 
 def _vwap_live_cycle(contracts) -> None:
@@ -4130,7 +4144,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="EdgeX Analysis Terminal",
-    version="19.0.50",
+    version="19.0.51",
     lifespan=lifespan,
 )
 app.add_middleware(push_security.BrowserSecurityMiddleware)
@@ -4800,7 +4814,21 @@ async def readiness_review_api(
 async def pending_entry_shadow_api(limit: int = Query(default=50, ge=1, le=500)):
     with _db_connect() as conn:
         conn.execute("BEGIN")
-        return pending_live.review(conn, now_ms=int(time.time()*1000), limit=limit)
+        now_ms=int(time.time()*1000)
+        result=pending_live.review(conn, now_ms=now_ms, limit=limit)
+        try:
+            proof=pending_evidence.review(conn,now_ms=now_ms,limit=0)
+            result['observation_evidence']={k:v for k,v in proof.items() if k!='latest'}
+        except Exception as exc:
+            result['observation_evidence']={'status':'UNAVAILABLE_ERROR','error_type':type(exc).__name__}
+        return result
+
+
+@app.get("/api/pending-entry-evidence")
+async def pending_entry_evidence_api(limit: int = Query(default=50, ge=1, le=500)):
+    with _db_connect() as conn:
+        conn.execute("BEGIN")
+        return pending_evidence.review(conn,now_ms=int(time.time()*1000),limit=limit)
 
 
 @app.get("/api/vwap-entry-shadow")
