@@ -1,5 +1,6 @@
 """No external delivery: exercise actual API authority and outbound boundary."""
 import base64
+import asyncio
 import io
 import json
 import re
@@ -7,7 +8,7 @@ import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
@@ -112,6 +113,19 @@ class PushSecurityTests(unittest.IsolatedAsyncioTestCase):
         r = await self.client.post("/api/push/subscribe", content=chunks())
         self.assertEqual(r.status_code, 413)
         self.assertEqual(server._subscription_count(), 1)
+
+    async def test_slow_body_times_out_before_handler(self):
+        app = AsyncMock()
+        middleware = security.BrowserSecurityMiddleware(app)
+        messages = []
+        async def receive():
+            await asyncio.Event().wait()
+        async def send(message):
+            messages.append(message)
+        with patch.object(security, "BODY_TIMEOUT", .001):
+            await middleware({"type": "http", "method": "POST", "path": "/api/push/session", "headers": [], "client": ("test", 0)}, receive, send)
+        self.assertEqual(messages[0]["status"], 408)
+        app.assert_not_called()
 
     async def test_session_and_test_rate_limits(self):
         with patch.object(server, "_send_push_sync", return_value=True) as send:

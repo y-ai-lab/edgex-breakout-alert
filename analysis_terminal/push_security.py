@@ -6,6 +6,7 @@ No registration reset, global trading authority, or stored-key migration occurs.
 from __future__ import annotations
 
 import base64
+import asyncio
 import hashlib
 import hmac
 import re
@@ -22,6 +23,7 @@ from starlette.responses import HTMLResponse
 
 PUBLIC_ORIGIN = "https://edgex-analysis-terminal-production.up.railway.app"
 MAX_BODY = 16384
+BODY_TIMEOUT = 10
 PROVIDERS = {
     "fcm.googleapis.com": ("/fcm/send/", "/wp/"),
     "updates.push.services.mozilla.com": ("/wpush/v1/", "/wpush/v2/"),
@@ -172,17 +174,22 @@ class BrowserSecurityMiddleware:
                 LIMITER.check("global", 300)
                 client = (scope.get("client") or ("unknown", 0))[0]
                 LIMITER.check("client:" + client, 60)
-                messages, size = [], 0
-                while True:
-                    message = await receive()
-                    if message["type"] == "http.disconnect":
-                        return
-                    size += len(message.get("body", b""))
-                    if size > MAX_BODY:
-                        raise HTTPException(413, "Request too large")
-                    messages.append(message)
-                    if not message.get("more_body"):
-                        break
+                body = bytearray()
+                try:
+                    async with asyncio.timeout(BODY_TIMEOUT):
+                        while True:
+                            message = await receive()
+                            if message["type"] == "http.disconnect":
+                                return
+                            chunk = message.get("body", b"")
+                            if len(body) + len(chunk) > MAX_BODY:
+                                raise HTTPException(413, "Request too large")
+                            body.extend(chunk)
+                            if not message.get("more_body"):
+                                break
+                except TimeoutError:
+                    raise HTTPException(408, "Request body timed out") from None
+                messages = [{"type": "http.request", "body": bytes(body), "more_body": False}]
 
                 async def replay():
                     return messages.pop(0) if messages else await receive()
