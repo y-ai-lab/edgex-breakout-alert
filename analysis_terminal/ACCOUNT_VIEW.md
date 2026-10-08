@@ -1,4 +1,4 @@
-# Private account view (v19.0.47)
+# Private account view (v19.0.48)
 
 The API tab shows USDC equity, available collateral, cash, unrealized PnL, margin,
 all current positions (including manual positions), and separate transaction and
@@ -51,7 +51,11 @@ Missing account/position lists, foreign accounts/coins, nonfinite numbers or
 ambiguous identifiers invalidate the relevant section. Zero/negative equity may
 be displayed; absent values are null, not zero. Collateral amount, legacy amount, equity and available amount
 remain distinct; legacy and current amounts are not silently added. Missing position detail means unknown entry/PnL/liquidation
-price, not an inferred price. Metadata failure means an unknown name.
+price, not an inferred price. Optional decimal fields may be empty in history
+responses (e.g. non-applicable funding fields); blanks remain null and render as
+unknown. Required balances, quantities and cash changes cannot be blank, and
+nonfinite or malformed nonempty values remain invalid. Fixed validation codes
+identify failed sections without exposing SDK responses or values. Metadata failure means an unknown name.
 
 Initial history pages contain at most 50 rows per section. Session-scoped opaque
 cursors retain the original 30-day interval and server-side upstream cursor.

@@ -121,7 +121,7 @@ class AccountDataError(Exception):
         super().__init__(self.code)
 
 def number(value, *, required=False):
-    if value is None and not required:
+    if not required and (value is None or isinstance(value,str) and not value.strip()):
         return None
     try:
         if isinstance(value,bool) or value is None or len(str(value))>100:

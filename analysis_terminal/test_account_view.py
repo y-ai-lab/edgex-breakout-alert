@@ -84,6 +84,26 @@ class ParserTests(unittest.TestCase):
         for page in pages:
             with self.subTest(page=page),self.assertRaises(view.AccountDataError):view.history_page(page,'123',{},'positions',observed_ms=NOW,start_ms=NOW-view.DAY,end_ms=NOW)
 
+    def test_optional_empty_numbers_are_missing_not_zero(self):
+        for value in ('','   ',None):
+            self.assertIsNone(view.number(value))
+        for value in ('NaN','Infinity','not-a-number'):
+            with self.assertRaises(view.AccountDataError):view.number(value)
+
+    def test_funding_history_empty_optional_values_remain_unknown(self):
+        page=raw_page(type='SETTLE_FUNDING_FEE',fillPrice='',fillOpenSize='',fillCloseSize='',realizePnl='',fillOpenFee='',fillCloseFee='',deltaFundingFee='0.25')
+        result=view.history_page(page,'123',{},'positions',observed_ms=NOW,start_ms=NOW-view.DAY,end_ms=NOW)['items'][0]
+        self.assertIsNone(result['price']);self.assertIsNone(result['realized_pnl_usdc'])
+        self.assertIsNone(result['open_quantity']);self.assertIsNone(result['close_fee_usdc'])
+        self.assertEqual(result['funding_delta_usdc'],'0.25')
+
+    def test_required_empty_balances_quantities_and_cash_changes_stay_invalid(self):
+        for value in ('','   ',None):
+            with self.assertRaises(view.AccountDataError):view.number(value,required=True)
+        raw=raw_asset();raw['positionList'][0]['openSize']=''
+        with self.assertRaises(view.AccountDataError):view.asset(raw,'123',{},observed_ms=NOW)
+        with self.assertRaises(view.AccountDataError):view.history_page(raw_page(deltaAmount=''),'123',{},'collateral',observed_ms=NOW,start_ms=NOW-view.DAY,end_ms=NOW)
+
     def test_stale_boundaries_fail_closed(self):
         store=view.Store();store.asset=view.asset(raw_asset(),'123',{},observed_ms=NOW)
         self.assertAlmostEqual(store.positions(now_ms=NOW+29999)['snapshot_age_seconds'],29.999)
@@ -248,6 +268,12 @@ class ReaderTests(unittest.IsolatedAsyncioTestCase):
             view.history_page(page,'123',{},'positions',observed_ms=NOW,start_ms=NOW-view.DAY,end_ms=NOW)
         self.assertEqual(exc.exception.code,'ACCOUNT_ROW_MISMATCH')
         self.assertNotIn('private',str(exc.exception))
+
+    async def test_reader_blank_history_fields_no_longer_block_collection(self):
+        fake=Mock();fake.async_client.make_authenticated_request=AsyncMock(return_value={'code':'SUCCESS','data':raw_page(fillPrice='',realizePnl='')})
+        result=await view.Reader(fixtures.configuration(),client=fake).history('positions',NOW-view.DAY,NOW)
+        self.assertIsNone(result['items'][0]['price']);self.assertIsNone(result['items'][0]['realized_pnl_usdc'])
+        self.assertEqual(len(result['items']),1)
 
     async def test_sdk_exception_is_sanitized(self):
         fake=Mock();fake.async_client.make_authenticated_request=AsyncMock(side_effect=RuntimeError('private-secret-response'))
