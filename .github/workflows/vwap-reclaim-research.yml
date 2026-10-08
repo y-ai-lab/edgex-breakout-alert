@@ -2,13 +2,14 @@ name: Registered VWAP reclaim research
 
 on:
   push:
-    branches: [main, feature/research-vwap-20261008]
+    branches: [main, feature/research-vwap-20261008, feature/research-guard-20261008]
     paths:
       - 'analysis_terminal/vwap_reclaim*'
       - 'analysis_terminal/test_vwap_reclaim_replay.py'
       - 'analysis_terminal/test_vwap_reclaim_schedule.py'
       - 'analysis_terminal/VWAP_RECLAIM_REVIEW.md'
       - '.github/workflows/vwap-reclaim-research.yml'
+      - '.github/scripts/test_vwap_workflow_guard.py'
   schedule:
     - cron: '0 1 * * 5'
   workflow_dispatch:
@@ -57,19 +58,21 @@ jobs:
             for (const match of fs.readFileSync(file,'utf8').matchAll(/<script[^>]*>([\s\S]*?)<\/script>/gi)) new Function(match[1]);
           }
           JS
-      - name: Production and original research remain byte-identical
+      - name: Registered research rules and comparators remain frozen
         run: |
           python - <<'PY'
           import json,subprocess
           from pathlib import Path
+          from analysis_terminal import server,vwap_reclaim_schedule
+          # UI, authentication and version changes are independently tested;
+          # freeze the strategy function/parameters, not the entire web server.
+          vwap_reclaim_schedule.original_strategy_check(server)
           base='4807e869a2563695cc377110edc7e5b90b38aa0a'
           preserved=['app.py','production_app.py','Dockerfile','requirements.txt',
-            'analysis_terminal/server.py','analysis_terminal/index.html','analysis_terminal/btc.html',
             'analysis_terminal/outcomes.py','analysis_terminal/pending_entry_protocol.json',
             'analysis_terminal/pending_entry_replay.py','analysis_terminal/pending_live.py',
             'analysis_terminal/pending_live_protocol.json','analysis_terminal/pending_followup.py',
-            'analysis_terminal/paper_execution.py','analysis_terminal/live_execution.py',
-            'analysis_terminal/live_execution_control.py','analysis_terminal/edgex_orders.py',
+            'analysis_terminal/paper_execution.py',
             '.github/workflows/strategy-research.yml']
           for name in preserved:
               assert subprocess.check_output(['git','show',base+':'+name])==Path(name).read_bytes(),name

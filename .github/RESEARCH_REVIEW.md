@@ -23,3 +23,17 @@ python .github/scripts/research_summary.py --research-dir strategy-output \
 ```
 
 これは公開OHLCからの仮想検証であり、板・価格tick・queue・funding・実約定は未検証。コスト込みRの単位はnet stop riskで、本番Shadowのoriginal stop distanceを使うRと直接合算しない。MFE/MAEの足内順序を推測しない。
+
+## VWAP研究CIの固定範囲（2026-10-08）
+
+初回開発時の「本番全ファイルが同じ」というチェックは、後の正当なUI・認証・
+ON/OFF実装まで研究条件変更として拒否していた。研究用チェックは登録済み
+analyze_contractとパラメータのfingerprint、既知のscanner hash、元の評価器・
+capture・protocol・週次workflowのbytes、事前登録したVWAP条件・期間、既存KILLを検証する。
+Webサーバー全体・UI・注文認証コードの旧版との一致は要求しない。
+それらの安全性は通常の全回帰テストで確認する。条件変更を許可するものではない。
+
+実際のworkflow内チェックを実行する回帰テストで、UI・認証更新の受入れと、
+評価器・RR・分析関数・期間の変更、棄却モデルの再稼働の拒否を確認する。
+公開市場archiveから全台帳を再現する後続チェック、未使用期間、費用、
+最初のartifact保持、サンプル基準を維持する。市場データ取得や成績は変更しない。
