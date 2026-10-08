@@ -71,6 +71,7 @@ def record_error(conn,error_type):
 
 def review(conn, *, now_ms, limit=50):
     m=meta(conn)
+    age=None if m['last_success_ms'] is None else now_ms-m['last_success_ms']
     signals=[json.loads(r[0]) for r in conn.execute('SELECT payload FROM pending_live_signals ORDER BY created_ms,signal_key')]
     observations={}
     for row in conn.execute('SELECT signal_key,close_ms,observed_ms,recorded_ms,setup_id,identity_sha256 FROM pending_evidence_states ORDER BY close_ms'):
@@ -104,7 +105,9 @@ def review(conn, *, now_ms, limit=50):
     return dict(protocol='pending_prefill_observation_evidence_v1',meta=m,
                 status='PAUSED_ERROR' if m['last_error'] else
                        'WAITING_FOR_AUDIT_START' if now_ms<m['capture_from_bucket_ms'] else
+                       'STALE_OBSERVATION' if age is not None and (age<0 or age>2*STEP) else
                        'COLLECTING' if m['last_success_ms'] is not None else 'WAITING_FOR_FIRST_OBSERVATION',
+                observation_age_seconds=None if age is None else age/1000,
                 summary=dict(total_proposal_records=len(records),statuses=counts,
                              stored_observations=sum(len(v) for v in observations.values())),
                 latest=list(reversed(records))[:max(0,min(limit,500))],

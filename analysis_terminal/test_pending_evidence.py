@@ -47,6 +47,12 @@ class EvidenceTests(unittest.TestCase):
         self.assertEqual(evidence.meta(self.conn),audit)
         self.assertEqual(live._meta(self.conn),original)
 
+    def test_stale_and_future_observer_clock_are_not_collecting(self):
+        self.source.capture();self.collect(START)
+        self.assertEqual(self.proof(now=START+3*STEP)['status'],'STALE_OBSERVATION')
+        m=evidence.meta(self.conn);m['last_success_ms']=START+5*STEP;evidence.save_meta(self.conn,m)
+        self.assertEqual(self.proof(now=START+3*STEP)['status'],'STALE_OBSERVATION')
+
     def test_mid_bucket_start_never_backfills_existing_observations(self):
         self.source.capture()
         self.conn.execute('DELETE FROM pending_evidence_meta')
