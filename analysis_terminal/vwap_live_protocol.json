@@ -1,0 +1,75 @@
+{
+  "protocol": "vwap_reclaim_live_capture_v1",
+  "registered_utc": "2026-10-08T11:50:01.465657+00:00",
+  "model": "trend_session_vwap_reclaim_net2r",
+  "models": [
+    "current_next_open",
+    "trend_session_vwap_reclaim_net2r"
+  ],
+  "dataset": "LIVE_CAPTURE_HYPOTHETICAL",
+  "changes_live_rules": false,
+  "real_orders_enabled": false,
+  "automatic_promotion": false,
+  "eligible_for_live_promotion": false,
+  "notifications_enabled": false,
+  "source_strategy_protocol_sha256": "98ac4bc347f00769b4d5e5c2647c2a9c4dc0717224c3792cd8e8d520c0fc1dd5",
+  "frozen_dependencies_sha256": {
+    "vwap_reclaim_replay.py": "228347266f5e17956c9110475d037c0be52a0a3d57ffd2da27eeadbe277f5ba5",
+    "confirmation_zone_replay.py": "fa62fd6571a5a153ef8b1b5a4a8f95551159edece717549d8b4816df696e7602",
+    "pending_entry_replay.py": "111686641afe5e61c64311fa730716b5198d3a74e34440e06f48d99da3c53df8",
+    "pending_entry_protocol.json": "1ed8af4b9bb0dd7281e80a21956677bb6d9e315f47fb0c00689992662a29ee0f"
+  },
+  "production_parameters": {
+    "monitor_interval": "HOUR_4",
+    "entry_interval": "MINUTE_15",
+    "trend_fast_ema": 20,
+    "trend_slow_ema": 50,
+    "atr_period": 14,
+    "roll_lookback": 20,
+    "roll_max_age": 6,
+    "retest_lookback": 4,
+    "atr_stop_buffer": 0.5,
+    "atr_target_buffer": 0.25,
+    "retest_atr_tolerance": 0.35,
+    "min_rr": 2.0
+  },
+  "rules": {
+    "activation": "Persist activation and next UTC midnight capture_start_ms, independent of existing pending live/replay. Fixed nonoverlapping 7-day cohorts. Never restart origin on redeploy.",
+    "max_capture_delay_ms": 120000,
+    "first_reclaim": "Use registered VWAP candidate unchanged. Require uninterrupted fresh market observation from UTC midnight; mark a session unknown on first late/missed/incomplete observation. Consume first strict reclaim even if it fails volume/room. Do not backfill first reclaim from historical bars.",
+    "control": "Reuse frozen current_next_open candidate. Baseline already present or missed setups; require breakout 4H close >= cohort origin and after uninterrupted observation began. One first qualification per setup.",
+    "signal_time": "Keep original signal close+1ms created_ms and actual observed_ms separately. execution_start_ms=floor(observed_ms/15M)*15M+15M; exclude signal and partially elapsed capture candle.",
+    "expiry": "Keep signal close+4 bars VWAP, +2 bars current; never extend for capture delay.",
+    "pending_state": "Record registered frozen-level pending_state from closed indicators at observation; executable candle uses state observed at previous bucket strictly before its open. Missing state/data becomes DATA_GAP; no historical reconstruction.",
+    "incremental_evaluator": "Replay one closed eligible candle with the frozen evaluator; transient clock adapter satisfies original full-study clock validator and restores original signal time/created/expiry. Enforce original expiry before/after adapter. OPEN cursor progresses with closed future bars only.",
+    "outcome": "Original fixed-entry/SL/TP, strict confirmation, fill/exit same-bar AMBIGUOUS, later TP+SL AMBIGUOUS, adverse stop gaps, DATA_GAP freezes uncertain capital. No generated fills on skipped capture candle.",
+    "coverage": "First attempt per bucket; same bucket retry never overwrites/adds evidence. Disclose missing/late buckets and indicator validity.",
+    "portfolio": "Original 10000USDC/1% research risk/3 positions/3% total/1x notional/JST daily3%; reserve at actual observed time. Independent each-week accounts plus continuous ledger across weeks; unknown capital never released. This differs from the user actual 3% one-position/no-daily-stop account.",
+    "comparison": "Same capture restrictions for current control; deduplicate setup IDs and fills. Report proposal-only/shared/current-missing/net count differences. Capped shared IDs unavailable: null. No combining replay or existing pending live samples.",
+    "stop": "Review only, never automatically kill/promote/tune/order. Sufficient negative performance records KILL and stops new registrations only after separately tested explicit engineering change; existing OPEN remains tracked."
+  },
+  "cost_model": {
+    "fee_bps_each_side": 5,
+    "slippage_bps_each_side": 2,
+    "stress_fee_bps_each_side": 10,
+    "stress_slippage_bps_each_side": 5,
+    "r_basis": "NET_STOP_RISK",
+    "mfe_mae_basis": "PRICE_STOP_DISTANCE"
+  },
+  "review_gates": {
+    "early_kill_minimum_resolved": 20,
+    "kill": "Any adequately observed period >=20 resolved with net AvgR<=0 or PF<=1 (zero tolerance 1e-12) kills this specification, skips unused periods and future activation. Do not retune.",
+    "positive_minimum_resolved_each_period": 50,
+    "practical_candidate": "Both complete unobserved-at-registration validation periods each >=50 resolved, win_rate>=40%, base AvgR>0/PF>=1.2, stress AvgR>0/PF>1, uncapped and capped pure fill increase vs current>0, capped >=20 resolved, no remaining OPEN/uncertain capital and known closed portfolio ROI>0. Then require separate captured-live Shadow and execution-quality validation; no promotion.",
+    "insufficient": "INSUFFICIENT SAMPLE or incomplete/unknown ROI: wait without replacing this specification. Do not count repeated daily/cohort updates or source replay as independent forward samples.",
+    "quality": "Source hash/ledger/control economics mismatch stops the experiment. Source failures block practical qualification. Ambiguous/gap cases remain disclosed and are not removed to create positive ROI.",
+    "comparison": "Independent setup IDs do not imply comparable lifecycle IDs; report shared ticker/side/signal-close timestamps, proposal-only/current-missing events, uncapped and capped net fill count differences. Capped shared events unavailable in frozen portfolio, keep null."
+  },
+  "limitations": [
+    "Hypothetical OHLC touch capture, not real orders or queue/fill proof.",
+    "Do not add overlapping historical and live results as independent samples.",
+    "Existing VWAP historical weekly protocol and all failed models remain unchanged.",
+    "Missed session/strict origin may lower captured opportunity count; do not relax after results.",
+    "Costs exclude funding, spread, tick and queue; portfolio ROI requires modeled allocation and all capital resolved."
+  ]
+}
