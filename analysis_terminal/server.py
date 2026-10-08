@@ -35,6 +35,7 @@ from analysis_terminal import paper_execution
 from analysis_terminal import btc_wave, btc_wave_store
 from analysis_terminal import entry_history
 from analysis_terminal import pending_live
+from analysis_terminal import vwap_live
 from analysis_terminal import live_execution
 from analysis_terminal.tracking import tracking_summary
 from analysis_terminal.history import fetch_history
@@ -327,6 +328,7 @@ def _init_db() -> None:
         btc_wave_store.initialize(conn)
         entry_history.initialize(conn)
         pending_live.initialize(conn, now_ms=int(time.time()*1000))
+        vwap_live.initialize(conn, now_ms=int(time.time()*1000))
         live_execution.initialize(conn, now_ms=int(time.time()*1000))
         conn.commit()
 
@@ -3849,6 +3851,18 @@ def _pending_live_cycle(contracts) -> None:
         print(f"Pending Shadow capture paused: {type(exc).__name__}", flush=True)
 
 
+def _vwap_live_cycle(contracts) -> None:
+    cache = _snapshot_cache
+    try:
+        with _db_connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            vwap_live.cycle(conn, contracts=contracts, snapshots=cache[1] if cache else {},
+                            analyze=analyze_contract, settings=SETTINGS, now_ms=int(time.time()*1000))
+    except Exception as exc:
+        with _db_connect() as conn:
+            vwap_live.record_error(conn, type(exc).__name__)
+
+
 async def _background_collector() -> None:
     global _live_execution_scan
     last_bucket: int | None = None
@@ -3877,6 +3891,7 @@ async def _background_collector() -> None:
                 except Exception as exc:
                     print(f"Entry history collector error: {type(exc).__name__}", flush=True)
                 _pending_live_cycle(contracts)
+                _vwap_live_cycle(contracts)
                 await _process_priority_changes(rows, bucket)
                 await _maybe_push_candidate_changes(rows)
                 await _refresh_paper_signal_results(contracts)
@@ -4032,7 +4047,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="EdgeX Analysis Terminal",
-    version="19.0.43",
+    version="19.0.44",
     lifespan=lifespan,
 )
 
@@ -4531,6 +4546,13 @@ async def pending_entry_shadow_api(limit: int = Query(default=50, ge=1, le=500))
     with _db_connect() as conn:
         conn.execute("BEGIN")
         return pending_live.review(conn, now_ms=int(time.time()*1000), limit=limit)
+
+
+@app.get("/api/vwap-entry-shadow")
+async def vwap_entry_shadow_api(limit: int = Query(default=50, ge=1, le=500)):
+    with _db_connect() as conn:
+        conn.execute("BEGIN")
+        return vwap_live.review(conn, now_ms=int(time.time()*1000), limit=limit)
 
 
 @app.get("/api/outcome-tracking")

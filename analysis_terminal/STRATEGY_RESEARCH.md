@@ -206,3 +206,20 @@ VWAP研究は別の公開足検証であり、本番の実時間Shadow/実約定
 週別の口座・日次の更新・過去の他研究を独立サンプルとして合算しない。
 最初のmainの封印結果または失敗記録を保持し、後の有利な再取得へ差し替えない。
 本番条件・UI・通知・DB・注文を変更せず、十分な負の成績でKILLを記録する。
+
+## v19.0.44: VWAP回復案を実時間の独立Shadowへ
+
+[VWAP_LIVE_CAPTURE.md](VWAP_LIVE_CAPTURE.md)と`vwap_live_protocol.json`を
+[捕捉前に登録](https://github.com/y-ai-lab/edgex-breakout-alert/commit/726a4164be555fec7077de2673eaaa9cbbd30a5e)。
+新しいエントリー基準の効果を、遅れや欠損も含めて検証するための収集追加であり、本番採用ではない。
+4H trend、出来高2倍、最初のVWAP回復、元の構造SL、固定net2R、4本期限は変更しない。
+過去4決着の正の結果はINSUFFICIENT SAMPLEのまま。棄却済みモデルは再稼働しない。
+
+`GET /api/vwap-entry-shadow`は別SQLite台帳で、現行次足始値と同じ捕捉制約を比較する。
+起点は初回起動の次UTC日で永続化し、旧pending live/replayや過去VWAP研究へ合算しない。
+signal close+1msと実観測時刻を保持し、未開始足だけを約定に使う。観測前の状態・期限を
+後から再構成しない。週別口座と連続口座、RとROI、候補と仮約定を分離する。
+収集不足・OPEN・曖昧・欠損は明示し、資金を解放せず昇格しない。
+
+研究口座は既存1%/3件/日次3%で、ユーザーの実口座3%/1件/日次上限なしとは別。
+実注文・READY通知・ENTRY NOW・UIタブ・旧捕捉起点を変更しない。
