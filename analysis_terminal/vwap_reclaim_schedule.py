@@ -101,6 +101,9 @@ def scheduled(output, *, now_ms, head_branch=None):
     if hashlib.sha256(json.dumps(universe, sort_keys=True, separators=(',', ':')).encode()).hexdigest() != p['source_universe_sha256']:
         raise ValueError('Registered universe changed')
     contracts = {c['contract_id']: server.scanner.Contract(**c) for c in universe}
+    # Preserve a started attempt for the workflow's always-run seal step if the
+    # process is interrupted before main can record a final or failed status.
+    (output / 'run-status.json').write_text(json.dumps(dict(state, status='COLLECTION_STARTED', seal=True)) + '\n')
     reports = [development]
     quality_blocked = False
     for i, period in enumerate(periods, 1):
