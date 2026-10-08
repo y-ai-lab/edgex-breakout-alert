@@ -113,8 +113,12 @@ class Sessions:
 
 SESSIONS=Sessions()
 
+SAFE_CODES={'DATA_UNAVAILABLE','INVALID_NUMBER','HISTORY_PAGE_INVALID','HISTORY_ID_INVALID','HISTORY_TIME_INVALID','HISTORY_COIN_MISMATCH','ACCOUNT_ROWS_INVALID','ACCOUNT_ROW_MISMATCH','TRANSPORT_READ_UNAVAILABLE'}
+
 class AccountDataError(Exception):
-    pass
+    def __init__(self,code='DATA_UNAVAILABLE'):
+        self.code=code if code in SAFE_CODES else 'DATA_UNAVAILABLE'
+        super().__init__(self.code)
 
 def number(value, *, required=False):
     if value is None and not required:
@@ -127,16 +131,16 @@ def number(value, *, required=False):
             raise ValueError()
         return str(n)
     except (InvalidOperation,ValueError,TypeError):
-        raise AccountDataError() from None
+        raise AccountDataError('INVALID_NUMBER') from None
 
 def rows(raw,key,account_id, *, required=True):
     result=raw.get(key)
     if result is None and not required:
         return []
     if not isinstance(result,list) or len(result)>5000:
-        raise AccountDataError()
+        raise AccountDataError('ACCOUNT_ROWS_INVALID')
     if any(not isinstance(r,dict) or str(r.get('accountId'))!=account_id for r in result):
-        raise AccountDataError()
+        raise AccountDataError('ACCOUNT_ROW_MISMATCH')
     return result
 
 def contract_name(cid,names):
@@ -187,29 +191,29 @@ def asset(raw,account_id,names,*,observed_ms):
 
 def history_page(raw,account_id,names,kind,*,observed_ms,start_ms,end_ms):
     if not isinstance(raw,dict) or not isinstance(raw.get('nextPageOffsetData'),str) or len(raw['nextPageOffsetData'])>8192:
-        raise AccountDataError()
+        raise AccountDataError('HISTORY_PAGE_INVALID')
     records=rows(raw,'dataList',account_id)
     if len(records)>PAGE_SIZE:
-        raise AccountDataError()
+        raise AccountDataError('HISTORY_PAGE_INVALID')
     items=[];ids=set()
     for r in records:
         rid=str(r.get('id'))
         if not rid.isdigit() or int(rid)<=0 or rid in ids:
-            raise AccountDataError()
+            raise AccountDataError('HISTORY_ID_INVALID')
         ids.add(rid)
         try:
             created=int(r['createdTime'])
             if str(created)!=str(r['createdTime']) or not start_ms<=created<end_ms:
                 raise ValueError()
         except (ValueError,TypeError,KeyError):
-            raise AccountDataError() from None
+            raise AccountDataError('HISTORY_TIME_INVALID') from None
         type_value=r.get('type')
         type_value=type_value if isinstance(type_value,str) and re.fullmatch(r'[A-Z_]{1,64}',type_value) else 'UNRECOGNIZED'
         status=r.get('censorStatus')
         status=status if isinstance(status,str) and status in {'INIT','CENSOR_SUCCESS','CENSOR_FAILURE','L2_APPROVED','L2_REJECT','L2_REJECT_APPROVED'} else 'UNRECOGNIZED'
         item=dict(time_ms=created,type=type_value,status=status,record_key=hashlib.sha256((kind+':'+rid).encode()).hexdigest())
         if str(r.get('coinId'))!='1000':
-            raise AccountDataError()
+            raise AccountDataError('HISTORY_COIN_MISMATCH')
         if kind=='positions':
             item.update(ticker=contract_name(str(r.get('contractId')),names),
                 price=number(r.get('fillPrice')),open_quantity=number(r.get('fillOpenSize')),close_quantity=number(r.get('fillCloseSize')),
@@ -240,7 +244,7 @@ class Reader:
             return data(await asyncio.wait_for(self.client.async_client.make_authenticated_request(
                 method='GET',path=READ_PATHS[kind],params=dict(params or {},accountId=self.config.account_id)),6))
         except Exception:
-            raise AccountDataError() from None
+            raise AccountDataError('TRANSPORT_READ_UNAVAILABLE') from None
 
     async def metadata(self,now_ms):
         if self.names_ms and 0<=now_ms-self.names_ms<3600000:
@@ -277,18 +281,18 @@ class Store:
             observed=int(time.time()*1000)
             try:
                 return asset(await reader.get('asset'),reader.config.account_id,reader.names,observed_ms=observed)
-            except Exception:
-                return None
+            except Exception as exc:
+                return exc.code if isinstance(exc,AccountDataError) else 'DATA_UNAVAILABLE'
         async def load_history(kind):
             try:
                 return await reader.history(kind,now_ms-30*DAY,now_ms)
-            except Exception:
-                return None
+            except Exception as exc:
+                return exc.code if isinstance(exc,AccountDataError) else 'DATA_UNAVAILABLE'
         values=await asyncio.gather(load_asset(),*(load_history(k) for k in ('positions','collateral')))
         # Atomic publication: never pair a new page with the preceding window.
-        self.asset=values[0]
-        self.histories={k:v for k,v in zip(('positions','collateral'),values[1:]) if v is not None}
-        self.errors={k:'DATA_UNAVAILABLE' for k,v in zip(('asset','positions','collateral'),values) if v is None}
+        self.asset=values[0] if isinstance(values[0],dict) else None
+        self.histories={k:v for k,v in zip(('positions','collateral'),values[1:]) if isinstance(v,dict)}
+        self.errors={k:v if v in SAFE_CODES else 'DATA_UNAVAILABLE' for k,v in zip(('asset','positions','collateral'),values) if not isinstance(v,dict)}
         self.window=(now_ms-30*DAY,now_ms);self.last_cycle_ms=int(time.time()*1000)
         self.reader=reader
 
@@ -297,7 +301,7 @@ class Store:
         return dict(read_only=True,owner_device_bound=owner_bound,authentication='SEALED_EXISTING_DEVICE',
             source='EDGEX_TRADING_ACCOUNT',collection_state='AVAILABLE' if self.asset and not self.errors else 'PARTIAL' if self.asset else 'UNAVAILABLE' if self.last_cycle_ms else 'NOT_READY',
             asset_snapshot_age_seconds=age,last_cycle_ms=self.last_cycle_ms,
-            sections_available={k:(self.asset is not None if k=='asset' else k in self.histories) for k in ('asset','positions','collateral')})
+            validation_errors=dict(self.errors),sections_available={k:(self.asset is not None if k=='asset' else k in self.histories) for k in ('asset','positions','collateral')})
 
     def positions(self,*,now_ms):
         if self.asset is None or not 0<=now_ms-self.asset['observed_ms']<30000:

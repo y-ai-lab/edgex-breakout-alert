@@ -242,6 +242,13 @@ class ReaderTests(unittest.IsolatedAsyncioTestCase):
         kwargs=fake_module.Client.call_args.kwargs
         self.assertEqual(kwargs['trading_private_key'],'');self.assertEqual(kwargs['wallet_private_key'],'')
 
+    async def test_history_quality_reason_is_fixed_and_never_echoes_response(self):
+        page=raw_page(accountId='private-mismatched-account')
+        with self.assertRaises(view.AccountDataError) as exc:
+            view.history_page(page,'123',{},'positions',observed_ms=NOW,start_ms=NOW-view.DAY,end_ms=NOW)
+        self.assertEqual(exc.exception.code,'ACCOUNT_ROW_MISMATCH')
+        self.assertNotIn('private',str(exc.exception))
+
     async def test_sdk_exception_is_sanitized(self):
         fake=Mock();fake.async_client.make_authenticated_request=AsyncMock(side_effect=RuntimeError('private-secret-response'))
         with self.assertRaises(view.AccountDataError) as exc:await view.Reader(fixtures.configuration(),client=fake).get('asset')
