@@ -1,0 +1,109 @@
+{
+  "protocol": "trend_session_vwap_reclaim_net2r_v1",
+  "model": "trend_session_vwap_reclaim_net2r",
+  "registered_utc": "2026-10-08T04:12:16.673519+00:00",
+  "hypothesis": "Independent auction-price family: in the closed 4H trend direction, the first strict 15M reclaim of a prior-bar UTC-session volume-weighted typical price with relative volume >=2 may distinguish fresh buying/selling from unqualified range continuation. Test an observed local structural stop and fixed cost-inclusive 2R inside a pre-signal structural extreme, without changing any production or pending-entry parameters.",
+  "changes_live_rules": false,
+  "real_orders_enabled": false,
+  "automatic_promotion": false,
+  "eligible_for_live_promotion": false,
+  "development": {
+    "start_ms": 1790391600000,
+    "end_ms": 1790996400000,
+    "role": "PREVIOUSLY_VIEWED_MARKET_DEVELOPMENT",
+    "source_manifest_sha256": "f7395ff494b4c34c44f1f8c7f1c66c39fe1204dc4897a22d386631d5926043a0",
+    "control_ledger_sha256": "0b93aca08703c704610749640220aff165b085131427fdfb815d0868cb0fb364"
+  },
+  "validation_periods": [
+    {
+      "start_ms": 1791504000000,
+      "end_ms": 1792108800000,
+      "role": "UNOBSERVED_AT_REGISTRATION_PUBLIC_OHLC_RESEARCH"
+    },
+    {
+      "start_ms": 1792108800000,
+      "end_ms": 1792713600000,
+      "role": "UNOBSERVED_AT_REGISTRATION_PUBLIC_OHLC_RESEARCH"
+    }
+  ],
+  "validation_policy": "Open only complete preregistered weeks after development is not killed. No rolling best windows, no retrospective retuning, no daily totals added to this cohort. Historical API retrieval is not captured-forward trading. Previously reserved 2026-09-05..09-12 remains unopened.",
+  "production_parameters": {
+    "monitor_interval": "HOUR_4",
+    "entry_interval": "MINUTE_15",
+    "trend_fast_ema": 20,
+    "trend_slow_ema": 50,
+    "atr_period": 14,
+    "roll_lookback": 20,
+    "roll_max_age": 6,
+    "retest_lookback": 4,
+    "atr_stop_buffer": 0.5,
+    "atr_target_buffer": 0.25,
+    "retest_atr_tolerance": 0.35,
+    "min_rr": 2.0
+  },
+  "source_universe_sha256": "1ee2f543d56f61b4adf0560f2ccf12bb29b755358ab686b9c107c778978681cd",
+  "indicator_windows": {
+    "HOUR_4": 180,
+    "MINUTE_15": 180
+  },
+  "rules": {
+    "session_minimum_bars": 4,
+    "volume_lookback": 20,
+    "relative_volume_minimum": 2.0,
+    "local_structure_bars": 4,
+    "atr_stop_buffer": 0.5,
+    "atr_target_buffer": 0.25,
+    "min_net_rr": 2.0,
+    "pending_bars": 4,
+    "fee_bps_each_side": 5,
+    "slippage_bps_each_side": 2,
+    "trend": "Exactly 180 contiguous closed 4H bars; LONG last close>EMA20>EMA50, SHORT inverse. No formed/future 4H candles.",
+    "vwap": "For the signal candle's UTC calendar day, use every preceding closed 15M bar from 00:00 through signal open, excluding signal. Require at least four bars and a complete contiguous session. VWAP proxy=sum(volume*(high+low+close)/3)/sum(volume). Nonnegative finite base volume, positive sum. This is an OHLC proxy, not exchange trade-level VWAP.",
+    "confirmation": "LONG previous close<=frozen prior-session VWAP AND signal low<=VWAP AND close>VWAP AND close>open; SHORT mirror. Volume of signal >=2*mean(volume of preceding 20 bars), exclude signal from baseline and require positive baseline. Strict color and strict close beyond frozen reclaimed level both remain required.",
+    "stop": "At confirmation close freeze last-four-closed-bar minimum low minus .5 ATR15 LONG or maximum high plus .5 ATR15 SHORT, ATR14 from exactly 180 bars. Independent local invalidation, never edit existing 4H stops, never narrow to force RR, never widen later.",
+    "target": "Freeze net 2R target inclusive of base costs at signal close limit. It must be inside highest high of prior 179 closed 15M bars minus .25 ATR15 LONG, or lowest low plus .25 ATR15 SHORT. Exclude signal from extension; never invent/extend room.",
+    "identity": "vwap-reclaim-v1:ticker:side:UTC-session-start. Consume the first strict VWAP reclaim per session/side including a low-volume, invalid-room or pre-period reclaim; do not choose the later winning reclaim. Suppress an entire session/side after any unobserved indicator point during that session. Warmup begins one UTC day before study start.",
+    "pending": "Unchanged four-bar limit-touch evaluator, original fixed stop/TP/VWAP and expiry. Before each executable bar use only closed indicators: matching 4H trend, matching candle color, strict close beyond frozen VWAP, last-four-bar touch and fixed SL validity. No rearm or expiry extension.",
+    "chronology": "created_ms=signal close+1ms. Exclude signal and all earlier bars from fills/outcomes. Intrabar fill and any exit touch AMBIGUOUS; later same-bar TP+SL AMBIGUOUS. Missing indicator state or candle DATA_GAP, hold uncertain capital; never infer the order or later profit. Charge adverse SL gap at worse open. Only closed bars through cutoff."
+  },
+  "portfolio": {
+    "initial_cash_usdc": 10000,
+    "risk_pct": 1,
+    "max_positions": 3,
+    "max_total_risk_pct": 3,
+    "max_notional_multiple": 1,
+    "daily_loss_pct": 3,
+    "daily_loss_timezone": "Asia/Tokyo",
+    "quantity": "Use frozen pending-entry portfolio: reserve on created_ms-1 from known cash and net stop risk, observed size constraints, no future sizing.",
+    "uncertain": "Retain OPEN/AMBIGUOUS/DATA_GAP reservations; final ROI unknown. Weekly independent accounts are not a continuous account."
+  },
+  "cost_stress": {
+    "fee_bps_each_side": 10,
+    "slippage_bps_each_side": 5,
+    "interpretation": "Reprice same frozen nominal fills, stop/target and recorded exits; no change of entries/outcomes or added sample. R uses stressed net stop risk. Funding/tick/queue not modeled."
+  },
+  "decision": {
+    "early_kill_minimum_resolved": 20,
+    "kill": "Any adequately observed period >=20 resolved with net AvgR<=0 or PF<=1 (zero tolerance 1e-12) kills this specification, skips unused periods and future activation. Do not retune.",
+    "positive_minimum_resolved_each_period": 50,
+    "practical_candidate": "Both complete unobserved-at-registration validation periods each >=50 resolved, win_rate>=40%, base AvgR>0/PF>=1.2, stress AvgR>0/PF>1, uncapped and capped pure fill increase vs current>0, capped >=20 resolved, no remaining OPEN/uncertain capital and known closed portfolio ROI>0. Then require separate captured-live Shadow and execution-quality validation; no promotion.",
+    "insufficient": "INSUFFICIENT SAMPLE or incomplete/unknown ROI: wait without replacing this specification. Do not count repeated daily/cohort updates or source replay as independent forward samples.",
+    "quality": "Source hash/ledger/control economics mismatch stops the experiment. Source failures block practical qualification. Ambiguous/gap cases remain disclosed and are not removed to create positive ROI.",
+    "comparison": "Independent setup IDs do not imply comparable lifecycle IDs; report shared ticker/side/signal-close timestamps, proposal-only/current-missing events, uncapped and capped net fill count differences. Capped shared events unavailable in frozen portfolio, keep null."
+  },
+  "frozen_dependencies_sha256": {
+    "confirmation_zone_replay.py": "fa62fd6571a5a153ef8b1b5a4a8f95551159edece717549d8b4816df696e7602",
+    "pending_entry_replay.py": "111686641afe5e61c64311fa730716b5198d3a74e34440e06f48d99da3c53df8",
+    "pending_entry_protocol.json": "1ed8af4b9bb0dd7281e80a21956677bb6d9e315f47fb0c00689992662a29ee0f",
+    "replay.py": "67417c93cdbab1640945c55f3f2c5d99552af711b40006f2db204e2ac55bdd5e"
+  },
+  "limitations": [
+    "Development prices/results already viewed under other models; this is not untouched development or independent confirmation.",
+    "Multiple failed hypotheses and market correlation increase overfitting risk; no symbol/date exclusions after results.",
+    "Base-volume weighted OHLC typical price is not trade-level VWAP; reconstructed public candles may be revised.",
+    "Current archived 182-market universe has listing/survivorship bias; disclose unavailable 180-bar histories.",
+    "Touch execution, costs and stress are hypothetical; funding, spread, tick, queue and actual fill quality unvalidated.",
+    "MFE/MAE use price stop distance, P&L R uses net stop risk; terminal-bar intrabar exit ordering is unknown.",
+    "Existing pending-entry weekly/live collection stays fixed. Killed models stay killed. No UI tabs, live conditions, notifications, DB or order changes."
+  ]
+}
