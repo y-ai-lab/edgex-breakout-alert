@@ -1,0 +1,120 @@
+name: Registered VWAP reclaim research
+
+on:
+  push:
+    branches: [feature/research-vwap-20261008]
+    paths:
+      - 'analysis_terminal/vwap_reclaim*'
+      - 'analysis_terminal/test_vwap_reclaim_replay.py'
+      - 'analysis_terminal/VWAP_RECLAIM_REVIEW.md'
+      - '.github/workflows/vwap-reclaim-research.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      EDGEX_EXEC_MODE: 'OFF'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: python -m pip install -r analysis_terminal/test-requirements.txt
+      - name: Chronology and regressions
+        run: |
+          mkdir -p validation-output
+          python -m unittest discover -s analysis_terminal -p 'test_*.py' -q > validation-output/analysis-tests.txt 2>&1
+          python -m unittest discover -s tests -q > validation-output/root-tests.txt 2>&1
+          python -m unittest discover -s .github/scripts -p 'test_*.py' -q > validation-output/review-tests.txt 2>&1
+          python -m compileall -q analysis_terminal
+          node - <<'JS'
+          const fs = require('fs');
+          for (const file of ['analysis_terminal/index.html', 'analysis_terminal/btc.html']) {
+            for (const match of fs.readFileSync(file,'utf8').matchAll(/<script[^>]*>([\s\S]*?)<\/script>/gi)) new Function(match[1]);
+          }
+          JS
+      - name: Production and original research remain byte-identical
+        run: |
+          python - <<'PY'
+          import json,subprocess
+          from pathlib import Path
+          base='4807e869a2563695cc377110edc7e5b90b38aa0a'
+          preserved=['app.py','production_app.py','Dockerfile','requirements.txt',
+            'analysis_terminal/server.py','analysis_terminal/index.html','analysis_terminal/btc.html',
+            'analysis_terminal/outcomes.py','analysis_terminal/pending_entry_protocol.json',
+            'analysis_terminal/pending_entry_replay.py','analysis_terminal/pending_live.py',
+            'analysis_terminal/pending_live_protocol.json','analysis_terminal/pending_followup.py',
+            'analysis_terminal/paper_execution.py','analysis_terminal/live_execution.py',
+            'analysis_terminal/live_execution_control.py','analysis_terminal/edgex_orders.py',
+            '.github/workflows/strategy-research.yml']
+          for name in preserved:
+              assert subprocess.check_output(['git','show',base+':'+name])==Path(name).read_bytes(),name
+          original=json.loads(subprocess.check_output(['git','show','2782ecccc3be271b7e585e3bee6061493d8b6119:analysis_terminal/vwap_reclaim_protocol.json']))
+          current=json.loads(Path('analysis_terminal/vwap_reclaim_protocol.json').read_text())
+          for key in ['published_control_ledger_sha256','control_content_except_engine_provenance_sha256','provenance_note']:
+              current['development'].pop(key)
+          assert original==current,'Registered strategy or periods changed'
+          for name in ['confirmation_zone_latest.json','two_close_latest.json','sweep_reclaim_latest.json','break_retest_latest.json']:
+              old=json.loads(Path('analysis_terminal',name).read_text())
+              assert old['decision']=='KILL_NO_LIVE_PROMOTION' and not old['forward_collection_enabled']
+          PY
+      - name: Download pinned public market archive and original controls
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/y-ai-lab/edgex-breakout-alert/actions/artifacts/11262672328/zip > development.zip
+          gh api repos/y-ai-lab/edgex-breakout-alert/actions/artifacts/11431586665/zip > frozen.zip
+          python - <<'PY'
+          import hashlib,zipfile
+          from pathlib import Path
+          digests={'development':'163fb6eb7947f1284dcb953d0bb8e39f1f1535a71b5778260c2a373c4f7c8a9c',
+                   'frozen':'21b77e1ef3396504d15db3c3832190834b77519ff545540389d28bd8ddeb634b'}
+          for name,digest in digests.items():
+              assert hashlib.sha256(Path(name+'.zip').read_bytes()).hexdigest()==digest
+              out=Path('source-input')/name;out.mkdir(parents=True)
+              with zipfile.ZipFile(name+'.zip') as archive:
+                  for info in archive.infolist():assert (out/info.filename).resolve().is_relative_to(out.resolve())
+                  archive.extractall(out)
+          PY
+      - name: Independently reproduce every frozen control and VWAP ledger
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from analysis_terminal import vwap_reclaim_replay as study,server
+          sources=list(Path('source-input/development').rglob('replay-report.json'));assert len(sources)==1
+          controls=list(Path('source-input/frozen').rglob('development/report.json'));assert len(controls)==1
+          result=study.build(sources[0].parent,server.analyze_contract,server.SETTINGS,role='development',baseline_path=controls[0])
+          assert result['source_files_verified']==182
+          decision=study.decision([result])
+          path=Path('analysis_terminal/vwap_reclaim_latest.json')
+          if path.exists():
+              expected=json.loads(path.read_text())
+              summary={k:v for k,v in result.items() if k!='records'}
+              # Both pinned control archives retain their own provenance hash.
+              expected_summary={k:v for k,v in expected['periods'][0].items() if k!='baseline_report_sha256'}
+              assert {k:v for k,v in summary.items() if k!='baseline_report_sha256'}==expected_summary
+              assert decision==expected['decision']
+          Path('validation-output/development.json').write_text(json.dumps(result,indent=2,allow_nan=False)+'\n')
+          summary=dict(decision=decision,metrics=result['metrics'][study.MODEL],comparison=result['comparison'],
+                       coverage=result['coverage'],stress=result['stress_metrics'][study.MODEL])
+          Path('validation-output/summary.json').write_text(json.dumps(summary,indent=2,allow_nan=False)+'\n')
+          print(json.dumps(summary))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: vwap-reclaim-validation
+          path: validation-output/
+          retention-days: 14

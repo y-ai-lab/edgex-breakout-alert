@@ -12,7 +12,10 @@
     "end_ms": 1790996400000,
     "role": "PREVIOUSLY_VIEWED_MARKET_DEVELOPMENT",
     "source_manifest_sha256": "f7395ff494b4c34c44f1f8c7f1c66c39fe1204dc4897a22d386631d5926043a0",
-    "control_ledger_sha256": "0b93aca08703c704610749640220aff165b085131427fdfb815d0868cb0fb364"
+    "control_ledger_sha256": "0b93aca08703c704610749640220aff165b085131427fdfb815d0868cb0fb364",
+    "published_control_ledger_sha256": "37353c224ff1b1b373e1727f8c5f5e04096042a61bb6db21406d2eccd60630eb",
+    "control_content_except_engine_provenance_sha256": "52bbfcaa30c7921d2668dc6ae9247784af1bd64bfeb8d8d73343f077cb38b467",
+    "provenance_note": "Before VWAP outcomes, additionally pin the already published independent control artifact 11431586665. Its full JSON differs from the original only in historical engine_sha256 metadata (ea4abe... versus 4a53a6...). All prices, records, metrics, portfolios and other fields match. Accept either exact raw hash plus canonical content excluding that provenance field; do not rewrite either input or its provenance. No strategy, periods or outcomes changed."
   },
   "validation_periods": [
     {
