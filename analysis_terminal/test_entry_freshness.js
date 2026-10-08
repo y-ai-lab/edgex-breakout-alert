@@ -25,7 +25,7 @@ global.localStorage={setItem(){},removeItem(){}};
 global.navigator={vibrate(){}};
 global.globalEntrySnapshot=null;global.entryHeartbeatBusy=false;global.lastReadySignature='';
 global.scan=()=>scanned++;global.tab=()=>{};global.analyze=()=>analyzed++;
-global.fmt=x=>String(x);global.directionJa=x=>x;
+global.analysisRiskPlan=async()=>null;global.fmt=x=>String(x);global.directionJa=x=>x;
 let nextTimer=1;const timers=new Map();
 global.setTimeout=(fn,delay)=>{const id=nextTimer++;timers.set(id,{fn,delay});return id;};
 global.clearTimeout=id=>timers.delete(id);

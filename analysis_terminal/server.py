@@ -38,6 +38,7 @@ from analysis_terminal import pending_live
 from analysis_terminal import vwap_live
 from analysis_terminal import live_execution
 from analysis_terminal import account_view
+from analysis_terminal import account_risk
 from analysis_terminal import execution_health
 from analysis_terminal import push_security
 from analysis_terminal.tracking import tracking_summary
@@ -4119,7 +4120,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="EdgeX Analysis Terminal",
-    version="19.0.48",
+    version="19.0.49",
     lifespan=lifespan,
 )
 app.add_middleware(push_security.BrowserSecurityMiddleware)
@@ -4630,6 +4631,25 @@ def _account_view_authorize(authorization):
 async def account_view_positions_api(authorization: str | None = Header(default=None)):
     _account_view_authorize(authorization)
     return account_view.STORE.positions(now_ms=int(time.time()*1000))
+
+
+class AccountRiskRequest(BaseModel):
+    model_config = {"extra": "forbid", "allow_inf_nan": False}
+    risk_pct: float = Field(default=3, gt=0, le=3)
+    entry: float = Field(gt=0, le=1e30)
+    stop: float = Field(gt=0, le=1e30)
+    target: float | None = Field(default=None, gt=0, le=1e30)
+    step_size: float | None = Field(default=None, gt=0, le=1e30)
+    min_order_size: float | None = Field(default=None, gt=0, le=1e30)
+    max_order_size: float | None = Field(default=None, gt=0, le=1e30)
+    leverage: float | None = Field(default=None, gt=0, le=1e30)
+
+
+@app.post("/api/account/risk")
+async def account_risk_api(req: AccountRiskRequest, authorization: str | None = Header(default=None)):
+    _account_view_authorize(authorization)
+    snapshot = account_view.STORE.positions(now_ms=int(time.time()*1000))
+    return account_risk.plan(req, snapshot, _live_execution_config)
 
 
 @app.get("/api/account/overview")

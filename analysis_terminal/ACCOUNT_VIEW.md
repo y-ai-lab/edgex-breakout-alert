@@ -77,3 +77,36 @@ reads, missing data, stale boundaries, duplicates, frozen pagination windows,
 post-await revocation, UI escaping and late responses after lock. Production
 smoke checks use public availability and rejected unauthenticated requests; the
 owner's private browser proof is not extracted or impersonated for validation.
+
+## Analysis capital (v19.0.49)
+
+Analysis defaults to the authenticated API's **USDC equity**, not collateral cash,
+legacy cash or an arbitrary starting balance. The owner explicitly opens/refreshes
+account data from the API tab or calculator. The same in-memory session protects
+`POST /api/account/risk`. Its request contains public scenario levels and the
+requested risk percentage only: equity/available overrides are forbidden. The
+server derives them from the validated, younger-than-30-second account snapshot.
+
+The calculation uses the lower of the requested risk budget and the execution
+policy's configured budget (at most 3% equity), and the policy's notional limit
+based on min(equity, available). Leverage cannot multiply that notional limit.
+Adverse entry/SL/TP slippage and opening/closing fee assumptions are included;
+quantity rounds down to the supplied size step and maximum, and returns zero if
+below the minimum. Negative fee-adjusted target profit remains negative. Structural
+levels and READY criteria are unchanged. Funding, fee-tier differences, tick/quote
+liquidity and realized execution remain unverified, so quantities are reference
+estimates and a 3% realized loss cap is **not guaranteed**. Gross structural RR and
+cost-adjusted RR are labeled separately. No execution configuration or orders
+are changed by this route.
+
+Missing/nonpositive equity, missing/negative available collateral, invalid policy,
+stale data and revoked/expired sessions block calculation instead of falling back
+to a manual balance. A verified zero available amount gives zero reference size.
+Account lock, page hiding and stale/expired data erase API capital and all derived
+quantities, including READY cards. Revision guards reject late calculations after
+lock, source changes, input changes and newer analyses. Manual mode starts blank,
+is explicitly hypothetical and fee-exclusive, and must be selected deliberately.
+No account money is sent to the public manual `/api/risk` endpoint or persisted
+in browser storage; the previous manual risk-profile cache is removed. Local
+synthetic tests verify positive authorization and arithmetic; production smoke
+uses availability and unauthenticated rejection, never the owner's proof.

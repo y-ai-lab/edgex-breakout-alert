@@ -205,13 +205,14 @@ button{-webkit-tap-highlight-color:transparent}
 <details id="risk" class="dashboardDrawer">
 <summary>資金・数量の計算</summary><div class="drawerBody">
 <div class="row">
-<div class="field"><label>計算用資金 USDC</label><input id="equity" type="number" value="1000"></div><div class="field"><label>1回の想定損失予算 %</label><input id="riskPct" type="number" value="3"></div>
+<div class="field"><label>資金の取得元</label><select id="capitalSource"><option value="API">APIの口座評価額</option><option value="MANUAL">手動の仮定資金</option></select></div>
+<div class="field"><label>計算用資金 USDC</label><input id="equity" type="number" step="any" readonly placeholder="API資金を取得してください"></div><div class="field"><label>1回の想定損失予算 %</label><input id="riskPct" type="number" value="3" min="0" max="3" step="any"></div><button class="ghost" id="capitalRefresh">API資金を取得・更新</button>
 <div class="field"><label>エントリー価格</label><input id="entry" type="number" step="any"></div><div class="field"><label>損切り価格</label><input id="stop" type="number" step="any"></div>
 <div class="field"><label>利確価格</label><input id="target" type="number" step="any"></div><div class="field"><label>注文刻み</label><input id="step" type="number" step="any"></div>
 <div class="field"><label>最小注文量</label><input id="minOrder" type="number" step="any"></div><div class="field"><label>最大注文量</label><input id="maxOrder" type="number" step="any"></div>
 <div class="field"><label>レバレッジ</label><input id="lev" type="number" step="any"></div><button class="primary" id="calc">計算</button>
 </div>
-<div id="riskStatus" class="status">手動の概算です。費用・Fundingは未計上で、自動取引の設定・発注数量は変更しません。急変時の実損失は予算を超える場合があります。</div><div id="riskOut" class="grid"></div><details class="help"><summary>資金管理の考え方</summary><div>エントリーとSLの価格差から数量を計算し、注文刻み・最小／最大数量・レバレッジ上限を反映します。表示する損失額はSL価格で決済できた場合の概算で、損失の保証上限ではありません。</div></details>
+<div id="capitalStatus" class="status" role="status">登録済み端末からAPI資金を取得してください。口座評価額と利用可能額を使います。</div><div id="riskStatus" class="status">参考数量です。API資金では設定済みの費用を含め、利用可能額で制限します。Funding・板・実際の約定は未確認です。急変時の実損失は予算を超える場合があります。</div><div id="riskOut" class="grid"></div><details class="help"><summary>資金管理の考え方</summary><div>API資金はUSDC評価額を基準に、設定済みのリスク予算と利用可能USDCで数量を制限します。レバレッジで口座の建玉上限は増やしません。手動モードは費用未計上の仮定計算です。表示する損失額はSL価格で決済できた場合の概算で、損失の保証上限ではありません。</div></details>
 </div></details>
 </section>
 
@@ -350,11 +351,11 @@ var accountViewSession=null,accountViewSnapshot=null,accountViewBusy=false,accou
 function accountMoney(value){if(value==null||value===''||!Number.isFinite(Number(value)))return '未確認';return Number(value).toLocaleString('ja-JP',{maximumFractionDigits:2,minimumFractionDigits:2})}
 function accountExact(value){return value==null?'未確認':lifecycleEscape(String(value))}
 function accountFresh(j){var age=j&&Number.isFinite(j._received_ms)?Date.now()-j._received_ms:Infinity;return !!j&&Number.isFinite(j.snapshot_age_seconds)&&j.snapshot_age_seconds>=0&&age>=0&&age+j.snapshot_age_seconds*1000<30000}
-function clearAccountValues(){accountViewSnapshot=null;accountViewHistory={};document.getElementById('accountViewData').hidden=true;['accountViewBalances','accountViewPositions','accountViewTrades','accountViewCash'].forEach(function(id){document.getElementById(id).innerHTML=''});['accountViewTradesMore','accountViewCashMore'].forEach(function(id){document.getElementById(id).hidden=true})}
+function clearAccountValues(){accountViewSnapshot=null;syncAnalysisCapital(null);accountViewHistory={};document.getElementById('accountViewData').hidden=true;['accountViewBalances','accountViewPositions','accountViewTrades','accountViewCash'].forEach(function(id){document.getElementById(id).innerHTML=''});['accountViewTradesMore','accountViewCashMore'].forEach(function(id){document.getElementById(id).hidden=true})}
 function lockAccountView(message){var old=accountViewSession;accountViewSession=null;accountViewEpoch++;clearAccountValues();document.getElementById('accountViewStatus').textContent=message||'口座情報を非表示にしました。';if(old)fetch('/api/account/logout',{method:'POST',headers:{Authorization:'Bearer '+old.token,'Content-Type':'application/json'},body:'{}',keepalive:true}).catch(function(){})}
-async function accountRequest(url){if(!accountViewSession||Date.now()>=accountViewSession.expires)throw new Error('AUTH');var controller=new AbortController(),timer=setTimeout(function(){controller.abort()},8000);try{var response=await fetch(url,{headers:{Authorization:'Bearer '+accountViewSession.token},signal:controller.signal});if(!response.ok){var failure=new Error('ACCOUNT_REQUEST');failure.status=response.status;throw failure}return await response.json()}finally{clearTimeout(timer)}}
+async function accountRequest(url,options){if(!accountViewSession||Date.now()>=accountViewSession.expires)throw new Error('AUTH');var controller=new AbortController(),timer=setTimeout(function(){controller.abort()},8000);try{var response=await fetch(url,Object.assign({},options||{},{headers:Object.assign({},options&&options.headers||{},{Authorization:'Bearer '+accountViewSession.token}),signal:controller.signal}));if(!response.ok){var failure=new Error('ACCOUNT_REQUEST');failure.status=response.status;throw failure}return await response.json()}finally{clearTimeout(timer)}}
 function renderAccountPositions(j){
- var st=document.getElementById('accountViewStatus');
+ syncAnalysisCapital(j);var st=document.getElementById('accountViewStatus');
  if(!j||j.source!=='EDGEX_TRADING_ACCOUNT'||j.read_only!==true||j.positions_scope!=='ALL_ACCOUNT_POSITIONS'||!j.balance||!Array.isArray(j.positions)||!accountFresh(j)){document.getElementById('accountViewBalances').innerHTML='';document.getElementById('accountViewPositions').innerHTML='';st.textContent='残高・建玉の最新状態を確認できません。取引所で確認してください。';return}
  document.getElementById('accountViewData').hidden=false;var b=j.balance;
  document.getElementById('accountViewBalances').innerHTML=card('USDC評価額',accountMoney(b.equity_usdc))+card('利用可能USDC',accountMoney(b.available_usdc))+card('USDC担保残高',accountMoney(b.cash_usdc))+(b.legacy_cash_usdc!=null&&Number(b.legacy_cash_usdc)!==0?card('従来のUSDC残高',accountMoney(b.legacy_cash_usdc)):'')+card('未実現損益 USDC',accountMoney(b.unrealized_pnl_usdc))+card('必要証拠金 USDC',accountMoney(b.initial_margin_usdc))+card('注文拘束 USDC',accountMoney(b.order_frozen_usdc));
@@ -385,7 +386,7 @@ async function moreAccountHistory(kind){
  try{var j=await accountRequest('/api/account/history?kind='+kind+'&cursor='+encodeURIComponent(h.next_cursor));if(epoch!==accountViewEpoch)return;if(!Array.isArray(j.items)||j.window_start_ms!==h.window_start_ms||j.window_end_ms!==h.window_end_ms||j.items.some(function(r){return h.items.some(function(p){return p.record_key===r.record_key})}))throw new Error('PAGE');accountViewHistory[kind]=Object.assign({},h,j,{items:h.items.concat(j.items)});renderAccountHistory(kind)}catch(e){if(epoch===accountViewEpoch){if(e.status===401||e.status===403)lockAccountView('閲覧認証が無効になりました。口座情報をロックしました。');else document.getElementById('accountViewStatus').textContent='履歴の続きを確認できません。取得済み分は保持し、全件取得とは判断しません。'}}finally{accountViewBusy=false}
 }
 document.getElementById('accountViewOpen').onclick=loadAccountView;document.getElementById('accountViewLock').onclick=function(){lockAccountView()};document.getElementById('accountViewTradesMore').onclick=function(){moreAccountHistory('positions')};document.getElementById('accountViewCashMore').onclick=function(){moreAccountHistory('collateral')};
-setInterval(function(){if(accountViewSnapshot&&!accountFresh(accountViewSnapshot))renderAccountPositions(accountViewSnapshot);if(accountViewSession&&document.visibilityState==='visible'&&document.getElementById('api').classList.contains('active'))refreshAccountPositions()},15000);
+setInterval(function(){if(accountViewSnapshot&&!accountFresh(accountViewSnapshot))renderAccountPositions(accountViewSnapshot);if(accountViewSession&&document.visibilityState==='visible'&&(document.getElementById('api').classList.contains('active')||apiCapitalMode()))refreshAccountPositions()},15000);
 document.addEventListener('visibilitychange',function(){if(document.visibilityState!=='visible'&&accountViewSession)lockAccountView('画面を離れたため口座情報をロックしました。再度表示してください。')});
 async function checkApiConnections(){
  var st=document.getElementById('apiCheckStatus'),out=document.getElementById('apiCheckResults'),button=document.getElementById('checkApi');if(!st||!out||!button)return;
@@ -883,16 +884,14 @@ async function refreshEntryHeartbeat(){
   refreshGlobalEntryAge()
  }finally{entryHeartbeatBusy=false}
 }
+function scenarioRiskParams(r){
+ var p={risk_pct:Number(document.getElementById('riskPct').value),entry:r.entry_reference,stop:r.stop_loss};
+ if(r.take_profit!=null)p.target=r.take_profit;if(r.step_size!=null)p.step_size=r.step_size;if(r.min_order_size!=null)p.min_order_size=r.min_order_size;if(r.max_order_size!=null)p.max_order_size=r.max_order_size;
+ var lev=r.direction==='LONG'?r.max_long_leverage:r.max_short_leverage;if(lev)p.leverage=lev;return p;
+}
 async function dashboardReadyRisk(r){
- var equity=Number(document.getElementById("equity").value)||0,riskPct=Number(document.getElementById("riskPct").value)||0;
- if(!equity||!riskPct||r.entry_reference==null||r.stop_loss==null)return null;
- var p={equity:equity,risk_pct:riskPct,entry:r.entry_reference,stop:r.stop_loss};
- if(r.take_profit!=null)p.target=r.take_profit;
- if(r.step_size!=null)p.step_size=r.step_size;
- if(r.min_order_size!=null)p.min_order_size=r.min_order_size;
- if(r.max_order_size!=null)p.max_order_size=r.max_order_size;
- var lev=r.direction==="LONG"?r.max_long_leverage:r.max_short_leverage;if(lev)p.leverage=lev;
- try{return await jf("/api/risk",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(p)})}catch(e){return null}
+ if(!r||r.entry_reference==null||r.stop_loss==null)return null;
+ try{return await analysisRiskPlan(scenarioRiskParams(r))}catch(e){return null}
 }
 function entryMetric(k,v){return '<div class="entryMetric"><div class="k">'+k+'</div><div class="v">'+v+'</div></div>'}
 async function renderEntryNow(j){
@@ -909,7 +908,7 @@ async function renderEntryNow(j){
   var top=ready.slice(0,3),risks=await Promise.all(top.map(dashboardReadyRisk));
   if(version!==entryRenderVersion)return;
   if(entryFreshness(j).stale){if(globalEntrySnapshot===j)renderGlobalEntryBar(j);renderEntryNow(j);return}
-  content.innerHTML='<div class="entryReadyGrid">'+top.map(function(r,i){var x=risks[i],riskText=x?'<b>概算数量 '+fmt(x.size,8)+'</b> / SL時の想定損失 '+fmt(x.max_loss,2)+' USDC'+(x.target_profit==null?'':' / 目標利益 '+fmt(x.target_profit,2)+' USDC'):'計算用資金から数量を概算（実発注数量とは別）';return '<button class="entryReadyCard" data-ticker="'+r.ticker+'"><div class="entryReadyTop"><span class="entryTicker">'+r.ticker+'</span><span class="entryDirection">'+directionJa(r.direction)+'</span><span class="pill">RR '+fmt(r.rr,2)+'</span><span class="pill">スコア '+fmt(r.score,1)+'</span></div><div class="entryNumbers">'+entryMetric("Entry",fmt(r.entry_reference,8))+entryMetric("SL",fmt(r.stop_loss,8))+entryMetric("TP",fmt(r.take_profit,8))+entryMetric("15M確定",new Date((Number(r.latest_15m_time_ms)||Date.now())+15*60*1000).toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit"}))+'</div><div class="entryRiskLine">'+riskText+'<br><span class="good">戦略条件は成立済み</span> — タップして詳細確認</div></button>'}).join("")+'</div>';
+  content.innerHTML='<div class="entryReadyGrid">'+top.map(function(r,i){var x=risks[i],riskText=x?(x.capital_source==='EDGEX_USDC_EQUITY'?'API資金・費用込み / ':'手動資金・費用未計上 / ')+'<b>概算数量 '+fmt(x.size,8)+'</b> / SL時の想定損失 '+fmt(x.max_loss,2)+' USDC'+(x.target_profit==null?'':' / 目標利益 '+fmt(x.target_profit,2)+' USDC'):'計算用資金から数量を概算（実発注数量とは別）';return '<button class="entryReadyCard" data-ticker="'+r.ticker+'"><div class="entryReadyTop"><span class="entryTicker">'+r.ticker+'</span><span class="entryDirection">'+directionJa(r.direction)+'</span><span class="pill">RR '+fmt(r.rr,2)+'</span><span class="pill">スコア '+fmt(r.score,1)+'</span></div><div class="entryNumbers">'+entryMetric("Entry",fmt(r.entry_reference,8))+entryMetric("SL",fmt(r.stop_loss,8))+entryMetric("TP",fmt(r.take_profit,8))+entryMetric("15M確定",new Date((Number(r.latest_15m_time_ms)||Date.now())+15*60*1000).toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit"}))+'</div><div class="entryRiskLine">'+riskText+'<br><span class="good">戦略条件は成立済み</span> — タップして詳細確認</div></button>'}).join("")+'</div>';
   content.querySelectorAll(".entryReadyCard").forEach(function(b){b.onclick=function(){if(entryFreshness(j).stale){renderGlobalEntryBar(j);renderEntryNow(j);return}document.getElementById("ticker").value=this.dataset.ticker;tab("analysis");analyze()}});
  }else{
   zone.classList.remove("hasReady");zone.classList.add("waiting");badge.className="entryNowBadge wait";badge.textContent="WAIT";
@@ -1026,19 +1025,16 @@ async function copyTextValue(value,button){try{await navigator.clipboard.writeTe
 function renderReadyActionCard(r,risk){
  var el=document.getElementById("readyActionCard");if(!el)return;if(!r||r.stage!=="READY"){el.innerHTML="";return}
  var qty=risk&&risk.size!=null?fmt(risk.size,8):"資金設定後に計算",loss=risk&&risk.max_loss!=null?fmt(risk.max_loss,2)+" USDC":"—",profit=risk&&risk.target_profit!=null?fmt(risk.target_profit,2)+" USDC":"—";
- el.innerHTML='<div class="readyActionCard"><h2>エントリー候補 — '+r.ticker+'</h2><div class="sub">現在の戦略条件をすべて満たしています。この画面の操作では注文を送信しません。自動取引の状態はAPIタブで確認してください。</div><div class="grid">'+card("方向",directionJa(r.direction))+card("RR",fmt(r.rr,2))+card("注文数量",qty)+card("SL時の想定損失",loss)+card("目標利益",profit)+'</div><div class="copyGrid"><button class="copyTile readyCopy" data-value="'+r.entry_reference+'"><div class="k">Entry</div><div class="v">'+fmt(r.entry_reference,8)+'</div></button><button class="copyTile readyCopy" data-value="'+r.stop_loss+'"><div class="k">SL</div><div class="v">'+fmt(r.stop_loss,8)+'</div></button><button class="copyTile readyCopy" data-value="'+r.take_profit+'"><div class="k">TP</div><div class="v">'+fmt(r.take_profit,8)+'</div></button></div><div class="row" style="margin-top:10px"><button class="primary" id="copyReadyPlan">プラン全体をコピー</button><button class="ghost" id="readyRiskTab">資金管理を開く</button></div></div>';
+ el.innerHTML='<div class="readyActionCard"><h2>エントリー候補 — '+r.ticker+'</h2><div class="sub">現在の戦略条件をすべて満たしています。この画面の操作では注文を送信しません。自動取引の状態はAPIタブで確認してください。</div><div class="grid">'+card("方向",directionJa(r.direction))+card("RR",fmt(r.rr,2))+card("参考数量",qty)+card("SL時の想定損失",loss)+card("目標利益",profit)+'</div><div class="copyGrid"><button class="copyTile readyCopy" data-value="'+r.entry_reference+'"><div class="k">Entry</div><div class="v">'+fmt(r.entry_reference,8)+'</div></button><button class="copyTile readyCopy" data-value="'+r.stop_loss+'"><div class="k">SL</div><div class="v">'+fmt(r.stop_loss,8)+'</div></button><button class="copyTile readyCopy" data-value="'+r.take_profit+'"><div class="k">TP</div><div class="v">'+fmt(r.take_profit,8)+'</div></button></div><div class="row" style="margin-top:10px"><button class="primary" id="copyReadyPlan">プラン全体をコピー</button><button class="ghost" id="readyRiskTab">資金管理を開く</button></div></div>';
  el.querySelectorAll(".readyCopy").forEach(function(b){b.onclick=function(){copyTextValue(this.dataset.value,this)}});
  var all=document.getElementById("copyReadyPlan");if(all)all.onclick=function(){copyTextValue(planText(r),this)};
  var rt=document.getElementById("readyRiskTab");if(rt)rt.onclick=function(){openRiskCalculator()};
 }
+var quickRiskVersion=0;
 async function renderQuickRisk(r){
- var out=document.getElementById("quickRiskOut");if(!out)return;out.innerHTML="";
- var equity=Number(document.getElementById("equity").value)||0,riskPct=Number(document.getElementById("riskPct").value)||0;
- if(!r||!r.entry_reference||!r.stop_loss||!equity||!riskPct){out.innerHTML='<div class="status">資金管理で「資金」と「1回の許容損失%」を設定すると、ここに注文数量を自動表示します。</div>';return}
- var p={equity:equity,risk_pct:riskPct,entry:r.entry_reference,stop:r.stop_loss};
- if(r.take_profit)p.target=r.take_profit;if(r.step_size)p.step_size=r.step_size;if(r.min_order_size)p.min_order_size=r.min_order_size;if(r.max_order_size)p.max_order_size=r.max_order_size;
- var lev=r.direction==="LONG"?r.max_long_leverage:r.max_short_leverage;if(lev)p.leverage=lev;
- try{var x=await jf("/api/risk",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(p)});renderReadyActionCard(r,x);out.innerHTML='<div class="section"><h2>このシナリオの資金計算</h2><div class="grid">'+card("資金",fmt(equity,2)+" USDC")+card("許容損失",fmt(x.risk_budget,2)+" USDC ("+fmt(riskPct,2)+"%)")+card("注文数量",fmt(x.size,8))+card("想定建玉",fmt(x.notional,2)+" USDC")+card("SL時の想定損失",fmt(x.max_loss,2)+" USDC")+card("目標利益",x.target_profit==null?"—":fmt(x.target_profit,2)+" USDC")+card("RR",fmt(x.rr,2))+'</div></div>'}catch(e){out.innerHTML='<div class="status error">資金計算: '+lifecycleEscape(e.message)+'</div>'}
+ var out=document.getElementById('quickRiskOut');if(!out)return;var version=++quickRiskVersion;out.innerHTML='';
+ if(!r||!r.entry_reference||!r.stop_loss)return;
+ try{var x=await analysisRiskPlan(scenarioRiskParams(r));if(version!==quickRiskVersion)return;renderReadyActionCard(r,x);out.innerHTML='<div class="section"><h2>このシナリオの資金計算</h2><div class="sub">'+riskEstimateNote(x)+'</div><div class="grid">'+card('計算用資金',fmt(x.equity_usdc,2)+' USDC')+card('損失予算',fmt(x.risk_budget,2)+' USDC')+card('参考数量',fmt(x.size,8))+card('想定建玉',fmt(x.notional,2)+' USDC')+card('SL時の想定損失',fmt(x.max_loss,2)+' USDC')+card('目標利益',x.target_profit==null?'—':fmt(x.target_profit,2)+' USDC')+card('構造RR',fmt(x.rr,2))+(x.cost_adjusted_rr!=null?card('費用込みRR',fmt(x.cost_adjusted_rr,2)):'')+'</div></div>'}catch(e){if(version===quickRiskVersion){renderReadyActionCard(r,null);out.innerHTML='<div class="status">'+lifecycleEscape(e.message)+'</div>'}}
 }
 function renderEntryBand(r){
  var b=r.entry_band;
@@ -1171,9 +1167,39 @@ async function refreshJournal(){
  for(var i=0;i<journal.length;i++){try{await updateJournalOne(i)}catch(e){journal[i].refresh_error=e.message;saveJournalStore()}}
  renderJournal();s.textContent="更新完了。";
 }
-function loadRiskProfile(){try{var p=JSON.parse(localStorage.getItem("edgexRiskProfile")||"{}");if(p.equity)document.getElementById("equity").value=p.equity;if(p.riskPct)document.getElementById("riskPct").value=p.riskPct}catch(e){}}
-function saveRiskProfile(){localStorage.setItem("edgexRiskProfile",JSON.stringify({equity:Number(document.getElementById("equity").value)||0,riskPct:Number(document.getElementById("riskPct").value)||0}))}
-document.getElementById("equity").addEventListener("change",function(){saveRiskProfile();if(lastAnalysis)renderQuickRisk(lastAnalysis);if(globalEntrySnapshot||lastMarketPayload)renderEntryNow(globalEntrySnapshot||lastMarketPayload)});document.getElementById("riskPct").addEventListener("change",function(){saveRiskProfile();if(lastAnalysis)renderQuickRisk(lastAnalysis);if(globalEntrySnapshot||lastMarketPayload)renderEntryNow(globalEntrySnapshot||lastMarketPayload)});
+// Account capital and derived quantities are never persisted or sent to /api/risk.
+var analysisCapitalRevision=0,analysisCapitalObserved=null,manualCalcVersion=0;
+function apiCapitalMode(){return document.getElementById('capitalSource').value!=='MANUAL'}
+function usableAccountCapital(j){return !!accountViewSession&&Date.now()<accountViewSession.expires&&document.visibilityState==='visible'&&accountFresh(j)&&j.source==='EDGEX_TRADING_ACCOUNT'&&j.read_only===true&&j.balance&&j.balance.equity_usdc!=null&&j.balance.available_usdc!=null&&j.balance.equity_usdc!==''&&j.balance.available_usdc!==''&&Number.isFinite(Number(j.balance.equity_usdc))&&Number(j.balance.equity_usdc)>0&&Number.isFinite(Number(j.balance.available_usdc))&&Number(j.balance.available_usdc)>=0}
+function clearRiskDerived(){analysisCapitalRevision++;manualCalcVersion++;quickRiskVersion++;entryRenderVersion++;document.getElementById('riskOut').innerHTML='';document.getElementById('quickRiskOut').innerHTML='';if(lastAnalysis)renderReadyActionCard(lastAnalysis,null);document.querySelectorAll('.entryRiskLine').forEach(function(el){el.textContent='資金を取得・更新すると参考数量を表示します。'})}
+function recalculateAnalysisCapital(){if(lastAnalysis)renderQuickRisk(lastAnalysis);if(globalEntrySnapshot||lastMarketPayload)renderEntryNow(globalEntrySnapshot||lastMarketPayload)}
+function syncAnalysisCapital(j){
+ if(!apiCapitalMode())return;var valid=usableAccountCapital(j),key=valid?String(j.observed_ms)+':'+j.balance.equity_usdc+':'+j.balance.available_usdc:null;
+ if(key!==analysisCapitalObserved){clearRiskDerived();analysisCapitalObserved=key;document.getElementById('riskStatus').textContent='資金を更新しました。参考数量は再計算してください。'}
+ document.getElementById('equity').value=valid?j.balance.equity_usdc:'';
+ document.getElementById('capitalStatus').textContent=valid?'APIのUSDC評価額 / 利用可能 '+accountMoney(j.balance.available_usdc)+' USDC / 取得 '+new Date(j.observed_ms).toLocaleString('ja-JP')+'。未入金のArcウォレット残高は含みません。':'最新のAPI資金を確認できません。登録済み端末で取得・更新してください。古い値や手動資金への自動切替は行いません。';
+ if(valid)recalculateAnalysisCapital();
+}
+function riskEstimateNote(x){return x.capital_source==='EDGEX_USDC_EQUITY'?'API口座資金・費用込みの参考値（片道手数料 '+lifecycleEscape(x.fee_bps)+'bps / スリッページ '+lifecycleEscape(x.slippage_bps)+'bps）。Funding・板・約定は未確認。':'手動の仮定資金・費用未計上の参考値。'}
+async function analysisRiskPlan(params){
+ var api=apiCapitalMode(),revision=analysisCapitalRevision,epoch=accountViewEpoch,p=Object.assign({},params),result;
+ if(api){
+  if(!usableAccountCapital(accountViewSnapshot))throw new Error('最新のAPI資金を取得してください。');
+  try{result=await accountRequest('/api/account/risk',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)})}catch(e){if(epoch===accountViewEpoch){if(e.status===401||e.status===403||!accountViewSession||Date.now()>=accountViewSession.expires)lockAccountView();else if(e.status===503){accountViewSnapshot=null;syncAnalysisCapital(null)}}throw new Error('API資金を確認できません。取得・更新してください。')}
+  if(revision!==analysisCapitalRevision||epoch!==accountViewEpoch||!apiCapitalMode()||!usableAccountCapital(accountViewSnapshot))throw new Error('資金の再確認が必要です。');
+  var responseView={_received_ms:Date.now(),snapshot_age_seconds:result.snapshot_age_seconds};
+  if(result.capital_source!=='EDGEX_USDC_EQUITY'||result.read_only!==true||result.calculation_scope!=='ANALYSIS_REFERENCE_ONLY'||!accountFresh(responseView)||result.observed_ms!==accountViewSnapshot.observed_ms)throw new Error('資金の再確認が必要です。');
+ }else{
+  p.equity=Number(document.getElementById('equity').value);if(!Number.isFinite(p.equity)||p.equity<=0)throw new Error('手動の仮定資金を入力してください。');
+  result=await jf('/api/risk',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});if(revision!==analysisCapitalRevision||apiCapitalMode())throw new Error('資金の再確認が必要です。');result.equity_usdc=p.equity;result.capital_source='MANUAL_HYPOTHETICAL';
+ }return result;
+}
+function changeCapitalSource(){clearRiskDerived();analysisCapitalObserved=null;document.getElementById('equity').value='';document.getElementById('equity').readOnly=apiCapitalMode();document.getElementById('capitalRefresh').hidden=!apiCapitalMode();document.getElementById('capitalStatus').textContent=apiCapitalMode()?'API資金を取得・更新してください。':'手動の仮定資金です。実口座の残高や自動取引設定には反映しません。';if(apiCapitalMode())syncAnalysisCapital(accountViewSnapshot);else recalculateAnalysisCapital()}
+function loadRiskProfile(){try{localStorage.removeItem('edgexRiskProfile')}catch(e){}}
+document.getElementById('capitalSource').onchange=changeCapitalSource;
+document.getElementById('capitalRefresh').onclick=loadAccountView;
+['equity','riskPct'].forEach(function(id){document.getElementById(id).addEventListener('input',function(){clearRiskDerived();recalculateAnalysisCapital()})});
+setInterval(function(){if(apiCapitalMode()&&analysisCapitalObserved!==null&&!usableAccountCapital(accountViewSnapshot))syncAnalysisCapital(null)},1000);
 function applyDeepLink(){var u=new URL(location.href),tabName=u.searchParams.get("tab"),ticker=u.searchParams.get("ticker");if(ticker)document.getElementById("ticker").value=ticker.toUpperCase();if(tabName)tab(tabName);if((tabName==="analysis"||ticker)&&ticker)analyze()}
 loadRiskProfile();document.getElementById("globalEntryAction").onclick=function(){tab("dashboard")};renderQuickAccess();initWatchSync();syncCandidateNotifyButton();renderPushGuide();syncBackgroundPushButton();loadNotificationCenter();updateCandleCountdown();setInterval(updateCandleCountdown,1000);setInterval(refreshGlobalEntryAge,10000);setInterval(refreshEntryHeartbeat,60000);document.addEventListener("visibilitychange",function(){if(document.visibilityState==="visible"){refreshGlobalEntryAge();refreshEntryHeartbeat()}});
 document.addEventListener("visibilitychange",function(){if(document.visibilityState==="visible"){renderLiveExecution(liveExecutionSnapshot);loadLiveExecution()}});
@@ -1196,5 +1222,13 @@ document.getElementById("installApp").onclick=async function(){if(deferredInstal
 if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("/sw.js").then(function(){syncBackgroundPushButton()}).catch(function(){syncBackgroundPushButton()})})}else{syncBackgroundPushButton()}
 applyDeepLink();setTimeout(function(){scan(false)},80);
 
-document.getElementById("calc").onclick=async function(){function v(id){return document.getElementById(id).value}var p={equity:+v("equity"),risk_pct:+v("riskPct"),entry:+v("entry"),stop:+v("stop")};if(v("target"))p.target=+v("target");if(v("step"))p.step_size=+v("step");if(v("minOrder"))p.min_order_size=+v("minOrder");if(v("maxOrder"))p.max_order_size=+v("maxOrder");if(v("lev"))p.leverage=+v("lev");var s=document.getElementById("riskStatus"),o=document.getElementById("riskOut");try{var r=await jf("/api/risk",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(p)});s.innerHTML="計算完了 — <b>"+directionJa(r.side)+"</b>"+(r.below_min_order?' <span class="bad">最小注文量未満</span>':'')+(r.margin_capped?' <span class="warn">証拠金上限で調整</span>':'')+(r.max_order_capped?' <span class="warn">最大注文量で調整</span>':'');o.innerHTML=card("許容損失額",fmt(r.risk_budget,4)+" USDC")+card("注文数量",fmt(r.size,8))+card("想定建玉",fmt(r.notional,2)+" USDC")+card("SL時の想定損失",fmt(r.max_loss,4)+" USDC")+card("SL価格での概算リスク率",pct(r.actual_risk_pct))+card("RR",fmt(r.rr,2))+card("目標利益",r.target_profit==null?"—":fmt(r.target_profit,4)+" USDC")}catch(e){s.innerHTML='<span class="error">'+lifecycleEscape(e.message)+'</span>'}};
+document.getElementById('calc').onclick=async function(){
+ function v(id){return document.getElementById(id).value}var version=++manualCalcVersion,p={risk_pct:+v('riskPct'),entry:+v('entry'),stop:+v('stop')};
+ if(v('target'))p.target=+v('target');if(v('step'))p.step_size=+v('step');if(v('minOrder'))p.min_order_size=+v('minOrder');if(v('maxOrder'))p.max_order_size=+v('maxOrder');if(v('lev'))p.leverage=+v('lev');
+ var s=document.getElementById('riskStatus'),o=document.getElementById('riskOut');o.innerHTML='';s.textContent='参考数量を計算中…';
+ try{var r=await analysisRiskPlan(p);if(version!==manualCalcVersion)return;s.innerHTML='計算完了 — '+directionJa(r.side)+(r.below_min_order?' / 最小注文量未満':'')+(r.margin_capped?' / 利用可能資金の上限で調整':'')+'<br>'+riskEstimateNote(r);o.innerHTML=card('損失予算',fmt(r.risk_budget,4)+' USDC')+card('参考数量',fmt(r.size,8))+card('想定建玉',fmt(r.notional,2)+' USDC')+card('SL時の想定損失',fmt(r.max_loss,4)+' USDC')+card('概算リスク率',pct(r.actual_risk_pct))+card('構造RR',fmt(r.rr,2))+card('目標利益',r.target_profit==null?'—':fmt(r.target_profit,4)+' USDC')+(r.cost_adjusted_rr!=null?card('費用込みRR',fmt(r.cost_adjusted_rr,2)):'')}
+ catch(e){if(version===manualCalcVersion)s.textContent=e.message}
+};
+['entry','stop','target','step','minOrder','maxOrder','lev'].forEach(function(id){document.getElementById(id).addEventListener('input',function(){manualCalcVersion++;document.getElementById('riskOut').innerHTML='';document.getElementById('riskStatus').textContent='価格・数量条件を更新しました。再計算してください。'})});
+
 </script></body></html>

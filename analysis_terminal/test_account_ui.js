@@ -15,7 +15,7 @@ const listeners={};
 const context={Date:class extends Date{static now(){return now}},Number,Math,JSON,Promise,AbortController,
  document:{visibilityState:'visible',getElementById:id=>nodes[id],addEventListener:(name,fn)=>listeners[name]=fn},
  setInterval(){},setTimeout(fn,delay){const id=++timerId;timers.set(id,{fn,delay});return id},clearTimeout:id=>timers.delete(id),
- currentPushSubscription:async()=>subscription,lifecycleEscape:s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'),card:(k,v)=>k+':'+v+';',
+ syncAnalysisCapital(){},apiCapitalMode:()=>false,currentPushSubscription:async()=>subscription,lifecycleEscape:s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'),card:(k,v)=>k+':'+v+';',
  fetch:async(url,opt)=>{requests.push({url,opt});if(url==='/api/account/logout')return {ok:true};if(fail)throw Error('offline');if(statusFailure)return {ok:false,status:statusFailure};if(release){const gate=release;release=null;await gate.promise}return {ok:true,json:async()=>url.startsWith('/api/account/history')?{...history,items:[{...row,record_key:'b'}],complete:true,next_cursor:null}:JSON.parse(JSON.stringify(asset))}},
  jf:async(url,opt={})=>{requests.push({url,opt});if(fail)throw Error('private-error');if(url==='/api/account/session')return {view_token:'a'.repeat(43),expires_in_seconds:600,read_only:true};if(release){const gate=release;release=null;await gate.promise}if(url.startsWith('/api/account/history'))return {...history,items:[{...row,record_key:'b'}],complete:true,next_cursor:null};return JSON.parse(JSON.stringify(asset))}
 };
