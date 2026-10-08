@@ -7,6 +7,10 @@ ROOT = Path(__file__).resolve().parent
 
 
 class EntryFreshnessTests(unittest.TestCase):
+    def test_execution_controls(self):
+        result = subprocess.run(["node", str(ROOT / "test_execution_controls_ui.js"), str(ROOT / "index.html")], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_account_capital_calculation(self):
         result = subprocess.run(["node", str(ROOT / "test_account_capital_ui.js"), str(ROOT / "index.html")], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

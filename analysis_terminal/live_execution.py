@@ -360,7 +360,7 @@ def parse_control(request):
         raise ExecutionError("INVALID_CONTROL_REQUEST") from None
 
 
-async def apply_control(engine, request, *, adapter_factory=None):
+async def apply_control(engine, request, *, adapter_factory=None, authorize=None, expected_epoch=None):
     """Private environment command; commit once before any remote operation."""
     if not request:
         return
@@ -405,7 +405,12 @@ async def apply_control(engine, request, *, adapter_factory=None):
                     json.loads(x[0])
                     for x in conn.execute("SELECT payload FROM paper_signals")
                 ]
-            await engine.arm(previous_ready=previous)
+            options = {}
+            if authorize is not None:
+                options["authorize"] = authorize
+            if expected_epoch is not None:
+                options["expected_epoch"] = expected_epoch
+            await engine.arm(previous_ready=previous, **options)
         else:
             await engine.preflight()
         code, status = None, "DONE"
@@ -966,15 +971,22 @@ class Engine:
             save_state(conn, s)
         return a, active
 
-    async def arm(self, previous_ready=()):
+    async def arm(self, previous_ready=(), *, authorize=None, expected_epoch=None):
         if self.config.mode != "LIVE" or self.config.errors():
             raise ExecutionError("LIVE_CONFIGURATION_REQUIRED")
         with self.db_connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            if expected_epoch is not None and state(conn).get("control_epoch", 0) != expected_epoch:
+                raise ExecutionError("STALE_CONTROL_STATE")
+            if authorize is not None:
+                authorize(conn)
             pause(conn, "ARM_CHECK_IN_PROGRESS")
             epoch = state(conn).get("control_epoch", 0)
         a, active = await self.preflight()
         with self.db_connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
+            if authorize is not None:
+                authorize(conn)
             if arm_blockers(self.config, a, active, orders(conn)):
                 raise ExecutionError("DEDICATED_FLAT_ACCOUNT_REQUIRED"
                                      if self.config.account_policy == "DEDICATED"

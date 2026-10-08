@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
 from statistics import mean
-from typing import Any
+from typing import Any, Literal
 from zoneinfo import ZoneInfo
 
 import uvicorn
@@ -40,6 +40,7 @@ from analysis_terminal import live_execution
 from analysis_terminal import account_view
 from analysis_terminal import account_risk
 from analysis_terminal import execution_health
+from analysis_terminal import execution_controls
 from analysis_terminal import push_security
 from analysis_terminal.tracking import tracking_summary
 from analysis_terminal.history import fetch_history
@@ -335,6 +336,7 @@ def _init_db() -> None:
         vwap_live.initialize(conn, now_ms=int(time.time()*1000))
         live_execution.initialize(conn, now_ms=int(time.time()*1000))
         account_view.initialize(conn, _live_execution_config, now_ms=int(time.time()*1000))
+        execution_controls.initialize(conn)
         conn.commit()
 
     if VAPID_PRIVATE_KEY:
@@ -4022,6 +4024,8 @@ async def _background_live_execution() -> None:
         except BlockingIOError:
             return
         engine = live_execution.Engine(_live_execution_db, _live_execution_config, None)
+        with _live_execution_db() as conn:
+            execution_controls.CONTROLLER.recover(conn, now_ms=engine.clock())
         await live_execution.apply_control(engine, _live_execution_config.control_request,
             adapter_factory=lambda: EdgeXOrders(_live_execution_config))
         if _live_execution_config.mode == "OFF":
@@ -4037,15 +4041,21 @@ async def _background_live_execution() -> None:
                 live_execution.pause(conn, "CLIENT_INITIALIZATION_FAILED")
             return
         engine.adapter = adapter
+        execution_controls.CONTROLLER.worker_available = True
         try:
             while True:
                 scan = _live_execution_scan
+                try:
+                    await execution_controls.CONTROLLER.process(engine)
+                except Exception:
+                    engine.halt("WEB_CONTROL_FAILED")
                 try:
                     await engine.cycle(scan[1] if scan else (), snapshot_ms=scan[0] if scan else None)
                 except ExecutionError:
                     pass  # Safe code persisted in private ledger; never log SDK payloads.
                 await asyncio.sleep(5)
         finally:
+            execution_controls.CONTROLLER.worker_available = False
             await adapter.close()
 
 
@@ -4120,7 +4130,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="EdgeX Analysis Terminal",
-    version="19.0.49",
+    version="19.0.50",
     lifespan=lifespan,
 )
 app.add_middleware(push_security.BrowserSecurityMiddleware)
@@ -4596,6 +4606,52 @@ async def live_execution_api():
 
 class AccountViewSessionRequest(BaseModel):
     subscription: dict[str, Any]
+
+
+class ExecutionControlRequest(BaseModel):
+    model_config = {"extra": "forbid"}
+    action: Literal["arm", "pause"]
+    request_id: str = Field(min_length=36, max_length=36)
+    expected_epoch: int = Field(ge=0, le=9223372036854775807, strict=True)
+
+
+def _execution_authorize(conn, authorization, *, write=False):
+    session = execution_controls.CONTROLLER.authorize(conn, _live_execution_config, authorization)
+    push_security.LIMITER.check("execution-control:" + session["device_hash"] + (":write" if write else ":read"), 30 if write else 60)
+    return session
+
+
+@app.post("/api/execution/session")
+async def execution_control_session_api(req: AccountViewSessionRequest):
+    with _db_connect() as conn:
+        device = account_view.authorized_device(conn, _live_execution_config, supplied=req.subscription)
+        push_security.LIMITER.check("execution-control-session:" + device, 4)
+        return execution_controls.CONTROLLER.create(conn, _live_execution_config, req.subscription)
+
+
+@app.get("/api/execution/status")
+async def execution_control_status_api(authorization: str | None = Header(default=None)):
+    with _live_execution_db() as conn:
+        _execution_authorize(conn, authorization)
+        conn.execute("BEGIN")
+        return execution_controls.CONTROLLER.status(conn, _live_execution_config, now_ms=int(time.time()*1000))
+
+
+@app.post("/api/execution/control")
+async def execution_control_api(req: ExecutionControlRequest, authorization: str | None = Header(default=None)):
+    with _live_execution_db() as conn:
+        _execution_authorize(conn, authorization, write=True)
+        return execution_controls.CONTROLLER.submit(conn, _live_execution_config, authorization,
+            action=req.action, request_id=req.request_id, expected_epoch=req.expected_epoch,
+            now_ms=int(time.time()*1000))
+
+
+@app.post("/api/execution/logout")
+async def execution_control_logout_api(authorization: str | None = Header(default=None)):
+    with _db_connect() as conn:
+        _execution_authorize(conn, authorization)
+    execution_controls.CONTROLLER.sessions.items.pop(authorization[7:], None)
+    return {"ok": True, "scope": "NEW_ENTRY_CONTROL"}
 
 
 @app.get("/api/account/config")

@@ -152,7 +152,7 @@ class BrowserSecurityMiddleware:
             return await self.app(scope, receive, send)
         path = scope.get("path", "")
         headers = dict(scope.get("headers", []))
-        sensitive = path.startswith("/api/account/") or path.startswith("/api/push/") or path.startswith("/api/custom-alerts") or path == "/api/watchlist"
+        sensitive = path.startswith("/api/execution/") or path.startswith("/api/account/") or path.startswith("/api/push/") or path.startswith("/api/custom-alerts") or path == "/api/watchlist"
 
         async def hardened(message):
             if message["type"] == "http.response.start":

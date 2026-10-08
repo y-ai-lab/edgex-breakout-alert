@@ -14,7 +14,7 @@ const result={size:'0.29',max_loss:'2.9',target_profit:'5.8',notional:'29',risk_
 const asset={source:'EDGEX_TRADING_ACCOUNT',read_only:true,positions_scope:'ALL_ACCOUNT_POSITIONS',balance:{equity_usdc:'100',available_usdc:'80',cash_usdc:'95'},positions:[],observed_ms:100000,snapshot_age_seconds:0,_received_ms:100000};
 const row={stage:'READY',entry_reference:100,stop_loss:90,take_profit:120};
 const context={Date:class extends Date{static now(){return now}},Number,Math,JSON,Promise,AbortController,
- document:{visibilityState:'visible',getElementById:id=>nodes[id],querySelectorAll:()=>[],addEventListener:(name,fn)=>listeners[name]=fn},
+ document:{visibilityState:'visible',getElementById:id=>nodes[id],querySelectorAll:()=>[],addEventListener:(name,fn)=>{const prior=listeners[name];listeners[name]=prior?()=>{prior();fn()}:fn}},
  setInterval:(fn,ms)=>intervals.push({fn,ms}),setTimeout,clearTimeout,lifecycleEscape:String,card:(k,v)=>k+':'+v+';',fmt:String,pct:String,directionJa:String,
  lastAnalysis:null,globalEntrySnapshot:null,lastMarketPayload:null,entryRenderVersion:0,renderReadyActionCard:(r,x)=>nodes.readyActionCard.innerHTML=x?'PRIVATE_SIZE':'PUBLIC_LEVELS',renderEntryNow:async()=>{},
  localStorage:{removeItem:k=>storage.push(k)},currentPushSubscription:async()=>({toJSON:()=>({keys:{auth:'SYNTHETIC'}})}),
