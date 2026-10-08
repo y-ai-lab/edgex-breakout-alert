@@ -1,0 +1,42 @@
+// Actual shipped functions: stale execution status and subscription-scoped fetch.
+const fs=require('fs'),vm=require('vm'),assert=require('assert');
+const html=fs.readFileSync(process.argv[2]||'analysis_terminal/index.html','utf8');
+const script=html.match(/<script>([\s\S]*?)<\/script>/)[1];new Function(script);
+const execution=script.slice(script.indexOf('var liveExecutionSnapshot='),script.indexOf('async function checkApiConnections('));
+const push=script.slice(script.indexOf('var pushManagementTokens='),script.indexOf('function renderPushEvents('));
+(async()=>{
+ let now=100000,requests=[];
+ const nodes=Object.fromEntries(['liveExecutionBadge','liveExecutionBrief','liveExecutionStatus','liveExecutionPolicy','liveExecutionWarnings'].map(id=>[id,{textContent:'',innerHTML:'',classList:{toggle(){}}}]));
+ const context={Date:{now:()=>now},Number,Infinity,Math,Map,Error,JSON,Object,fmt:(n)=>String(n),card:(k,v)=>k+':'+v+';',document:{getElementById:id=>nodes[id]},
+  jf:async(url,opt={})=>{requests.push({url,opt});if(url==='/api/push/session'){assert(!opt.headers.Authorization);assert.equal(JSON.parse(opt.body).subscription.endpoint,'https://web.push.apple.com/test');return {management_token:'a'.repeat(64)}}return {ok:true}}};
+ vm.createContext(context);vm.runInContext(execution+push,context);
+ const live={_received_ms:now,connection_age_seconds:0,status:'RUNNING',source:'CURRENT_READY_ONLY',automatic_promotion:false,real_orders_enabled:true,active_orders:0,status_counts:{SKIPPED:5},safety:{risk_budget_pct:3,daily_loss_stop_enabled:false}};
+ context.renderLiveExecution(live);
+ assert.equal(nodes.liveExecutionBadge.textContent,'稼働中');
+ assert(nodes.liveExecutionBrief.textContent.includes('条件成立を待っています'));
+ assert(nodes.liveExecutionBrief.textContent.includes('実注文決着 0件'));
+ assert(nodes.liveExecutionPolicy.innerHTML.includes('3%'));
+ assert(nodes.liveExecutionPolicy.innerHTML.includes('EdgeX取引口座'));
+ assert(nodes.liveExecutionWarnings.textContent.includes('保証上限ではありません'));
+ assert(nodes.liveExecutionWarnings.textContent.includes('連敗'));
+ assert(nodes.liveExecutionWarnings.textContent.includes('未完了'));
+ now+=30000;context.renderLiveExecution(live);
+ assert.equal(nodes.liveExecutionBadge.textContent,'接続を確認');
+ assert.equal(nodes.liveExecutionPolicy.innerHTML,'');
+ now=100000;context.renderLiveExecution({...live,connection_age_seconds:29});now+=1000;context.renderLiveExecution({...live,connection_age_seconds:29});assert.equal(nodes.liveExecutionBadge.textContent,'接続を確認');
+ now=100000;context.renderLiveExecution({...live,status:'ERROR',real_orders_enabled:false,last_error:'OWNERSHIP_CONFLICT'});
+ assert.equal(nodes.liveExecutionBadge.textContent,'照合が必要');
+ assert(nodes.liveExecutionWarnings.textContent.includes('保護注文を確認'));
+ context.renderLiveExecution({...live,status:'PAUSED',real_orders_enabled:false,status_counts:{CLOSED:1},active_orders:1});
+ assert.equal(nodes.liveExecutionBadge.textContent,'新規エントリー停止');
+ assert(!nodes.liveExecutionWarnings.textContent.includes('未完了'));
+ context.renderLiveExecution(null);assert.equal(nodes.liveExecutionBadge.textContent,'接続を確認');
+ const sub={endpoint:'https://web.push.apple.com/test',toJSON:()=>({endpoint:'https://web.push.apple.com/test',keys:{auth:'browser-proof'}})};
+ for(const url of ['/api/push/preferences?endpoint=x','/api/push/preferences','/api/push/test','/api/push/unsubscribe','/api/custom-alerts/delete'])await context.pushRequest(sub,url,{method:url.includes('?')?'GET':'POST',headers:{'Content-Type':'application/json'}});
+ assert.equal(requests.filter(r=>r.url==='/api/push/session').length,1);
+ for(const r of requests.filter(r=>r.url!=='/api/push/session'))assert.equal(r.opt.headers.Authorization,'Bearer '+'a'.repeat(64));
+ assert(!script.includes('localStorage.setItem("pushManagement'));
+ assert(!script.includes('最大損失'));
+ assert(html.includes('value="3"'));
+ console.log('Execution freshness, truthful risk labels and scoped Push management: OK');
+})().catch(e=>{console.error(e);process.exitCode=1});

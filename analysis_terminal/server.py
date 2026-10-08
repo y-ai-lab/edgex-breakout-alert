@@ -17,7 +17,7 @@ from zoneinfo import ZoneInfo
 
 import uvicorn
 import websockets
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, Header, HTTPException, Query
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel, Field
 from pywebpush import WebPushException, webpush
@@ -37,6 +37,7 @@ from analysis_terminal import entry_history
 from analysis_terminal import pending_live
 from analysis_terminal import vwap_live
 from analysis_terminal import live_execution
+from analysis_terminal import push_security
 from analysis_terminal.tracking import tracking_summary
 from analysis_terminal.history import fetch_history
 from analysis_terminal.outcome_history import BACKFILL_BARS, BACKFILL_REQUESTS, consecutive_window, merge_candles
@@ -766,13 +767,16 @@ def _subscription_count() -> int:
 
 
 def _save_push_subscription(req: PushSubscriptionRequest) -> str:
-    endpoint = str(req.subscription.get("endpoint") or "").strip()
-    keys = req.subscription.get("keys") or {}
-    if not endpoint or not keys.get("p256dh") or not keys.get("auth"):
-        raise HTTPException(400, "Invalid PushSubscription payload")
+    endpoint, _, _ = push_security.subscription_identity(req.subscription)
     now_ms = int(time.time() * 1000)
     payload = json.dumps(req.subscription, separators=(",", ":"))
     with _db_connect() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        existing = conn.execute("SELECT payload FROM push_subscriptions WHERE endpoint = ?", (endpoint,)).fetchone()
+        if existing:
+            push_security.prove_subscription(json.loads(existing["payload"]), req.subscription)
+        elif conn.execute("SELECT COUNT(*) FROM push_subscriptions").fetchone()[0] >= 32:
+            raise HTTPException(429, "Push subscription capacity reached")
         conn.execute(
             """
             INSERT INTO push_subscriptions(
@@ -872,14 +876,20 @@ def _send_push_sync(subscription: sqlite3.Row, payload: dict[str, Any]) -> bool:
         return False
     endpoint = str(subscription["endpoint"])
     try:
-        webpush(
-            subscription_info=json.loads(subscription["payload"]),
-            data=json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
-            vapid_private_key=str(VAPID_KEY_PATH),
-            vapid_claims={"sub": VAPID_SUBJECT},
-            ttl=900,
-            timeout=12,
-        )
+        info = json.loads(subscription["payload"])
+        push_security.subscription_identity(info)
+        if info["endpoint"] != endpoint:
+            return False
+        with push_security.ProviderSession() as session:
+            webpush(
+                subscription_info=info,
+                data=json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+                vapid_private_key=str(VAPID_KEY_PATH),
+                vapid_claims={"sub": VAPID_SUBJECT},
+                ttl=900,
+                timeout=12,
+                requests_session=session,
+            )
         now_ms = int(time.time() * 1000)
         with _db_connect() as conn:
             conn.execute(
@@ -897,11 +907,22 @@ def _send_push_sync(subscription: sqlite3.Row, payload: dict[str, Any]) -> bool:
         status = getattr(response, "status_code", None)
         if status in {404, 410}:
             _delete_push_subscription(endpoint)
-        print(f"Web Push error status={status}: {exc}", flush=True)
+        # Never log endpoints, subscription keys or exception response bodies.
+        print(f"Web Push delivery failed status={status}", flush=True)
         return False
-    except Exception as exc:
-        print(f"Web Push error: {exc}", flush=True)
+    except Exception:
+        print("Web Push delivery failed", flush=True)
         return False
+
+
+def _authorize_push(endpoint: str, authorization: str | None) -> sqlite3.Row:
+    if not isinstance(authorization, str):
+        raise HTTPException(401, "Push ownership required")
+    row = _get_push_subscription(endpoint)
+    if row is None:
+        raise HTTPException(403, "Push ownership required")
+    push_security.authorize(json.loads(row["payload"]), authorization)
+    return row
 
 
 async def _broadcast_push(
@@ -4047,9 +4068,10 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="EdgeX Analysis Terminal",
-    version="19.0.44",
+    version="19.0.45",
     lifespan=lifespan,
 )
+app.add_middleware(push_security.BrowserSecurityMiddleware)
 
 
 @app.get("/health")
@@ -4097,8 +4119,8 @@ async def btc_wave_api():
 
 @app.get("/btc", response_class=HTMLResponse)
 async def btc_wave_page():
-    return HTMLResponse(Path(__file__).with_name("btc.html").read_text(encoding="utf-8").replace(
-        "__APP_VERSION__",app.version),headers={"Cache-Control":"no-store"})
+    return push_security.html_response(Path(__file__).with_name("btc.html").read_text(encoding="utf-8").replace(
+        "__APP_VERSION__",app.version))
 
 
 @app.get("/api/analyze")
@@ -4494,7 +4516,26 @@ async def live_execution_api():
     # Status only. No account values, IDs, credentials or public trading controls.
     with _live_execution_db() as conn:
         conn.execute("BEGIN")
-        return live_execution.report(conn, _live_execution_config, now_ms=int(time.time()*1000))
+        report = live_execution.report(conn, _live_execution_config, now_ms=int(time.time()*1000))
+        config = _live_execution_config
+        # Public operational rules only; never account balance, keys or order IDs.
+        try:
+            risk = float(config.risk_pct)
+            risk = risk if math.isfinite(risk) and 0 < risk <= 3 else None
+        except (TypeError, ValueError):
+            risk = None
+        report["safety"] = {
+            "capital_source": "EDGEX_USDC_EQUITY", "risk_budget_pct": risk,
+            "risk_budget_includes_assumed_costs": True, "loss_cap_guaranteed": False,
+            "daily_loss_stop_enabled": bool(config.daily_loss_usdc and config.daily_loss_usdc != "DISABLED"),
+            "max_managed_positions": 1, "same_contract_manual_trading_safe": False,
+            "protection_installation_atomic": False, "funding_included_in_risk_budget": False,
+            "shadow_orders_enabled": False,
+        }
+        now_ms = int(time.time()*1000)
+        success_ms = report.get("last_success_ms")
+        report["connection_age_seconds"] = (now_ms-success_ms)/1000 if isinstance(success_ms, (int, float)) else None
+        return report
 
 
 @app.get("/api/paper-execution/events")
@@ -4714,7 +4755,9 @@ async def synced_watchlist_save_api(req: WatchlistSyncRequest):
 @app.get("/api/custom-alerts")
 async def custom_alerts_get_api(
     endpoint: str = Query(min_length=10, max_length=4096),
+    authorization: str | None = Header(default=None),
 ):
+    _authorize_push(endpoint, authorization)
     return {
         "alerts": _load_custom_alerts(endpoint=endpoint),
     }
@@ -4726,7 +4769,8 @@ async def custom_alerts_create_api(req: CustomAlertCreateRequest):
 
 
 @app.post("/api/custom-alerts/delete")
-async def custom_alerts_delete_api(req: CustomAlertDeleteRequest):
+async def custom_alerts_delete_api(req: CustomAlertDeleteRequest, authorization: str | None = Header(default=None)):
+    _authorize_push(req.endpoint, authorization)
     return {
         "ok": _delete_custom_alert(req),
     }
@@ -4751,20 +4795,35 @@ async def push_config_api():
         "daily_summary_hour_jst": DAILY_SUMMARY_HOUR_JST,
         "notification_policy": NOTIFICATION_POLICY,
         "daily_summary_enabled": False,
+        "subscription_management": "SUBSCRIPTION_KEY_PROOF",
+        "provider_only_delivery": True,
     }
+
+
+@app.post("/api/push/session")
+async def push_session_api(req: PushSubscriptionRequest):
+    endpoint, _, _ = push_security.subscription_identity(req.subscription)
+    row = _get_push_subscription(endpoint)
+    if row is None:
+        raise HTTPException(403, "Push ownership required")
+    push_security.prove_subscription(json.loads(row["payload"]), req.subscription)
+    # Upgrade existing browsers silently: no subscribe, preference rewrite or send.
+    return {"management_token": push_security.management_token(req.subscription)}
 
 
 @app.post("/api/push/subscribe")
 async def push_subscribe_api(req: PushSubscriptionRequest):
     if not _push_enabled():
         raise HTTPException(503, "Web Push is not configured")
+    endpoint, _, _ = push_security.subscription_identity(req.subscription)
+    previous = _get_push_subscription(endpoint)
     endpoint = _save_push_subscription(req)
     subscriptions = [
         row for row in _load_push_subscriptions()
         if str(row["endpoint"]) == endpoint
     ]
     delivered = False
-    if subscriptions:
+    if subscriptions and previous is None:
         delivered = await asyncio.to_thread(
             _send_push_sync,
             subscriptions[0],
@@ -4783,11 +4842,13 @@ async def push_subscribe_api(req: PushSubscriptionRequest):
         "ok": True,
         "test_delivered": delivered,
         "subscribers": _subscription_count(),
+        "management_token": push_security.management_token(req.subscription),
     }
 
 
 @app.post("/api/push/unsubscribe")
-async def push_unsubscribe_api(req: PushUnsubscribeRequest):
+async def push_unsubscribe_api(req: PushUnsubscribeRequest, authorization: str | None = Header(default=None)):
+    _authorize_push(req.endpoint, authorization)
     _delete_push_subscription(req.endpoint)
     return {
         "ok": True,
@@ -4798,10 +4859,9 @@ async def push_unsubscribe_api(req: PushUnsubscribeRequest):
 @app.get("/api/push/preferences")
 async def push_preferences_get_api(
     endpoint: str = Query(min_length=10, max_length=4096),
+    authorization: str | None = Header(default=None),
 ):
-    row = _get_push_subscription(endpoint)
-    if row is None:
-        raise HTTPException(404, "Push subscription not found")
+    row = _authorize_push(endpoint, authorization)
     return {
         "candidate_alerts": bool(row["candidate_alerts"]),
         "daily_summary": False,
@@ -4815,7 +4875,8 @@ async def push_preferences_get_api(
 
 
 @app.post("/api/push/preferences")
-async def push_preferences_api(req: PushPreferenceRequest):
+async def push_preferences_api(req: PushPreferenceRequest, authorization: str | None = Header(default=None)):
+    _authorize_push(req.endpoint, authorization)
     if not _update_push_preferences(req):
         raise HTTPException(404, "Push subscription not found")
     row = _get_push_subscription(req.endpoint)
@@ -4831,10 +4892,9 @@ async def push_preferences_api(req: PushPreferenceRequest):
 
 
 @app.post("/api/push/test")
-async def push_test_api(req: PushTestRequest):
-    row = _get_push_subscription(req.endpoint)
-    if row is None:
-        raise HTTPException(404, "Push subscription not found")
+async def push_test_api(req: PushTestRequest, authorization: str | None = Header(default=None)):
+    row = _authorize_push(req.endpoint, authorization)
+    push_security.LIMITER.check("test:" + req.endpoint, 3)
     payload = {
         "title": "EdgeX テスト通知",
         "notification_kind": "MANUAL",
@@ -4942,14 +5002,10 @@ async def app_icon():
 
 @app.get("/", response_class=HTMLResponse)
 async def index():
-    return HTMLResponse(
+    return push_security.html_response(
         Path(__file__).with_name("index.html").read_text(encoding="utf-8").replace(
             "__APP_VERSION__", app.version
         ),
-        headers={
-            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
-            "Pragma": "no-cache",
-        },
     )
 
 

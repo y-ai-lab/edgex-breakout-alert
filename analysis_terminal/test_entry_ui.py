@@ -7,6 +7,13 @@ ROOT = Path(__file__).resolve().parent
 
 
 class EntryFreshnessTests(unittest.TestCase):
+    def test_security_and_execution_status_functions(self):
+        result = subprocess.run(
+            ["node", str(ROOT / "test_security_ui.js"), str(ROOT / "index.html")],
+            capture_output=True, text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_essential_layout_full_boot_and_api_checks(self):
         result = subprocess.run(
             ["node", str(ROOT / "test_essential_ui.js"), str(ROOT / "index.html")],

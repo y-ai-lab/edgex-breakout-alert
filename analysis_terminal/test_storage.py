@@ -1,5 +1,9 @@
 """Storage/API smoke tests; market and external push transport are mocked."""
+import base64
+import json
 import sqlite3
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives import serialization
 import sys
 import tempfile
 import types
@@ -44,14 +48,23 @@ class StorageTests(unittest.IsolatedAsyncioTestCase):
                 last_success_ms INTEGER)""")
             conn.execute(
                 "INSERT INTO push_subscriptions(endpoint,payload,created_ms,updated_ms) VALUES (?,?,?,?)",
-                ("https://push.example.invalid/subscriber", "{}", self.now_ms, self.now_ms),
+                ("https://web.push.apple.com/test-subscriber", "{}", self.now_ms, self.now_ms),
             )
         server._init_db()
+        public = ec.derive_private_key(1, ec.SECP256R1()).public_key().public_bytes(serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint)
+        encode = lambda b: base64.urlsafe_b64encode(b).decode().rstrip("=")
+        self.subscription = {"endpoint": "https://web.push.apple.com/test-subscriber", "keys": {"p256dh": encode(public), "auth": encode(b"test-only-auth16")}}
+        with server._db_connect() as conn:
+            conn.execute("UPDATE push_subscriptions SET payload=?", (json.dumps(self.subscription),))
+        self.authorization = "Bearer " + server.push_security.management_token(self.subscription)
+        limiter = patch.object(server.push_security, "LIMITER", server.push_security.RateLimiter())
+        limiter.start()
+        self.addCleanup(limiter.stop)
 
     async def test_page_version_tracks_health_after_release(self):
         for version in (server.app.version, "19.0.999"):
             with patch.object(server.app, "version", version):
-                async with AsyncClient(transport=ASGITransport(app=server.app), base_url="http://test") as client:
+                async with AsyncClient(transport=ASGITransport(app=server.app), base_url="http://test", headers={"Authorization": self.authorization}) as client:
                     page = await client.get("/")
                     health = (await client.get("/health")).json()
                 self.assertEqual(health["version"], version)
@@ -162,7 +175,7 @@ class StorageTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(server._load_push_events()[0]["kind"], "ready")
 
     async def test_non_entry_dispatch_is_blocked_even_for_legacy_preferences(self):
-        before = dict(server._get_push_subscription("https://push.example.invalid/subscriber"))
+        before = dict(server._get_push_subscription("https://web.push.apple.com/test-subscriber"))
         server._create_custom_alert(server.CustomAlertCreateRequest(
             endpoint=before["endpoint"], ticker="TESTUSDC", condition="PRICE_ABOVE", threshold=100))
         rule = server._load_custom_alerts(endpoint=before["endpoint"])[0]
@@ -197,12 +210,12 @@ class StorageTests(unittest.IsolatedAsyncioTestCase):
         async def inline(func, *args):
             return func(*args)
         with patch.object(server, "_send_push_sync", return_value=True) as send, patch.object(server.asyncio, "to_thread", inline):
-            response = await server.push_test_api(server.PushTestRequest(endpoint="https://push.example.invalid/subscriber"))
+            response = await server.push_test_api(server.PushTestRequest(endpoint="https://web.push.apple.com/test-subscriber"), authorization=self.authorization)
             self.assertTrue(response["delivered"])
             self.assertEqual(send.call_args.args[1]["notification_kind"], "MANUAL")
 
     async def test_ready_honors_opt_out_snooze_and_quiet_hours(self):
-        endpoint = "https://push.example.invalid/subscriber"
+        endpoint = "https://web.push.apple.com/test-subscriber"
         for preferences in (
             dict(candidate_alerts=False),
             dict(snooze_until_ms=self.now_ms + 3600000),
@@ -218,9 +231,9 @@ class StorageTests(unittest.IsolatedAsyncioTestCase):
                     send.assert_not_called()
 
     async def test_entry_policy_apis_keep_subscription_and_reject_custom_creation(self):
-        endpoint = "https://push.example.invalid/subscriber"
+        endpoint = "https://web.push.apple.com/test-subscriber"
         original = dict(server._get_push_subscription(endpoint))
-        async with AsyncClient(transport=ASGITransport(app=server.app), base_url="http://test") as client:
+        async with AsyncClient(transport=ASGITransport(app=server.app), base_url="http://test", headers={"Authorization": self.authorization}) as client:
             cfg = (await client.get("/api/push/config")).json()
             self.assertEqual(cfg["notification_policy"], "READY_ONLY")
             self.assertFalse(cfg["daily_summary_enabled"])
@@ -284,7 +297,7 @@ class StorageTests(unittest.IsolatedAsyncioTestCase):
             patch.object(server, "fetch_snapshots", AsyncMock(return_value={})),
             patch.object(server, "_snapshot_cache", (server.time.time(), {})),
         ):
-            async with AsyncClient(transport=ASGITransport(app=server.app), base_url="http://test") as client:
+            async with AsyncClient(transport=ASGITransport(app=server.app), base_url="http://test", headers={"Authorization": self.authorization}) as client:
                 for path in (
                     "/", "/health", "/api/screener?limit=3", "/api/analyze?ticker=TESTUSDC",
                     "/api/readiness-review", "/api/shadow-v2", "/api/push/config", "/api/push/events",
@@ -299,7 +312,7 @@ class StorageTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(review["current"]["ready_count"], 0)
                 self.assertEqual(review["proposed_v2"]["ready_count"], 1)
                 self.assertEqual((await client.get("/api/shadow-v2")).json()["metrics"]["sample_status"], "INSUFFICIENT SAMPLE")
-                self.assertEqual((await client.get("/api/push/preferences", params={"endpoint": "https://push.example.invalid/subscriber"})).status_code, 200)
+                self.assertEqual((await client.get("/api/push/preferences", params={"endpoint": "https://web.push.apple.com/test-subscriber"})).status_code, 200)
                 self.assertEqual((await client.post("/api/push/subscribe", json={"subscription": {"endpoint": "https://push.example.invalid/test"}})).status_code, 503)
         self.assertEqual(server._subscription_count(), 1)
         self.assertEqual(transport.webpush.call_count, 0)
