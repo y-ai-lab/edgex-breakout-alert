@@ -8,7 +8,7 @@ import sqlite3
 import sys
 import time
 from collections import Counter
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
 from statistics import mean
@@ -35,6 +35,7 @@ from analysis_terminal import paper_execution
 from analysis_terminal import btc_wave, btc_wave_store
 from analysis_terminal import entry_history
 from analysis_terminal import pending_live
+from analysis_terminal import live_execution
 from analysis_terminal.tracking import tracking_summary
 from analysis_terminal.history import fetch_history
 from analysis_terminal.outcome_history import BACKFILL_BARS, BACKFILL_REQUESTS, consecutive_window, merge_candles
@@ -60,6 +61,9 @@ _background_task: asyncio.Task | None = None
 _btc_wave_task: asyncio.Task | None = None
 _btc_wave_latest: dict[str, Any] | None = None
 _btc_wave_lock = asyncio.Lock()
+_live_execution_task: asyncio.Task | None = None
+_live_execution_scan: tuple[int, list[dict[str, Any]]] | None = None
+_live_execution_config = live_execution.Config.from_env()
 
 
 def _db_connect() -> sqlite3.Connection:
@@ -323,6 +327,7 @@ def _init_db() -> None:
         btc_wave_store.initialize(conn)
         entry_history.initialize(conn)
         pending_live.initialize(conn, now_ms=int(time.time()*1000))
+        live_execution.initialize(conn, now_ms=int(time.time()*1000))
         conn.commit()
 
     if VAPID_PRIVATE_KEY:
@@ -3845,6 +3850,7 @@ def _pending_live_cycle(contracts) -> None:
 
 
 async def _background_collector() -> None:
+    global _live_execution_scan
     last_bucket: int | None = None
     await asyncio.sleep(5)
     while True:
@@ -3853,6 +3859,7 @@ async def _background_collector() -> None:
         if bucket != last_bucket:
             try:
                 contracts, rows = await _scan_market_rows(force=True)
+                _live_execution_scan = (int(_snapshot_cache[0]*1000), rows) if _snapshot_cache else None
                 _persist_scan_result(contracts, rows)
                 _persist_shadow_v2_signals(rows)
                 _simulation_cycle(contracts, rows)
@@ -3939,16 +3946,69 @@ async def _background_btc_wave() -> None:
         await asyncio.sleep(60)
 
 
+@contextmanager
+def _live_execution_db():
+    conn = _db_connect()
+    try:
+        with conn:
+            yield conn
+    finally:
+        conn.close()
+
+
+async def _background_live_execution() -> None:
+    # Independent task: a trading error must not stop research or notifications.
+    if _live_execution_config.mode == "OFF":
+        return
+    if _live_execution_config.errors():
+        with _live_execution_db() as conn:
+            live_execution.pause(conn, "CONFIGURATION_REQUIRED")
+        return
+    import fcntl
+    from analysis_terminal.edgex_orders import EdgeXOrders, ExecutionError
+    with DB_PATH.with_suffix(".execution.lock").open("a") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return
+        try:
+            adapter = EdgeXOrders(_live_execution_config)
+        except Exception:
+            with _live_execution_db() as conn:
+                live_execution.pause(conn, "CLIENT_INITIALIZATION_FAILED")
+            return
+        engine = live_execution.Engine(_live_execution_db, _live_execution_config, adapter)
+        try:
+            while True:
+                scan = _live_execution_scan
+                try:
+                    await engine.cycle(scan[1] if scan else (), snapshot_ms=scan[0] if scan else None)
+                except ExecutionError:
+                    pass  # Safe code persisted in private ledger; never log SDK payloads.
+                await asyncio.sleep(5)
+        finally:
+            await adapter.close()
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    global _background_task, _btc_wave_task, _btc_wave_latest
+    global _background_task, _btc_wave_task, _btc_wave_latest, _live_execution_task, _live_execution_scan
     _init_db()
     _btc_wave_latest = None
+    _live_execution_scan = None
     _background_task = asyncio.create_task(_background_collector())
     _btc_wave_task = asyncio.create_task(_background_btc_wave())
+    _live_execution_task = asyncio.create_task(_background_live_execution())
     try:
         yield
     finally:
+        if _live_execution_task is not None:
+            _live_execution_task.cancel()
+            try:
+                await _live_execution_task
+            except asyncio.CancelledError:
+                pass
+            _live_execution_task = None
         if _background_task is not None:
             _background_task.cancel()
             try:
@@ -3967,7 +4027,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="EdgeX Analysis Terminal",
-    version="19.0.38",
+    version="19.0.39",
     lifespan=lifespan,
 )
 
@@ -4407,6 +4467,14 @@ async def paper_execution_api(limit: int = Query(default=50, ge=1, le=200)):
     with _db_connect() as conn:
         conn.execute("BEGIN")
         return paper_execution.report(conn,now_ms=int(time.time()*1000),limit=limit)
+
+
+@app.get("/api/live-execution")
+async def live_execution_api():
+    # Status only. No account values, IDs, credentials or public trading controls.
+    with _live_execution_db() as conn:
+        conn.execute("BEGIN")
+        return live_execution.report(conn, _live_execution_config, now_ms=int(time.time()*1000))
 
 
 @app.get("/api/paper-execution/events")

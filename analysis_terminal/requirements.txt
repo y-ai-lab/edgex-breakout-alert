@@ -2,3 +2,6 @@ fastapi>=0.116,<1
 uvicorn[standard]>=0.35,<1
 pydantic>=2.11,<3
 pywebpush>=2.0,<3
+# Pin reviewed official source and archive checksum for reproducible signing.
+edgex-python-sdk @ https://github.com/edgex-Tech/edgex-python-sdk/archive/487274d97cd1b77e05a759dbdf75e191582adefc.tar.gz#sha256=5876beb3c8098990bf798076db7b9ff9bd00030ef8bebdf6c8b99ea6bfc7434b
+

@@ -1,6 +1,8 @@
 # EdgeX Analysis Terminal
 
-通知Botとは別Railwayサービスで動く分析ツールです。注文API・Telegram認証情報は使いません。
+通知Botとは別Railwayサービスで動く分析ツールです。Telegram認証情報は使いません。
+v19.0.39から任意の[EdgeX API自動取引](LIVE_EXECUTION.md)を実装しました。
+既定OFFで、本リリースでは実注文を送信していません。模擬執行とShadowは別台帳のまま維持します。
 
 - Market Screener: EdgeX全取引可能銘柄を4H→15Mでスキャン
 - Ticker Analysis: EMA20/50、ATR、breakout、retest、confirmation、SL/TP/RR

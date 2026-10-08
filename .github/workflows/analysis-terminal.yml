@@ -1,0 +1,47 @@
+name: Analysis terminal safety checks
+
+on:
+  pull_request:
+    paths:
+      - 'analysis_terminal/**'
+      - '.github/workflows/analysis-terminal.yml'
+  push:
+    branches: [main, 'feature/execution-v19.0.39']
+    paths:
+      - 'analysis_terminal/**'
+      - '.github/workflows/analysis-terminal.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      EDGEX_EXEC_MODE: 'OFF'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: python -m pip install -r analysis_terminal/test-requirements.txt
+      - run: python -m compileall -q analysis_terminal
+      - run: python -m unittest discover -s analysis_terminal -p 'test_*.py' -q
+      - run: python -m unittest discover -s tests -q
+      - run: python -m unittest discover -s .github/scripts -p 'test_*.py' -q
+      - name: Browser JavaScript syntax
+        run: |
+          node - <<'JS'
+          const fs = require('fs');
+          for (const file of ['analysis_terminal/index.html', 'analysis_terminal/btc.html']) {
+            const source = fs.readFileSync(file, 'utf8');
+            for (const match of source.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/gi)) {
+              new Function(match[1]);
+            }
+          }
+          console.log('JavaScript syntax checks passed');
+          JS

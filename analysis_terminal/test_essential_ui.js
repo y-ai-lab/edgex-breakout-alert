@@ -32,6 +32,7 @@ ready.entry_band={version:1,status:'COMPATIBLE',direction:'LONG',min_rr:2,struct
 const near={...ready,ticker:'NEXTUSDC',stage:'CONFIRMATION_WAIT',setup_id:'next',reason:'retest seen; waiting for 15M confirmation'};
 const market={universe:2,scanned:2,coverage_pct:100,matched:2,snapshot_age_seconds:0,results:[ready,near],ready_candidates:[ready],qualified_near_candidates:[near],summary:{ready_count:1,qualified_near_count:1,near_signal_count:1,direction_counts:{LONG:2},average_score:90}};
 const paper={mode:'PAPER_ONLY',real_orders_enabled:false,eligible_for_live_promotion:false,automatic_promotion:false,source:'CURRENT_READY_ONLY',account:{last_cycle_ms:clock,paused:false,collector_stale:false,cash_usdc:10000,policy:{}},tracking:{state:'WAITING_READY',active_status_counts:{PENDING:0,OPEN:0,AMBIGUOUS:0},data_issue_count:0,data_issue_counts:{}},metrics:{resolved:0,status_counts:{},sample_status:'INSUFFICIENT SAMPLE'},latest:[]};
+const execution={mode:'OFF',status:'OFF',real_orders_enabled:false,source:'CURRENT_READY_ONLY',automatic_promotion:false,active_orders:0};
 let failures=false,invalid=false,stale=false,releaseOld=null;
 const historyItem={setup_id:'history-1',ticker:'NEXTUSDC',direction:'LONG',first_near:{observed_ms:1000,stage:'CONFIRMATION_WAIT',entry_reference:80,stop_loss:70,take_profit:100,rr:2,confirmation_color_ok:false,confirmation_level_ok:true},first_ready:{observed_ms:2000,stage:'READY',entry_reference:81,stop_loss:70,take_profit:105,rr:3.18},latest:{observed_ms:3000,stage:'RR_WAIT'},lifecycle:{ended_ms:4000,end_reason:'SUPERSEDED'},reference_outcome:{verified:true,status:'SL',final_r:-1,hypothetical:true}};
 let historyReply={historical:true,totals:{setups:2,ready:1,near:2},items:[historyItem],next_cursor:{before_ms:2000,before_setup:'history-1'}},historyGate=null,historyFailure=false;
@@ -55,6 +56,7 @@ const context={console,URL,AbortController,Uint32Array,crypto:require('crypto').
   else if(url.startsWith('/api/push/config'))data={enabled:true,notification_policy:'READY_ONLY',daily_summary_enabled:false};
   else if(url.startsWith('/api/push/events'))data={events:[]};
   else if(url.startsWith('/api/paper-execution'))data=paper;
+  else if(url.startsWith('/api/live-execution'))data=execution;
   else if(url.startsWith('/api/watchlist'))data={tickers:[]};
   else if(url.startsWith('/api/risk'))data={size:1,max_loss:10,target_profit:25,risk_budget:10,notional:100,rr:2.5};
   else if(url.startsWith('/api/chart'))data={analysis:{...ready,ticker:'TESTUSDC'},series:{HOUR_4:[],MINUTE_15:[]}};
@@ -76,7 +78,12 @@ async function settle(){for(let i=0;i<8;i++)await new Promise(setImmediate)}
  assert.equal(storage.get('edgexJournal'),'[{"ticker":"KEEPUSDC"}]');assert.equal(storage.get('edgexMarketHistory'),'[{"time_ms":1}]');
  assert(!requests.some(r=>/shadow-v2|strategy-comparison|replay|readiness-history|server-history|server-paper-signals|opportunity/.test(r.url)));
  assert(!requests.some(r=>r.url.startsWith('/api/entry-history')),'History must be lazy and leave ENTRY NOW boot unchanged');
- context.tab('api');await settle();assert(nodes.api.classList.contains('active'));assert(nodes.apiCheckStatus.textContent.includes('正常 5 / 要確認 0 / 失敗 0'));assert(nodes.paperExecutionStatus.textContent.includes('PAPER ONLY'));
+ context.tab('api');await settle();assert(nodes.api.classList.contains('active'));assert(nodes.apiCheckStatus.textContent.includes('正常 5 / 要確認 1 / 失敗 0'));assert(nodes.paperExecutionStatus.textContent.includes('PAPER ONLY'));
+ assert(nodes.apiCheckResults.innerHTML.includes('停止中 / 新規実注文なし'));
+ execution.mode='LIVE';execution.status='RUNNING';execution.real_orders_enabled=true;await context.checkApiConnections();
+ assert(nodes.apiCheckStatus.textContent.includes('正常 6 / 要確認 0 / 失敗 0'));
+ assert(nodes.apiCheckResults.innerHTML.includes('稼働中 / 実注文有効'));
+ execution.mode='OFF';execution.status='OFF';execution.real_orders_enabled=false;
  assert(nodes.paperExecutionStatus.textContent.includes('現行READY待ち'));
  const originalTracking=paper.tracking;
  for(const [state,text,warn] of [['WAITING_FILL','模擬約定待ち',false],['TRACKING','追跡中',false],['DATA_INCOMPLETE','履歴復旧待ち',true],['PAUSED','模擬口座停止',true],['AMBIGUOUS','損益未確定',true],['NOT_STARTED','初回更新待ち',true],['COLLECTOR_STALE','更新を確認',true]]){
@@ -84,22 +91,22 @@ async function settle(){for(let i=0;i<8;i++)await new Promise(setImmediate)}
   context.renderPaperExecution(paper);await context.checkApiConnections();
   assert(nodes.paperExecutionStatus.textContent.includes(text),state);
   assert(nodes.apiCheckResults.innerHTML.includes(text),state);
-  assert(nodes.apiCheckStatus.textContent.includes(warn?'正常 4 / 要確認 1':'正常 5 / 要確認 0'),state);
+  assert(nodes.apiCheckStatus.textContent.includes(warn?'正常 4 / 要確認 2':'正常 5 / 要確認 1'),state);
  }
  // The single displayed rejection does not hide an older active order's gap.
  paper.tracking={...originalTracking,state:'DATA_INCOMPLETE',data_issue_count:1,data_issue_counts:{HISTORY_GAP:1},active_status_counts:{PENDING:0,OPEN:1,AMBIGUOUS:0}};
  paper.latest=[{ticker:'NEWUSDC',status:'REJECTED',reason:'ACTIVE_POSITION_DATA_INCOMPLETE'}];
  context.renderPaperExecution(paper);await context.checkApiConnections();
- assert(nodes.apiCheckStatus.textContent.includes('要確認 1'));assert(nodes.paperExecutionSummary.innerHTML.includes('1件'));assert(nodes.paperExecutionStatus.classList.contains('warn'));
+ assert(nodes.apiCheckStatus.textContent.includes('要確認 2'));assert(nodes.paperExecutionSummary.innerHTML.includes('1件'));assert(nodes.paperExecutionStatus.classList.contains('warn'));
  for(const bad of [null,{...originalTracking,state:'UNKNOWN'},{...originalTracking,data_issue_count:-1},{...originalTracking,active_status_counts:{PENDING:0,OPEN:null,AMBIGUOUS:0}}]){
-  paper.tracking=bad;context.renderPaperExecution(paper);await context.checkApiConnections();assert(nodes.apiCheckStatus.textContent.includes('要確認 1'));assert(nodes.paperExecutionStatus.textContent.includes('状態を確認'));
+  paper.tracking=bad;context.renderPaperExecution(paper);await context.checkApiConnections();assert(nodes.apiCheckStatus.textContent.includes('要確認 2'));assert(nodes.paperExecutionStatus.textContent.includes('状態を確認'));
  }
  paper.tracking=originalTracking;paper.latest=[];context.renderPaperExecution(paper);assert(!nodes.paperExecutionStatus.classList.contains('warn'));
  const diagnostic=requests.filter(r=>['/health','/api/analyze?ticker=BTCUSDC','/api/paper-execution?limit=1'].includes(r.url));assert(diagnostic.length>=3);assert(diagnostic.every(r=>r.method==='GET'));
  failures=true;await context.checkApiConnections();assert(nodes.apiCheckStatus.textContent.includes('失敗 1'));assert(nodes.apiCheckResults.innerHTML.includes('取得・応答内容を確認できません'));assert(!nodes.checkApi.disabled);
  failures=false;invalid=true;await context.checkApiConnections();assert(nodes.apiCheckStatus.textContent.includes('失敗 1'));invalid=false;
- stale=true;await context.checkApiConnections();assert(nodes.apiCheckStatus.textContent.includes('要確認 2'));stale=false;
- let release;releaseOld={promise:new Promise(r=>release=r)};const old=context.checkApiConnections();await settle();await context.checkApiConnections();release();await old;assert(nodes.apiCheckStatus.textContent.includes('正常 5 / 要確認 0 / 失敗 0'));
+ stale=true;await context.checkApiConnections();assert(nodes.apiCheckStatus.textContent.includes('要確認 3'));stale=false;
+ let release;releaseOld={promise:new Promise(r=>release=r)};const old=context.checkApiConnections();await settle();await context.checkApiConnections();release();await old;assert(nodes.apiCheckStatus.textContent.includes('正常 5 / 要確認 1 / 失敗 0'));
  const button=nodes.nearCandidates.querySelectorAll('.nearCandidateCard')[0];clock+=120000;button.click();assert(nodes.nearCandidates.innerHTML.includes('データ鮮度を確認'));assert(!requests.some(r=>r.url.startsWith('/api/chart')));
  context.refreshGlobalEntryAge();assert(nodes.dashSummary.innerHTML.includes('鮮度を確認'));assert(!nodes.dashSummary.innerHTML.includes('エントリー可能'));
  await context.scan(false);assert(nodes.nearCandidates.innerHTML.includes('NEXTUSDC'));const fresh=nodes.nearCandidates.querySelectorAll('.nearCandidateCard')[0];fresh.click();await settle();assert(nodes.analysis.classList.contains('active'));assert(nodes.analysisStatus.innerHTML.includes('エントリー可能'));
