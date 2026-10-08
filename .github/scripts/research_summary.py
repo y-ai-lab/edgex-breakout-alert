@@ -10,6 +10,7 @@ import time
 ROOT=Path(__file__).resolve().parents[2]
 sys.path.insert(0,str(ROOT))
 from analysis_terminal import pending_entry_replay as study, pending_followup as follow, execution_funnel as funnel
+import capital_admission_audit
 
 DAY=86400000
 
@@ -70,12 +71,17 @@ def summarize(directory, *, now_ms):
             or not 0<=coverage['valid_points']<=expected):
         raise ValueError('Coverage or universe accounting mismatch')
     raw=study.decision([report])
+    admissions={model:capital_admission_audit.summarize(
+        [r for r in report['records'] if r['model']==model],report['portfolios'][model])
+        for model in study.MODELS}
     quality_blocked=bool(failures) or coverage['valid_points']==0
     out.update(collection_status='DATA_QUALITY_BLOCKED' if quality_blocked else 'RESULTS_VERIFIED',
                current_cohort_rule_decision=raw,
                decision='DATA_QUALITY_BLOCKED' if quality_blocked else raw if days==7 else 'PROVISIONAL_'+raw,
                coverage=coverage,metrics=report['metrics'],portfolios=report['portfolios'],
                comparison=checked['proposal_vs_current'],
+               capital_admission_audit=admissions,
+               capital_admission_audit_sha256=hashlib.sha256(Path(capital_admission_audit.__file__).read_bytes()).hexdigest(),
                report_sha256=hashlib.sha256(rp.read_bytes()).hexdigest(),
                source_manifest_sha256=hashlib.sha256(sp.read_bytes()).hexdigest(),
                protocol_sha256=report['protocol_sha256'],engine_sha256=report['engine_sha256'],
@@ -103,6 +109,15 @@ def markdown(result):
     lines += ['', '| モデル | 資金制限後約定 | 確定 | 実現損益 USDC | 最終ROI% | 保有/不確定 |', '|---|---:|---:|---:|---:|---:|']
     for model,p in result['portfolios'].items():
         lines.append(f"| {model} | {p['filled']} | {p['resolved']} | {show(p['realized_net_pnl_usdc'])} | {show(p['closed_portfolio_roi_pct'])} | {p['active']}/{p['uncertain']} |")
+    lines += ['', '| モデル | 制約で失われた仮約定 | 除外理由 | 約定あり/なしの除外候補 |',
+              '|---|---:|---|---:|']
+    for model,audit in result['capital_admission_audit'].items():
+        if not audit['reasons']:
+            lines.append(f"| {model} | {audit['filled_omitted']} | なし | 0/0 |")
+        for reason,counts in audit['reasons'].items():
+            lines.append(f"| {model} | {counts['excluded_with_uncapped_fill']} | {reason} | {counts['excluded_with_uncapped_fill']}/{counts['excluded_without_uncapped_fill']} |")
+    lines += ['', '元の固定研究口座の判断を観察。未約定候補の除外を失われた約定に数えない。',
+              '予約・最小数量の診断は重複する。実運用口座の評価や予約解除の提案ではない。']
     c=result['comparison'];v=result['coverage']
     lines += ['',f"現行に対する仮想約定純増: {c['net_filled_count_difference']} / 資金制限後: {c['capped_filled_count_difference']}",
               f"有効市場時点: {v['valid_points']}/{v['expected_points_all_markets']} / 取得失敗: {v['failed_markets']}",

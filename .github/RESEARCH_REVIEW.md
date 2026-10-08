@@ -24,6 +24,21 @@ python .github/scripts/research_summary.py --research-dir strategy-output \
 
 これは公開OHLCからの仮想検証であり、板・価格tick・queue・funding・実約定は未検証。コスト込みRの単位はnet stop riskで、本番Shadowのoriginal stop distanceを使うRと直接合算しない。MFE/MAEの足内順序を推測しない。
 
+## 資金制約の約定監査（2026-10-08）
+
+`decision-summary.json` の `capital_admission_audit` は、検証済みの公開研究台帳に対する
+元の固定portfolio関数の判断を観察する。除外理由別に、元台帳で仮約定した候補と
+未約定候補を分ける。未約定候補の除外数を失われた約定数と扱わない。
+予約の有無、3枠上限、同ticker、最小数量と残り建玉金額/リスクの関係も記録するが、
+これらは重複する診断であり足し合わせない。時点で分かる資金だけを観察し、
+予約解除、将来利益による配分、待機期限や元のパラメータの変更を行わない。
+
+元のエンジンhash・全portfolio・全除外Counter・入力不変・候補と約定の保存を突合し、
+不一致は停止する。元のmetrics/portfolio/判断と `capped_shared_setup_count:null` を保持する。
+新サンプル・実約定・ROIの改善証拠ではない。固定研究口座1万USDC/1%/最大3件/合計3%/
+1倍建玉金額/JST日次3%は、実運用口座3%/最大1件/日次制限なしと異なる。
+GitHubには登録済み公開市場研究artifactの診断だけを出し、本番台帳をコピーしない。
+
 ## VWAP研究CIの固定範囲（2026-10-08）
 
 初回開発時の「本番全ファイルが同じ」というチェックは、後の正当なUI・認証・
