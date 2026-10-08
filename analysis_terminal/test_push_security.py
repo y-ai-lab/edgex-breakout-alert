@@ -192,14 +192,27 @@ class PushSecurityTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(self.token, r.text)
 
     def test_ssrf_and_host_url_tricks_fail_before_transport_or_storage(self):
-        for endpoint in ("http://fcm.googleapis.com/fcm/send/x", "https://127.0.0.1/x", "https://169.254.169.254/x", "https://localhost/x", "https://fcm.googleapis.com.evil.invalid/fcm/send/x", "https://fcm.googleapis.com@evil.invalid/fcm/send/x", "https://fcm.googleapis.com:443/fcm/send/x", "https://fcm.googleapis.com/fcm/send/x?redirect=x", "https://web.push.apple.com/x#fragment", "https://web.push.apple.com/", "https://evil.invalid/x", "https://web.push.apple.com\\@evil.invalid/x"):
+        for endpoint in ("http://fcm.googleapis.com/fcm/send/x", "https://127.0.0.1/x", "https://169.254.169.254/x", "https://localhost/x", "https://fcm.googleapis.com.evil.invalid/fcm/send/x", "https://fcm.googleapis.com@evil.invalid/fcm/send/x", "https://fcm.googleapis.com:443/fcm/send/x", "https://fcm.googleapis.com/fcm/send/x?redirect=x", "https://web.push.apple.com/x#fragment", "https://web.push.apple.com/", "https://evil.invalid/x", "https://web.push.apple.com\\@evil.invalid/x", " https://web.push.apple.com/x", "https://web.push.apple.com/\nx"):
             with self.subTest(endpoint=endpoint), self.assertRaises(HTTPException):
                 security.subscription_identity(subscription(endpoint))
         self.assertEqual(server._subscription_count(), 1)
 
     def test_all_supported_browser_providers(self):
-        for endpoint in ("https://fcm.googleapis.com/fcm/send/x", "https://fcm.googleapis.com/wp/x", "https://updates.push.services.mozilla.com/wpush/v2/x", "https://web.push.apple.com/x"):
+        for endpoint in ("https://fcm.googleapis.com/fcm/send/x:APA91b_token=", "https://fcm.googleapis.com/wp/x", "https://updates.push.services.mozilla.com/wpush/v2/x", "https://web.push.apple.com/x"):
             self.assertEqual(security.validate_endpoint(endpoint), endpoint)
+
+    async def test_existing_delivery_validation_is_aggregate_and_non_mutating(self):
+        before = dict(server._get_push_subscription(self.sub["endpoint"]))
+        r = await self.client.get("/api/push/config")
+        self.assertEqual(r.json()["delivery_validation"], {"checked_subscriptions": 1, "validated_subscriptions": 1, "blocked_subscriptions": 0})
+        self.assertNotIn(self.sub["endpoint"], r.text)
+        self.assertNotIn(self.sub["keys"]["auth"], r.text)
+        with server._db_connect() as conn:
+            conn.execute("INSERT INTO push_subscriptions(endpoint,payload,created_ms,updated_ms) VALUES ('legacy','{}',1,1)")
+        r = await self.client.get("/api/push/config")
+        self.assertEqual(r.json()["delivery_validation"]["blocked_subscriptions"], 1)
+        self.assertEqual(dict(server._get_push_subscription(self.sub["endpoint"])), before)
+        self.assertEqual(server._subscription_count(), 2)
 
     def test_transport_never_redirects_or_disables_tls(self):
         with patch.object(security.requests.Session, "request", return_value=Mock(status_code=302)) as request:

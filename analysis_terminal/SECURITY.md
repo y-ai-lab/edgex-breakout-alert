@@ -30,6 +30,8 @@ Pushの送信先はHTTPSのFCM・Mozilla Push・Apple Web Pushの正確なホス
 登録時と既存レコード送信時の両方で確認し、HTTPリダイレクトは禁止、TLS検証は
 常に有効。無効な旧購読を勝手に消したり、任意の新ホストを許可したりしない。
 Web Pushエラーは固定文とHTTP statusだけを記録し、URL・鍵・応答本文を記録しない。
+公開configのdelivery_validationは検証済み／停止対象の件数だけを返し、
+購読のURLや鍵を公開せず、既存レコードの送信先検証を本番で照合できる。
 
 端末設定へのcross-site書き込みを拒否する。これはBearer所有確認の代わりではない。
 HTMLはレスポンスごとのnonce CSPで同梱scriptのみ実行し、inlineイベントを禁止。

@@ -766,6 +766,20 @@ def _subscription_count() -> int:
     return int(row["n"]) if row else 0
 
 
+def _push_delivery_validation() -> dict[str, int]:
+    # Aggregate evidence only: do not expose subscription URLs or keys.
+    with _db_connect() as conn:
+        rows = conn.execute("SELECT endpoint, payload FROM push_subscriptions").fetchall()
+    valid = 0
+    for row in rows:
+        try:
+            endpoint, _, _ = push_security.subscription_identity(json.loads(row["payload"]))
+            valid += int(endpoint == row["endpoint"])
+        except (HTTPException, ValueError, TypeError):
+            pass
+    return {"checked_subscriptions": len(rows), "validated_subscriptions": valid, "blocked_subscriptions": len(rows)-valid}
+
+
 def _save_push_subscription(req: PushSubscriptionRequest) -> str:
     endpoint, _, _ = push_security.subscription_identity(req.subscription)
     now_ms = int(time.time() * 1000)
@@ -4797,6 +4811,7 @@ async def push_config_api():
         "daily_summary_enabled": False,
         "subscription_management": "SUBSCRIPTION_KEY_PROOF",
         "provider_only_delivery": True,
+        "delivery_validation": _push_delivery_validation(),
     }
 
 

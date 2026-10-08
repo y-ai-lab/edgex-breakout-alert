@@ -43,13 +43,15 @@ def html_response(html):
 def validate_endpoint(endpoint):
     if not isinstance(endpoint, str) or not 10 <= len(endpoint) <= 4096:
         raise HTTPException(400, "Invalid Push endpoint")
+    if any(ord(c) <= 32 or ord(c) == 127 or c == "\\" for c in endpoint):
+        raise HTTPException(400, "Invalid Push endpoint")
     try:
         url = urlsplit(endpoint)
         prefixes = PROVIDERS.get(url.hostname, ())
         valid = (
             url.scheme == "https" and url.netloc == url.hostname
             and not url.query and not url.fragment
-            and re.fullmatch(r"/[A-Za-z0-9_./%~-]+", url.path)
+            and re.fullmatch(r"/[A-Za-z0-9_./%~:=\-]+", url.path)
             and any(url.path.startswith(p) and len(url.path) > len(p) for p in prefixes)
         )
     except ValueError:
