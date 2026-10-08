@@ -1,4 +1,4 @@
-# EdgeX V2 API execution — v19.0.39
+# EdgeX V2 API execution — v19.0.40
 
 ユーザーの自動取引実装依頼に対応した、分析サービス内の任意機能です。既定は **OFF**。
 本リリースで実注文は送信していません。SDKの認証・署名・注文本文と異常系を
@@ -38,6 +38,7 @@ Railwayの **分析サービスだけ** に秘密変数を設定します。通�
 | `EDGEX_EXEC_DAILY_LOSS_USDC` | 日次equity減少による新規停止額。明示必須 |
 | `EDGEX_EXEC_SLIPPAGE_BPS` | 片道想定スリッページ。既定2、0〜25 |
 | `EDGEX_EXEC_FEE_BPS` | 片道費用予算。既定5、契約の標準fee以上が必要 |
+| `EDGEX_EXEC_CONTROL_REQUEST` | 任意の管理操作。`check:<UUIDv4>` / `arm:<UUIDv4>` / `pause:<UUIDv4>` |
 
 金額はこのリリースでは設定していません。資金配分を明示せずLIVEにはできません。
 同時保有は1ポジション、元本は口座equity以下です。SLを近づける方向で丸め、
@@ -53,6 +54,8 @@ python -m analysis_terminal.live_execution_control status
 ```
 
 `check` はLIVE設定でも読取専用です。CLIは鍵を引数に受け取らず、応答本文を出しません。
+契約メタデータ・口座・全ページの未処理注文を確認し、5秒以上古い口座照合は拒否します。
+これはHMAC認証と読み取りの検証で、取引署名者の権限や実注文の受付・約定の証明ではありません。
 LIVE設定後も自動ではarmされません。空の専用口座・未管理注文なし・未解決台帳なしでのみ
 次の操作が可能です。
 
@@ -67,6 +70,31 @@ python -m analysis_terminal.live_execution_control pause
 armは日次損失基準をリセットしません。日次基準はJST日付の最初の接続成功時equityで、
 再接続前の正確な日初残高ではありません。停止幅は明示上限と日初equity 3%の小さい方です。
 入出金・手動注文は停止基準や照合を乱すため、同じ口座を併用しないでください。
+
+### Railway設定からの管理操作（v19.0.40）
+
+SSHできない場合も、Railwayの分析サービス変数だけで同じ管理操作を実行できます。
+ローカルでDB・認証情報なしに操作IDを生成できます。
+
+```bash
+python -m analysis_terminal.live_execution_control request --operation check
+```
+
+出力された `EDGEX_EXEC_CONTROL_REQUEST=check:<UUID>` を分析サービスに設定し、
+READ_ONLYでデプロイします。`GET /api/live-execution` の `operator_control.status=DONE` と
+`READ_ONLY`、最新 `last_preflight_ms` を確認します。REFUSEDなら新規は停止したままです。
+鍵はRailwayの秘密変数だけに保存し、操作IDには鍵・口座ID・金額を含めません。
+
+開始は、認証情報・署名者鍵・4つの資金上限をすべて設定したLIVEモードで、
+**新しいUUIDの `arm` 操作**を指定します。設定済みという理由だけで自動armはしません。
+停止は新しいUUIDの `pause` 操作です。LIVEのまま停止すれば既存の保護管理は継続します。
+管理用の公開POST APIはありません。
+
+各UUIDはSQLiteの追加台帳で一度だけ消費します。同じ操作が環境変数に残っていても、
+再デプロイ・異常停止後に再armしません。失敗した操作を、後の設定修正で勝手に再試行しません。
+同じUUIDで操作を変えると停止します。PROCESSINGのまま中断した操作も再実行せず停止し、
+オペレーターによる照合と新しいUUIDを必要とします。開始の照合中にpauseされた場合は開始を拒否します。
+公開ステータスには操作種別・結果・時刻だけを返し、UUIDや認証応答を返しません。
 
 ## 注文・復旧の限界
 
@@ -86,7 +114,7 @@ SL/TPの期限は21日です。期限直前まで残る場合は停止して緊�
 close後は所有する残存出口だけを取消し、取引所の約定とflatの一致でCLOSEDにします。
 記録する取引損益は実価格・実手数料による **funding控除前** で、口座ROIではありません。
 
-新規3テーブルは追加移行で、既存DB・Push・模擬口座・Shadow台帳を変更しません。
+v39の3テーブルとv40の操作台帳は追加移行で、既存DB・Push・模擬口座・Shadow台帳を変更しません。
 公開 `GET /api/live-execution` は接続・停止状態の集計だけを返し、鍵・口座情報・注文価格・
 注文IDは返しません。公開arm・発注APIはありません。画面の既存API検証に状態を表示します。
 新タブやShadow通知は追加しません。

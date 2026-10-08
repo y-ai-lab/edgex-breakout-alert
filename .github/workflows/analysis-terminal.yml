@@ -6,7 +6,7 @@ on:
       - 'analysis_terminal/**'
       - '.github/workflows/analysis-terminal.yml'
   push:
-    branches: [main, 'feature/execution-v19.0.39']
+    branches: [main, 'feature/execution-v19.0.*']
     paths:
       - 'analysis_terminal/**'
       - '.github/workflows/analysis-terminal.yml'

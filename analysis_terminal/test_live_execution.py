@@ -109,7 +109,10 @@ class Exchange:
         ]
 
     async def metadata(self):
-        return {"contractList": [META.copy()]}
+        return {
+            "contractList": [META.copy()],
+            "global": {"nativeChainId": "3343", "contractAddress": "0x" + "22" * 20},
+        }
 
     async def quote(self, contract_id, price):
         return dict(
@@ -317,7 +320,7 @@ class ExecutionTests(unittest.IsolatedAsyncioTestCase):
 
         client.get_account_asset.side_effect = account
         client.get_active_orders.side_effect = active
-        client.get_metadata.return_value = success({"contractList": [META]})
+        client.get_metadata.return_value = success(await self.exchange.metadata())
         client.get_max_order_size.return_value = success(
             dict(ask1Price="100", bid1Price="100", maxBuySize="100", maxSellSize="100")
         )
@@ -507,7 +510,8 @@ class ExecutionTests(unittest.IsolatedAsyncioTestCase):
         await self.armed()
         await self.engine.cycle()
         self.exchange.equity -= Decimal(30)
-        await self.engine.arm()
+        with self.assertRaisesRegex(ExecutionError, "DAILY_EQUITY_LOSS_LIMIT"):
+            await self.engine.arm()
         await self.engine.cycle([candidate()], snapshot_ms=self.now)
         self.assertFalse(self.state()["armed"])
         self.assertEqual(self.state()["day_start_equity"], "10000")

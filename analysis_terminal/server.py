@@ -3958,11 +3958,7 @@ def _live_execution_db():
 
 async def _background_live_execution() -> None:
     # Independent task: a trading error must not stop research or notifications.
-    if _live_execution_config.mode == "OFF":
-        return
-    if _live_execution_config.errors():
-        with _live_execution_db() as conn:
-            live_execution.pause(conn, "CONFIGURATION_REQUIRED")
+    if _live_execution_config.mode == "OFF" and not _live_execution_config.control_request:
         return
     import fcntl
     from analysis_terminal.edgex_orders import EdgeXOrders, ExecutionError
@@ -3971,13 +3967,22 @@ async def _background_live_execution() -> None:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             return
+        engine = live_execution.Engine(_live_execution_db, _live_execution_config, None)
+        await live_execution.apply_control(engine, _live_execution_config.control_request,
+            adapter_factory=lambda: EdgeXOrders(_live_execution_config))
+        if _live_execution_config.mode == "OFF":
+            return
+        if _live_execution_config.errors():
+            with _live_execution_db() as conn:
+                live_execution.pause(conn, "CONFIGURATION_REQUIRED")
+            return
         try:
-            adapter = EdgeXOrders(_live_execution_config)
+            adapter = engine.adapter or EdgeXOrders(_live_execution_config)
         except Exception:
             with _live_execution_db() as conn:
                 live_execution.pause(conn, "CLIENT_INITIALIZATION_FAILED")
             return
-        engine = live_execution.Engine(_live_execution_db, _live_execution_config, adapter)
+        engine.adapter = adapter
         try:
             while True:
                 scan = _live_execution_scan
@@ -4027,7 +4032,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="EdgeX Analysis Terminal",
-    version="19.0.39",
+    version="19.0.40",
     lifespan=lifespan,
 )
 

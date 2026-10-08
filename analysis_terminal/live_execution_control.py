@@ -8,6 +8,7 @@ import json
 import os
 import sqlite3
 import time
+import uuid
 
 from analysis_terminal import live_execution as live
 from analysis_terminal.edgex_orders import EdgeXOrders, ExecutionError
@@ -47,8 +48,7 @@ async def run(args):
                 await engine.arm(previous_ready=previous)
             else:
                 # Connectivity check is always read-only, even in LIVE mode.
-                await adapter.account()
-                await adapter.active_orders()
+                await engine.preflight()
         finally:
             await adapter.close()
     with db() as conn:
@@ -57,11 +57,19 @@ async def run(args):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("status", "check", "arm", "pause"))
+    parser.add_argument(
+        "action", choices=("status", "check", "arm", "pause", "request")
+    )
+    parser.add_argument(
+        "--operation", choices=("check", "arm", "pause"), default="check"
+    )
     parser.add_argument(
         "--db", default=os.getenv("ANALYSIS_DB_PATH", "/data/analysis_terminal.db")
     )
     args = parser.parse_args()
+    if args.action == "request":
+        print("EDGEX_EXEC_CONTROL_REQUEST=" + args.operation + ":" + str(uuid.uuid4()))
+        return
     try:
         print(json.dumps(asyncio.run(run(args)), ensure_ascii=False))
     except ExecutionError as exc:

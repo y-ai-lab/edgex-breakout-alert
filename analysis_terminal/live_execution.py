@@ -13,6 +13,7 @@ import hashlib
 import json
 import os
 import time
+import uuid
 from zoneinfo import ZoneInfo
 
 from analysis_terminal.edgex_orders import ExecutionError, decimal
@@ -36,6 +37,7 @@ class Config:
     daily_loss_usdc: str = ""
     slippage_bps: str = "2"
     fee_bps: str = "5"
+    control_request: str = field(default="", repr=False)
 
     @classmethod
     def from_env(cls):
@@ -52,6 +54,7 @@ class Config:
             daily_loss_usdc="DAILY_LOSS_USDC",
             slippage_bps="SLIPPAGE_BPS",
             fee_bps="FEE_BPS",
+            control_request="CONTROL_REQUEST",
         )
         defaults = cls()
         return cls(
@@ -130,6 +133,9 @@ def initialize(conn, *, now_ms):
     conn.execute(
         "CREATE TABLE IF NOT EXISTS live_execution_events(id INTEGER PRIMARY KEY AUTOINCREMENT,setup_id TEXT,observed_ms INTEGER NOT NULL,status TEXT NOT NULL)"
     )
+    conn.execute("""CREATE TABLE IF NOT EXISTS live_execution_controls (
+        request_id TEXT PRIMARY KEY, action TEXT NOT NULL, status TEXT NOT NULL,
+        created_ms INTEGER NOT NULL, completed_ms INTEGER, code TEXT)""")
     initial = dict(
         armed=False,
         armed_ms=None,
@@ -187,7 +193,7 @@ def save(conn, r, now_ms):
 
 def pause(conn, reason):
     s = state(conn)
-    s.update(armed=False, reason=reason)
+    s.update(armed=False, reason=reason, control_epoch=s.get("control_epoch", 0) + 1)
     save_state(conn, s)
 
 
@@ -220,6 +226,9 @@ def report(conn, config, *, now_ms):
             )
         )
     )
+    control = conn.execute(
+        "SELECT action,status,created_ms,completed_ms,code FROM live_execution_controls ORDER BY rowid DESC LIMIT 1"
+    ).fetchone()
     return dict(
         mode=config.mode,
         status=status,
@@ -240,7 +249,92 @@ def report(conn, config, *, now_ms):
         active_orders=active,
         status_counts=dict(Counter(r["status"] for r in items)),
         account_details_exposed=False,
+        last_preflight_ms=s.get("last_preflight_ms"),
+        preflight_is_read_only=True,
+        preflight_validates_signer_authorization=False,
+        operator_control=(
+            dict(
+                zip(("action", "status", "created_ms", "completed_ms", "code"), control)
+            )
+            if control
+            else None
+        ),
     )
+
+
+def parse_control(request):
+    try:
+        action, token = request.split(":")
+        identifier = uuid.UUID(token)
+        if (
+            action not in {"check", "arm", "pause"}
+            or str(identifier) != token
+            or identifier.version != 4
+        ):
+            raise ValueError()
+        return action, token
+    except (ValueError, AttributeError):
+        raise ExecutionError("INVALID_CONTROL_REQUEST") from None
+
+
+async def apply_control(engine, request, *, adapter_factory=None):
+    """Private environment command; commit once before any remote operation."""
+    if not request:
+        return
+    try:
+        action, token = parse_control(request)
+    except ExecutionError:
+        engine.halt("INVALID_CONTROL_REQUEST")
+        return
+    with engine.db_connect() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        prior = conn.execute(
+            "SELECT action,status FROM live_execution_controls WHERE request_id=?",
+            (token,),
+        ).fetchone()
+        if prior:
+            if prior[0] != action:
+                pause(conn, "CONTROL_CONTENT_CHANGED")
+            elif prior[1] == "PROCESSING":
+                pause(conn, "CONTROL_INTERRUPTED")
+            return
+        conn.execute(
+            "INSERT INTO live_execution_controls VALUES(?,?,?, ?,NULL,NULL)",
+            (token, action, "PROCESSING", engine.clock()),
+        )
+        if action == "pause":
+            pause(conn, "MANUAL_PAUSE")
+            conn.execute(
+                "UPDATE live_execution_controls SET status='DONE',completed_ms=? WHERE request_id=?",
+                (engine.clock(), token),
+            )
+            return
+    try:
+        if engine.config.mode == "OFF" or engine.config.errors():
+            raise ExecutionError("CONFIGURATION_REQUIRED")
+        if engine.adapter is None:
+            if adapter_factory is None:
+                raise ExecutionError("CLIENT_REQUIRED")
+            engine.adapter = adapter_factory()
+        if action == "arm":
+            with engine.db_connect() as conn:
+                previous = [
+                    json.loads(x[0])
+                    for x in conn.execute("SELECT payload FROM paper_signals")
+                ]
+            await engine.arm(previous_ready=previous)
+        else:
+            await engine.preflight()
+        code, status = None, "DONE"
+    except Exception:
+        # Never persist an SDK exception or echoed credentials as a control code.
+        engine.halt("OPERATOR_REQUEST_FAILED")
+        code, status = "PRECONDITIONS_OR_CONNECTION_FAILED", "REFUSED"
+    with engine.db_connect() as conn:
+        conn.execute(
+            "UPDATE live_execution_controls SET status=?,completed_ms=?,code=? WHERE request_id=?",
+            (status, engine.clock(), code, token),
+        )
 
 
 def rounded(value, tick, up=False):
@@ -637,11 +731,44 @@ class Engine:
                 return
         self.update(r, "PROTECTED")
 
+    async def preflight(self):
+        if self.config.mode == "OFF" or self.config.errors():
+            raise ExecutionError("CONFIGURATION_REQUIRED")
+        metadata = await self.adapter.metadata()
+        try:
+            g = metadata["global"]
+            if int(g.get("nativeChainId") or g["chainId"]) <= 0:
+                raise ValueError()
+            address = g["contractAddress"]
+            if len(address) != 42 or not address.startswith("0x"):
+                raise ValueError()
+            int(address[2:], 16)
+            contracts = metadata["contractList"]
+            if not isinstance(contracts, list) or not contracts:
+                raise ValueError()
+            ids = [str(c["contractId"]) for c in contracts]
+            if len(set(ids)) != len(ids) or not all(c.isdigit() for c in ids):
+                raise ValueError()
+        except (KeyError, ValueError, TypeError, AttributeError):
+            raise ExecutionError("INCOMPLETE_SIGNING_METADATA") from None
+        a = await self.adapter.account()
+        active = await self.adapter.active_orders()
+        if not 0 <= self.clock() - a["observed_ms"] < 5000:
+            raise ExecutionError("STALE_ACCOUNT_OR_SCAN")
+        self.metadata = metadata
+        with self.db_connect() as conn:
+            s = state(conn)
+            s.update(last_preflight_ms=self.clock(), last_success_ms=self.clock())
+            save_state(conn, s)
+        return a, active
+
     async def arm(self, previous_ready=()):
         if self.config.mode != "LIVE" or self.config.errors():
             raise ExecutionError("LIVE_CONFIGURATION_REQUIRED")
-        a = await self.adapter.account()
-        active = await self.adapter.active_orders()
+        with self.db_connect() as conn:
+            pause(conn, "ARM_CHECK_IN_PROGRESS")
+            epoch = state(conn).get("control_epoch", 0)
+        a, active = await self.preflight()
         with self.db_connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
             if (
@@ -651,6 +778,20 @@ class Engine:
             ):
                 raise ExecutionError("DEDICATED_FLAT_ACCOUNT_REQUIRED")
             s = state(conn)
+            if s.get("control_epoch", 0) != epoch:
+                raise ExecutionError("PAUSED_DURING_ARM_CHECK")
+            day = (
+                datetime.fromtimestamp(self.clock() / 1000, ZoneInfo("Asia/Tokyo"))
+                .date()
+                .isoformat()
+            )
+            if s["day"] == day and s["day_start_equity"] is not None:
+                loss = min(
+                    decimal(self.config.daily_loss_usdc),
+                    decimal(s["day_start_equity"]) * decimal(".03"),
+                )
+                if decimal(s["day_start_equity"]) - a["equity"] >= loss:
+                    raise ExecutionError("DAILY_EQUITY_LOSS_LIMIT")
             s.update(
                 armed=True,
                 armed_ms=self.clock(),
