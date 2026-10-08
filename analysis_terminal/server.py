@@ -37,6 +37,7 @@ from analysis_terminal import entry_history
 from analysis_terminal import pending_live
 from analysis_terminal import vwap_live
 from analysis_terminal import live_execution
+from analysis_terminal import execution_health
 from analysis_terminal import push_security
 from analysis_terminal.tracking import tracking_summary
 from analysis_terminal.history import fetch_history
@@ -4082,7 +4083,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="EdgeX Analysis Terminal",
-    version="19.0.45",
+    version="19.0.46",
     lifespan=lifespan,
 )
 app.add_middleware(push_security.BrowserSecurityMiddleware)
@@ -4530,7 +4531,8 @@ async def live_execution_api():
     # Status only. No account values, IDs, credentials or public trading controls.
     with _live_execution_db() as conn:
         conn.execute("BEGIN")
-        report = live_execution.report(conn, _live_execution_config, now_ms=int(time.time()*1000))
+        now_ms = int(time.time()*1000)
+        report = live_execution.report(conn, _live_execution_config, now_ms=now_ms)
         config = _live_execution_config
         # Public operational rules only; never account balance, keys or order IDs.
         try:
@@ -4546,9 +4548,12 @@ async def live_execution_api():
             "protection_installation_atomic": False, "funding_included_in_risk_budget": False,
             "shadow_orders_enabled": False,
         }
-        now_ms = int(time.time()*1000)
         success_ms = report.get("last_success_ms")
         report["connection_age_seconds"] = (now_ms-success_ms)/1000 if isinstance(success_ms, (int, float)) else None
+        records = live_execution.orders(conn)
+        events = [dict(r) for r in conn.execute(
+            "SELECT observed_ms,status FROM live_execution_events ORDER BY id DESC LIMIT 8")]
+        report["health"] = execution_health.report(records, report, now_ms=now_ms, events=events)
         return report
 
 

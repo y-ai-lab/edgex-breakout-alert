@@ -147,6 +147,7 @@ button{-webkit-tap-highlight-color:transparent}
 <div class="analyticsBox" role="status" aria-live="polite">
   <div class="row compactRow"><b>API自動取引</b><span id="liveExecutionBadge" class="pill">確認中</span><button id="openLiveStatus" class="ghost">稼働・ルールを見る</button></div>
   <div id="liveExecutionBrief" class="sub">接続状態を確認しています。ENTRYは条件成立の表示で、約定済みを意味しません。</div>
+  <div id="liveExecutionAttention" class="status warn" hidden role="alert"></div>
 </div>
 <div class="focusSection">
   <div class="sectionHeading"><div><div class="eyebrow">WATCH NEXT</div><h3>次に監視する候補</h3></div><div class="sub">条件成立前です。カードをタップして分析。</div></div>
@@ -220,6 +221,10 @@ button{-webkit-tap-highlight-color:transparent}
 <div class="dashboardHero"><div><div class="eyebrow">API STATUS</div><h2>接続・自動取引</h2><div class="sub">稼働状態と運用ルールを確認できます。この画面の操作では注文を送りません。</div></div><button class="primary" id="checkApi">再確認</button></div>
 <details class="dashboardDrawer" id="liveExecutionDetails" open><summary>自動取引の状態・安全ルール</summary><div class="drawerBody">
 <div id="liveExecutionStatus" class="status">接続状態を確認しています。</div>
+<div id="liveExecutionHealth" class="status"></div>
+<div id="liveExecutionGuidance" class="sub"></div>
+<p class="sub">この集計はボット自身の注文記録です。手動・他の建玉は含みません。<a href="https://pro.edgex.exchange/en-US/portfolio/overview" target="_blank" rel="noopener noreferrer">取引所で建玉・注文を確認 ↗</a></p>
+<details class="dashboardDrawer"><summary>直近の状態変化</summary><div class="drawerBody"><div id="liveExecutionTimeline" class="sub" style="white-space:pre-line">読み込み中です。</div><p class="sub">送信・応答の記録と、約定・決済の確定は別です。過去の状態変化は現在の保護状態や取引成績を保証しません。</p></div></details>
 <div id="liveExecutionPolicy" class="summary"></div>
 <div id="liveExecutionWarnings" class="sub"></div>
 <p class="sub">エントリーは4Hトレンド＋ブレイク／リテスト＋15Mの方向・水準確認、構造SL／TP、RR≥2。Shadow・BTC検証は実注文に使いません。ENTRY表示、注文管理、実際の決着は別の状態です。</p>
@@ -282,20 +287,40 @@ function card(k,v){return '<div class="card"><div class="k">'+k+'</div><div clas
 async function jf(url,opt){var r=await fetch(url,opt),j={};try{j=await r.json()}catch(e){}if(!r.ok)throw new Error(j.detail||("HTTP "+r.status));return j}
 var apiCheckRequest=0;
 var liveExecutionSnapshot=null,liveExecutionBusy=false;
+function executionHealth(j){
+ var h=j&&j.health,states=['NO_ACTIVE_BOT_RECORD','ENTRY_PENDING','ENTRY_UNCONFIRMED','PROTECTION_RECORDED','PROTECTION_UNCONFIRMED','EXIT_UNCONFIRMED','OWNERSHIP_UNCERTAIN','LEDGER_DATA_UNCERTAIN','MANAGEMENT_DISABLED','MANAGEMENT_BLOCKED','ACTIVE_OBSERVATION_STALE','RECONCILIATION_REQUIRED'];
+ if(!h||h.scope!=='BOT_LEDGER_ONLY'||h.read_only!==true||states.indexOf(h.state)<0||typeof h.attention_required!=='boolean'||['INFO','ATTENTION','CRITICAL'].indexOf(h.severity)<0||!Number.isInteger(h.active_records)||h.active_records<0||!h.counts||!Number.isInteger(h.counts.closed)||h.counts.closed<0||!Array.isArray(h.guidance)||typeof h.summary!=='string'||!Array.isArray(h.recent_events)||!h.recent_events.every(function(e){return e&&typeof e.label==='string'&&(e.observed_ms===null||Number.isInteger(e.observed_ms)&&e.observed_ms>0)}))return null;
+ return h;
+}
+function renderExecutionHealth(j){
+ var h=executionHealth(j),banner=document.getElementById('liveExecutionAttention'),out=document.getElementById('liveExecutionHealth'),guide=document.getElementById('liveExecutionGuidance'),timeline=document.getElementById('liveExecutionTimeline');if(!banner||!out||!guide||!timeline)return;
+ var age=j&&Number.isFinite(j._received_ms)?Date.now()-j._received_ms:Infinity,fresh=!!j&&!j._fetch_failed&&age>=0&&age<30000;
+ if(!h){banner.hidden=false;banner.textContent='注文台帳の最新状態を確認できません。取引所で建玉・注文を確認してください。';out.textContent='注文台帳の確認が必要です。';guide.textContent='未決着の注文がある場合、OFF・READ_ONLYへの切替は保護管理を停止します。';timeline.textContent='状態変化を取得できません。';return}
+ var prefix=fresh?'':'最終取得時の記録（現在は未確認）: ';
+ banner.hidden=fresh&&!h.attention_required;banner.textContent=prefix+(h.attention_required?h.summary:'最新状態が不明です。取引所で建玉・注文を確認してください。');
+ banner.classList.toggle('bad',h.severity==='CRITICAL');banner.classList.toggle('warn',h.severity!=='CRITICAL');
+ out.textContent=prefix+h.summary+(h.stop_explanation?' '+h.stop_explanation:'');guide.textContent=h.guidance.filter(function(x){return typeof x==='string'}).join(' ');
+ if(!fresh)guide.textContent+=' 最新の状態を取引所で確認し、記録が古いだけで決着・保護済みと判断しないでください。';
+ timeline.textContent=h.recent_events.length?h.recent_events.map(function(e){return (Number.isFinite(e.observed_ms)?new Date(e.observed_ms).toLocaleString('ja-JP'):'記録時刻未確認')+' — '+e.label}).join('\n'):'まだ状態変化の記録はありません。';
+}
 function liveExecutionView(j){
  var elapsed=j&&Number.isFinite(j._received_ms)?Date.now()-j._received_ms:Infinity;
- if(!j||elapsed<0||elapsed>=30000||j.source!=='CURRENT_READY_ONLY'||j.automatic_promotion!==false)return {label:'接続を確認',warn:true,text:'最新の稼働状態を確認できません。稼働中とは判断しないでください。'};
+ if(!j||j._fetch_failed||elapsed<0||elapsed>=30000||j.source!=='CURRENT_READY_ONLY'||j.automatic_promotion!==false)return {label:'接続を確認',warn:true,text:'最新の稼働状態を確認できません。稼働中とは判断しないでください。'};
  if(j.status==='RUNNING'&&(!Number.isFinite(j.connection_age_seconds)||j.connection_age_seconds<0||j.connection_age_seconds*1000+elapsed>=30000))return {label:'接続を確認',warn:true,text:'取引口座との接続情報が古いか不明です。最新の状態を確認してください。'};
  var labels={OFF:'停止中',CONFIGURATION_REQUIRED:'接続設定が必要',READ_ONLY:'読取専用',RUNNING:'稼働中',PAUSED:'新規エントリー停止',ERROR:'照合が必要',STALE_CONNECTION:'接続を確認'};
  var active=Number.isInteger(j.active_orders)&&j.active_orders>=0?j.active_orders:null;
  var closed=j.status_counts&&Number.isInteger(j.status_counts.CLOSED)?j.status_counts.CLOSED:0;
  var enabled=j.status==='RUNNING'&&j.real_orders_enabled===true;
+ var h=executionHealth(j);
+ if(h&&h.attention_required)return {label:'建玉・注文を確認',warn:true,critical:h.severity==='CRITICAL',text:h.summary+' / '+(enabled?'実注文の設定は有効':'新規実注文なし')};
+ if(enabled&&!h)return {label:'台帳を確認',warn:true,text:'実注文の設定は有効ですが、注文台帳の監視情報を確認できません。'};
  return {label:labels[j.status]||'状態を確認',warn:!enabled,text:(enabled?'現行READYのみ実注文有効':'新規実注文なし')+' / 管理中 '+(active==null?'不明':active)+'件 / 実注文決着 '+closed+'件'+(enabled&&active===0?' — 条件成立を待っています。':'')};
 }
 function renderLiveExecution(j){
+ renderExecutionHealth(j);
  var v=liveExecutionView(j),badge=document.getElementById('liveExecutionBadge'),brief=document.getElementById('liveExecutionBrief'),st=document.getElementById('liveExecutionStatus'),policy=document.getElementById('liveExecutionPolicy'),warnings=document.getElementById('liveExecutionWarnings');
  if(!badge||!brief||!st||!policy||!warnings)return;
- badge.textContent=v.label;badge.classList.toggle('warn',v.warn);badge.classList.toggle('good',!v.warn);brief.textContent=v.text;st.textContent=v.label+' — '+v.text;
+ badge.textContent=v.label;badge.classList.toggle('warn',v.warn);badge.classList.toggle('bad',!!v.critical);badge.classList.toggle('good',!v.warn);brief.textContent=v.text;st.textContent=v.label+' — '+v.text;
  var s=j&&j.safety;
  if(!s||v.label==='接続を確認'){policy.innerHTML='';warnings.textContent='運用ルールは最新の接続確認後に表示します。';return}
  var risk=typeof s.risk_budget_pct==='number'&&s.risk_budget_pct>0&&s.risk_budget_pct<=3?fmt(s.risk_budget_pct,2)+'%':'未設定';
@@ -309,7 +334,7 @@ function renderLiveExecution(j){
 async function loadLiveExecution(){
  if(liveExecutionBusy)return;liveExecutionBusy=true;
  var controller=new AbortController(),timer=setTimeout(function(){controller.abort()},8000);
- try{var j=await jf('/api/live-execution',{signal:controller.signal});j._received_ms=Date.now();liveExecutionSnapshot=j;renderLiveExecution(j)}catch(e){liveExecutionSnapshot=null;renderLiveExecution(null)}finally{clearTimeout(timer);liveExecutionBusy=false}
+ try{var j=await jf('/api/live-execution',{signal:controller.signal});j._received_ms=Date.now();liveExecutionSnapshot=j;renderLiveExecution(j)}catch(e){if(liveExecutionSnapshot)liveExecutionSnapshot._fetch_failed=true;renderLiveExecution(liveExecutionSnapshot)}finally{clearTimeout(timer);liveExecutionBusy=false}
 }
 async function checkApiConnections(){
  var st=document.getElementById('apiCheckStatus'),out=document.getElementById('apiCheckResults'),button=document.getElementById('checkApi');if(!st||!out||!button)return;
@@ -320,7 +345,7 @@ async function checkApiConnections(){
   {label:'銘柄分析',url:'/api/analyze?ticker=BTCUSDC',validate:function(j){if(j.ticker!=='BTCUSDC'||!j.stage)throw new Error();var age=j.data_age_seconds;return {warn:!Number.isFinite(age)||age<0||age>=900,text:j.ticker+' / '+stageJa(j.stage)+' / '+(Number.isFinite(age)?'確定足 '+Math.round(age)+'秒前':'鮮度不明')}}},
   {label:'エントリー通知',url:'/api/push/config',validate:function(j){if(typeof j.enabled!=='boolean'||j.notification_policy!=='READY_ONLY'||j.daily_summary_enabled!==false)throw new Error();var blocked=j.delivery_validation&&j.delivery_validation.blocked_subscriptions>0;return {warn:!j.enabled||blocked,text:blocked?'送信先・購読鍵の確認が必要':j.enabled?'通知サーバー有効 / エントリー可能のみ':'通知サーバー未設定'}}},
   {label:'模擬執行',url:'/api/paper-execution?limit=1',validate:function(j){if(j.mode!=='PAPER_ONLY'||j.real_orders_enabled!==false||j.eligible_for_live_promotion!==false||j.automatic_promotion!==false||j.source!=='CURRENT_READY_ONLY'||!j.account)throw new Error();var d=paperTrackingStatus(j);return {warn:d.warn,text:'PAPER ONLY / '+d.text}}},
-  {label:'API自動取引',url:'/api/live-execution',validate:function(j){if(typeof j.real_orders_enabled!=='boolean'||j.source!=='CURRENT_READY_ONLY'||j.automatic_promotion!==false)throw new Error();var labels={OFF:'停止中',CONFIGURATION_REQUIRED:'接続設定が必要',READ_ONLY:'読取専用で接続中',RUNNING:'稼働中',PAUSED:'停止中',ERROR:'照合が必要',STALE_CONNECTION:'接続状態を確認'};return {warn:j.status!=='RUNNING',text:(labels[j.status]||'状態を確認')+' / '+(j.real_orders_enabled?'実注文有効':'新規実注文なし')+(j.active_orders?' / 管理中 '+j.active_orders+'件':'')}}}
+  {label:'API自動取引',url:'/api/live-execution',validate:function(j){if(typeof j.real_orders_enabled!=='boolean'||j.source!=='CURRENT_READY_ONLY'||j.automatic_promotion!==false)throw new Error();var v=liveExecutionView(Object.assign({},j,{_received_ms:Date.now()}));return {warn:v.warn,text:v.label+' / '+(j.real_orders_enabled?'実注文有効':'新規実注文なし')+(executionHealth(j)&&executionHealth(j).attention_required?' / '+executionHealth(j).summary:'')}}}
  ];
  var results=await Promise.all(checks.map(async function(c){
   var controller=new AbortController(),timeout=setTimeout(function(){controller.abort()},15000);

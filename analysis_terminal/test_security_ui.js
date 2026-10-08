@@ -6,11 +6,11 @@ const execution=script.slice(script.indexOf('var liveExecutionSnapshot='),script
 const push=script.slice(script.indexOf('var pushManagementTokens='),script.indexOf('function renderPushEvents('));
 (async()=>{
  let now=100000,requests=[];
- const nodes=Object.fromEntries(['liveExecutionBadge','liveExecutionBrief','liveExecutionStatus','liveExecutionPolicy','liveExecutionWarnings'].map(id=>[id,{textContent:'',innerHTML:'',classList:{toggle(){}}}]));
- const context={Date:{now:()=>now},Number,Infinity,Math,Map,Error,JSON,Object,fmt:(n)=>String(n),card:(k,v)=>k+':'+v+';',document:{getElementById:id=>nodes[id]},
+ const nodes=Object.fromEntries(['liveExecutionBadge','liveExecutionBrief','liveExecutionStatus','liveExecutionPolicy','liveExecutionWarnings','liveExecutionAttention','liveExecutionHealth','liveExecutionGuidance','liveExecutionTimeline'].map(id=>[id,{textContent:'',innerHTML:'',classList:{toggle(){}}}]));
+ const context={Date:class extends Date{static now(){return now}},AbortController,setTimeout,clearTimeout,Number,Infinity,Math,Map,Error,JSON,Object,fmt:(n)=>String(n),card:(k,v)=>k+':'+v+';',document:{getElementById:id=>nodes[id]},
   jf:async(url,opt={})=>{requests.push({url,opt});if(url==='/api/push/session'){assert(!opt.headers.Authorization);assert.equal(JSON.parse(opt.body).subscription.endpoint,'https://web.push.apple.com/test');return {management_token:'a'.repeat(64)}}return {ok:true}}};
  vm.createContext(context);vm.runInContext(execution+push,context);
- const live={_received_ms:now,connection_age_seconds:0,status:'RUNNING',source:'CURRENT_READY_ONLY',automatic_promotion:false,real_orders_enabled:true,active_orders:0,status_counts:{SKIPPED:5},safety:{risk_budget_pct:3,daily_loss_stop_enabled:false}};
+ const live={_received_ms:now,connection_age_seconds:0,status:'RUNNING',source:'CURRENT_READY_ONLY',automatic_promotion:false,real_orders_enabled:true,active_orders:0,status_counts:{SKIPPED:5},safety:{risk_budget_pct:3,daily_loss_stop_enabled:false},health:{scope:'BOT_LEDGER_ONLY',read_only:true,state:'NO_ACTIVE_BOT_RECORD',attention_required:false,severity:'INFO',active_records:0,counts:{closed:0},summary:'手動・他の建玉は含みません。',guidance:[],recent_events:[]}};
  context.renderLiveExecution(live);
  assert.equal(nodes.liveExecutionBadge.textContent,'稼働中');
  assert(nodes.liveExecutionBrief.textContent.includes('条件成立を待っています'));
@@ -31,6 +31,17 @@ const push=script.slice(script.indexOf('var pushManagementTokens='),script.index
  assert.equal(nodes.liveExecutionBadge.textContent,'新規エントリー停止');
  assert(!nodes.liveExecutionWarnings.textContent.includes('未完了'));
  context.renderLiveExecution(null);assert.equal(nodes.liveExecutionBadge.textContent,'接続を確認');
+ // Persistent ledger uncertainty survives a recovered connection and failed GET.
+ const critical={...live,status:'PAUSED',real_orders_enabled:false,last_error:null,health:{...live.health,state:'OWNERSHIP_UNCERTAIN',attention_required:true,severity:'CRITICAL',active_records:1,summary:'所有権が不明です。',guidance:['取引所を確認'],recent_events:[{observed_ms:now,label:'<img src=x onerror=bad()>'}]}};
+ context.renderLiveExecution(critical);
+ assert.equal(nodes.liveExecutionBadge.textContent,'建玉・注文を確認');assert(!nodes.liveExecutionAttention.hidden);
+ assert(nodes.liveExecutionTimeline.textContent.includes('<img'));assert.equal(nodes.liveExecutionTimeline.innerHTML,'');
+ context.liveExecutionSnapshot=critical;context.jf=async()=>{throw new Error('offline')};await context.loadLiveExecution();
+ assert.equal(context.liveExecutionSnapshot,critical);assert(!nodes.liveExecutionAttention.hidden);assert(nodes.liveExecutionAttention.textContent.includes('所有権'));assert(nodes.liveExecutionAttention.textContent.includes('最終取得時'));
+ assert.equal(nodes.liveExecutionBadge.textContent,'接続を確認');
+ context.renderLiveExecution({...live,health:{...live.health,recent_events:[null]}});assert.equal(nodes.liveExecutionBadge.textContent,'台帳を確認');
+ context.renderLiveExecution(live);assert(nodes.liveExecutionAttention.hidden);
+ context.jf=async(url,opt={})=>{requests.push({url,opt});if(url==='/api/push/session'){assert(!opt.headers.Authorization);assert.equal(JSON.parse(opt.body).subscription.endpoint,'https://web.push.apple.com/test');return {management_token:'a'.repeat(64)}}return {ok:true}};
  const sub={endpoint:'https://web.push.apple.com/test',toJSON:()=>({endpoint:'https://web.push.apple.com/test',keys:{auth:'browser-proof'}})};
  for(const url of ['/api/push/preferences?endpoint=x','/api/push/preferences','/api/push/test','/api/push/unsubscribe','/api/custom-alerts/delete'])await context.pushRequest(sub,url,{method:url.includes('?')?'GET':'POST',headers:{'Content-Type':'application/json'}});
  assert.equal(requests.filter(r=>r.url==='/api/push/session').length,1);

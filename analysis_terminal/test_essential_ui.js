@@ -32,7 +32,7 @@ ready.entry_band={version:1,status:'COMPATIBLE',direction:'LONG',min_rr:2,struct
 const near={...ready,ticker:'NEXTUSDC',stage:'CONFIRMATION_WAIT',setup_id:'next',reason:'retest seen; waiting for 15M confirmation'};
 const market={universe:2,scanned:2,coverage_pct:100,matched:2,snapshot_age_seconds:0,results:[ready,near],ready_candidates:[ready],qualified_near_candidates:[near],summary:{ready_count:1,qualified_near_count:1,near_signal_count:1,direction_counts:{LONG:2},average_score:90}};
 const paper={mode:'PAPER_ONLY',real_orders_enabled:false,eligible_for_live_promotion:false,automatic_promotion:false,source:'CURRENT_READY_ONLY',account:{last_cycle_ms:clock,paused:false,collector_stale:false,cash_usdc:10000,policy:{}},tracking:{state:'WAITING_READY',active_status_counts:{PENDING:0,OPEN:0,AMBIGUOUS:0},data_issue_count:0,data_issue_counts:{}},metrics:{resolved:0,status_counts:{},sample_status:'INSUFFICIENT SAMPLE'},latest:[]};
-const execution={mode:'OFF',status:'OFF',real_orders_enabled:false,source:'CURRENT_READY_ONLY',automatic_promotion:false,active_orders:0};
+const execution={mode:'OFF',status:'OFF',real_orders_enabled:false,source:'CURRENT_READY_ONLY',automatic_promotion:false,active_orders:0,connection_age_seconds:0,health:{scope:'BOT_LEDGER_ONLY',read_only:true,state:'NO_ACTIVE_BOT_RECORD',attention_required:false,severity:'INFO',active_records:0,counts:{closed:0},summary:'未決着なし',guidance:[],recent_events:[]}};
 let failures=false,invalid=false,stale=false,releaseOld=null;
 const historyItem={setup_id:'history-1',ticker:'NEXTUSDC',direction:'LONG',first_near:{observed_ms:1000,stage:'CONFIRMATION_WAIT',entry_reference:80,stop_loss:70,take_profit:100,rr:2,confirmation_color_ok:false,confirmation_level_ok:true},first_ready:{observed_ms:2000,stage:'READY',entry_reference:81,stop_loss:70,take_profit:105,rr:3.18},latest:{observed_ms:3000,stage:'RR_WAIT'},lifecycle:{ended_ms:4000,end_reason:'SUPERSEDED'},reference_outcome:{verified:true,status:'SL',final_r:-1,hypothetical:true}};
 let historyReply={historical:true,totals:{setups:2,ready:1,near:2},items:[historyItem],next_cursor:{before_ms:2000,before_setup:'history-1'}},historyGate=null,historyFailure=false;
@@ -83,6 +83,8 @@ async function settle(){for(let i=0;i<8;i++)await new Promise(setImmediate)}
  execution.mode='LIVE';execution.status='RUNNING';execution.real_orders_enabled=true;await context.checkApiConnections();
  assert(nodes.apiCheckStatus.textContent.includes('正常 6 / 要確認 0 / 失敗 0'));
  assert(nodes.apiCheckResults.innerHTML.includes('稼働中 / 実注文有効'));
+ const healthy=execution.health;execution.health={...healthy,state:'OWNERSHIP_UNCERTAIN',attention_required:true,severity:'CRITICAL',summary:'所有権未確認'};
+ await context.checkApiConnections();assert(nodes.apiCheckStatus.textContent.includes('正常 5 / 要確認 1'));assert(nodes.apiCheckResults.innerHTML.includes('所有権未確認'));execution.health=healthy;
  execution.mode='OFF';execution.status='OFF';execution.real_orders_enabled=false;
  assert(nodes.paperExecutionStatus.textContent.includes('現行READY待ち'));
  const originalTracking=paper.tracking;
