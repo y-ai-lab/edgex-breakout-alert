@@ -157,7 +157,9 @@ def report(records, connection, *, now_ms, events=()):
     if active and connection.get("mode") != "LIVE":
         guidance.append(KEEP_MANAGEMENT)
     if state == "OWNERSHIP_UNCERTAIN":
-        guidance.append("同じ銘柄の手動売買を控え、他者・手動の注文をボットが閉じたと推測しないでください。")
+        guidance.append("同じ銘柄への手動SL/TP追加・変更も競合の対象です。隔離された場合、ボット自身のSL/TPを取り消す処理を行います。手動注文は操作しないため、取引所で手動SL/TPが有効か確認してください。")
+    if state == "PROTECTION_RECORDED":
+        guidance.append("SL/TPは条件注文です。建玉欄に表示されない場合もあるため、取引所の条件注文一覧で確認してください。")
     recent = []
     for event in events:
         status = event.get("status") if isinstance(event, dict) else None
