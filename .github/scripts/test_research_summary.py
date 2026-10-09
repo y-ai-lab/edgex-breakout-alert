@@ -77,6 +77,30 @@ class SummaryTests(unittest.TestCase):
         r=self.run_fixture(fixture(7,wins=19));self.assertEqual(r['decision'],'CONTINUE_INSUFFICIENT_SAMPLE')
         self.assertIn('INSUFFICIENT SAMPLE',review.markdown(r));self.assertFalse(r['automatic_promotion'])
 
+    def test_missing_price_diagnostics_and_uncapped_funnel_are_explicit(self):
+        result=self.run_fixture(fixture(wins=1,losses=1))
+        values=result['entry_execution_funnel'][study.MODEL]
+        self.assertEqual((values['candidates'],values['filled'],values['unfilled']),(2,2,0))
+        self.assertEqual(values['fill_rate_pct'],100)
+        self.assertEqual(result['entry_price_audit']['status'],'NOT_RECORDED')
+        self.assertIn('未到達・遅い接触を0件と扱わない',review.markdown(result))
+
+    def test_verified_geometry_is_descriptive_and_does_not_change_decision(self):
+        from unittest.mock import patch
+        from analysis_terminal import pending_fill_diagnostics as prices
+        summary=prices.summarize([])
+        summary.update(candidates=2,expired=1,trigger_across_roll=2,late_price_touches=1,
+                       expired_later_observations={'LATE_PRICE_TOUCH':1})
+        price_result=dict(status='VERIFIED_FROM_FROZEN_PUBLIC_SOURCES',summary=summary,
+                          original_candidates_reproduced=2)
+        with patch.object(review.entry_price_audit,'summarize',return_value=price_result):
+            result=self.run_fixture(fixture(wins=1,losses=1))
+        self.assertEqual(result['decision'],'PROVISIONAL_CONTINUE_INSUFFICIENT_SAMPLE')
+        text=review.markdown(result)
+        self.assertIn('期限切れ・期限内未到達: 1',text)
+        self.assertIn('遅い接触は追加約定・勝利・ROIではない',text)
+        self.assertFalse(result['independent_sample_counts_added'])
+
     def test_unknown_open_roi_stays_unknown_in_json_and_markdown(self):
         r=self.run_fixture(fixture(7,uncertain=True));p=r['portfolios'][study.MODEL]
         self.assertIsNone(p['closed_portfolio_roi_pct']);self.assertIsNone(p['equity_usdc'])

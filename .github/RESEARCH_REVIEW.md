@@ -39,6 +39,23 @@ python .github/scripts/research_summary.py --research-dir strategy-output \
 1倍建玉金額/JST日次3%は、実運用口座3%/最大1件/日次制限なしと異なる。
 GitHubには登録済み公開市場研究artifactの診断だけを出し、本番台帳をコピーしない。
 
+## 待ち価格と未約定ファネルの再照合（2026-10-09）
+
+日次サマリーに候補・仮約定・未約定状態・約定率・資金制限後の約定を分けて表示する。
+既存の `review/pending-fill-diagnostics.json` があれば `entry_price_audit.py` が元の
+公開市場ファイルと固定評価器から全診断を再計算し、保存された全候補・診断・SHA・
+metrics・portfolioとの完全一致を要求する。不一致は停止し、値を合わせて修復しない。
+診断未記録は `NOT_RECORDED` / summary null として表示し、価格未到達0件と扱わない。
+
+元の候補台帳を変更せず、期限内未到達・ロール水準の反対側にある待ち価格・確認時点で
+既に過ぎた構造TP・期限切れ後の固定観測を集計する。遅い価格接触は約定・利益ではなく、
+4本期限を延長しない。距離Rは価格stop-distanceでありnet stop-riskの損益Rとは別。
+追加期間取得・後付けパラメータ選択・ticker選別・本番台帳の輸出・本番条件変更を行わない。
+既存の単独週判定、サンプル不足、元のmetrics/portfolio、最終ROI nullを維持する。
+この再照合は同じ公開研究artifactの監査であり、新たな独立サンプルではない。
+研究サマリーの変更も `Analysis terminal safety checks` の対象に含め、研究feature branchと
+mainで全テストを実行する。週次収集workflowのbytes・固定期間は変更しない。
+
 ## VWAP研究CIの固定範囲（2026-10-08）
 
 初回開発時の「本番全ファイルが同じ」というチェックは、後の正当なUI・認証・

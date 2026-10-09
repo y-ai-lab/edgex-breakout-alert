@@ -11,6 +11,7 @@ ROOT=Path(__file__).resolve().parents[2]
 sys.path.insert(0,str(ROOT))
 from analysis_terminal import pending_entry_replay as study, pending_followup as follow, execution_funnel as funnel
 import capital_admission_audit
+import entry_price_audit
 
 DAY=86400000
 
@@ -82,6 +83,16 @@ def summarize(directory, *, now_ms):
                comparison=checked['proposal_vs_current'],
                capital_admission_audit=admissions,
                capital_admission_audit_sha256=hashlib.sha256(Path(capital_admission_audit.__file__).read_bytes()).hexdigest(),
+               entry_execution_funnel={model:dict(
+                   candidates=values['uncapped']['candidates'],
+                   filled=values['uncapped']['filled'],
+                   unfilled=values['uncapped']['unfilled'],
+                   fill_rate_pct=values['uncapped']['fill_rate_pct'],
+                   unfilled_status_counts=values['uncapped']['unfilled_status_counts'],
+                   capped_filled=values['capped']['filled'],
+                   filled_omitted_by_capital_model=values['filled_omitted_by_capital_model'])
+                   for model,values in checked['models'].items()},
+               entry_price_audit=entry_price_audit.summarize(directory),
                report_sha256=hashlib.sha256(rp.read_bytes()).hexdigest(),
                source_manifest_sha256=hashlib.sha256(sp.read_bytes()).hexdigest(),
                protocol_sha256=report['protocol_sha256'],engine_sha256=report['engine_sha256'],
@@ -118,6 +129,23 @@ def markdown(result):
             lines.append(f"| {model} | {counts['excluded_with_uncapped_fill']} | {reason} | {counts['excluded_with_uncapped_fill']}/{counts['excluded_without_uncapped_fill']} |")
     lines += ['', '元の固定研究口座の判断を観察。未約定候補の除外を失われた約定に数えない。',
               '予約・最小数量の診断は重複する。実運用口座の評価や予約解除の提案ではない。']
+    lines += ['', '| モデル | 候補 | 仮約定 | 未約定 | 約定率% | 未約定状態 | 資金制限後約定 |',
+              '|---|---:|---:|---:|---:|---|---:|']
+    for model,values in result['entry_execution_funnel'].items():
+        statuses=', '.join(f'{key}: {count}' for key,count in sorted(values['unfilled_status_counts'].items())) or 'なし'
+        lines.append(f"| {model} | {values['candidates']} | {values['filled']} | {values['unfilled']} | {show(values['fill_rate_pct'])} | {statuses} | {values['capped_filled']} |")
+    audit=result['entry_price_audit']
+    lines += ['', f"待ち価格診断: **{audit['status']}**"]
+    if audit['summary'] is not None:
+        p=audit['summary']
+        lines += [
+            f"公開足から元候補 {audit['original_candidates_reproduced']} 件と診断を再現・照合。",
+            f"期限切れ・期限内未到達: {p['expired']} / 待ち価格がロール水準の反対側: {p['trigger_across_roll']} / 確認終値が構造TPより先: {p['target_behind_signal_close']}",
+            f"期限切れの待機中TP接触: {p['expired_target_touched_before_expiry']} / 最接近距離中央値（価格差R）: {show(p['expired_closest_distance_median_r'])}",
+            f"固定追加観測での遅い価格接触: {p['late_price_touches']} / 観測終了理由: {json.dumps(p['expired_later_observations'],ensure_ascii=False,sort_keys=True)}",
+            '遅い接触は追加約定・勝利・ROIではない。4本期限を延長せず、価格差Rと損益Rを合算しない。']
+    else:
+        lines += ['診断未記録。未到達・遅い接触を0件と扱わない。']
     c=result['comparison'];v=result['coverage']
     lines += ['',f"現行に対する仮想約定純増: {c['net_filled_count_difference']} / 資金制限後: {c['capped_filled_count_difference']}",
               f"有効市場時点: {v['valid_points']}/{v['expected_points_all_markets']} / 取得失敗: {v['failed_markets']}",

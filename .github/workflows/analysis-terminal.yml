@@ -5,11 +5,13 @@ on:
     paths:
       - 'analysis_terminal/**'
       - '.github/workflows/analysis-terminal.yml'
+      - '.github/scripts/**'
   push:
-    branches: [main, 'feature/execution-v19.0.*']
+    branches: [main, 'feature/execution-v19.0.*', 'feature/research-*']
     paths:
       - 'analysis_terminal/**'
       - '.github/workflows/analysis-terminal.yml'
+      - '.github/scripts/**'
 
 permissions:
   contents: read
