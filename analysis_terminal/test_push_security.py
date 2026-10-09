@@ -128,7 +128,11 @@ class PushSecurityTests(unittest.IsolatedAsyncioTestCase):
         app.assert_not_called()
 
     async def test_session_and_test_rate_limits(self):
-        with patch.object(server, "_send_push_sync", return_value=True) as send:
+        # Replace only this module's clock; freezing time.monotonic globally
+        # would also freeze asyncio. Wall-clock minute crossings must not make
+        # an otherwise correct limiter look broken in CI.
+        clock = Mock(monotonic=Mock(return_value=600.0))
+        with patch.object(security, "time", clock), patch.object(server, "_send_push_sync", return_value=True) as send:
             for _ in range(3):
                 r = await self.client.post("/api/push/test", json={"endpoint": self.sub["endpoint"]}, headers=self.header)
                 self.assertEqual(r.status_code, 200)
@@ -136,10 +140,21 @@ class PushSecurityTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(r.status_code, 429)
             self.assertEqual(r.headers["retry-after"], "60")
             self.assertEqual(send.call_count, 3)
-        for _ in range(60):
-            await self.client.post("/api/push/session", json={"subscription": self.sub})
-        r = await self.client.post("/api/push/session", json={"subscription": self.sub})
-        self.assertEqual(r.status_code, 429)
+            # A new minute isolates the client quota from the four test calls.
+            clock.monotonic.return_value = 660.0
+            for _ in range(60):
+                r = await self.client.post("/api/push/session", json={"subscription": self.sub})
+                self.assertEqual(r.status_code, 200)
+            r = await self.client.post("/api/push/session", json={"subscription": self.sub})
+            self.assertEqual(r.status_code, 429)
+            self.assertEqual(r.headers["retry-after"], "60")
+            clock.monotonic.return_value = 720.0
+            r = await self.client.post("/api/push/session", json={"subscription": self.sub})
+            self.assertEqual(r.status_code, 200)
+            r = await self.client.post("/api/push/test", json={"endpoint": self.sub["endpoint"]}, headers=self.header)
+            self.assertEqual(r.status_code, 200)
+            self.assertEqual(send.call_count, 4)
+        self.assertEqual(server._subscription_count(), 1)
 
     async def test_capacity_keeps_existing_subscription_and_migration(self):
         for n in range(31):
