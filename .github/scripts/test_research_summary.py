@@ -106,6 +106,33 @@ class SummaryTests(unittest.TestCase):
         self.assertIsNone(p['closed_portfolio_roi_pct']);self.assertIsNone(p['equity_usdc'])
         self.assertIn('不明',review.markdown(r));self.assertEqual(r['metrics'][study.MODEL]['resolved'],0)
 
+    def test_partial_closed_account_roi_is_not_labeled_final_week_roi(self):
+        result=self.run_fixture(fixture(1,wins=1))
+        self.assertIsNotNone(result['portfolios'][study.MODEL]['closed_portfolio_roi_pct'])
+        before=copy.deepcopy(result)
+        text=review.markdown(result)
+        self.assertIn('既存取引の口座ROI%',text)
+        self.assertIn('途中週で数値が出ても、その週の最終ROIではない',text)
+        self.assertNotIn('| 最終ROI% |',text)
+        self.assertEqual(result,before)
+
+    def test_net_expectancy_excludes_unresolved_candidates_and_keeps_net_r_basis(self):
+        result=self.run_fixture(fixture(1,wins=1,uncertain=True))
+        self.assertEqual(result['metrics'][study.MODEL]['candidates'],2)
+        self.assertEqual(result['metrics'][study.MODEL]['resolved'],1)
+        text=review.markdown(result)
+        self.assertIn('決着済み仮約定1件当たり',text)
+        self.assertIn('net stop-risk基準',text)
+        self.assertIn('候補数・未決済を分母に加えず',text)
+        self.assertNotIn('候補単位のexpectancy',text)
+
+    def test_no_lost_fills_does_not_invent_a_capital_shortage(self):
+        result=self.run_fixture(fixture())
+        text=review.markdown(result)
+        self.assertIn('最小数量の建玉金額不足',text)
+        self.assertIn('因果効果は未検証',text)
+        self.assertNotIn('| SIZE_OR_RISK_LIMIT |',text)
+
     def test_completed_flag_future_day_and_unanchored_period_fail_closed(self):
         for kind in ('complete','future','anchor','days','role'):
             s,r,p=fixture();now=ORIGIN+DAY+1

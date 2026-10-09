@@ -117,9 +117,11 @@ def markdown(result):
               '|---|---:|---:|---:|---:|---:|---:|---:|---:|---|']
     for model,m in result['metrics'].items():
         lines.append(f"| {model} | {m['filled']} | {m['resolved']} | {m['tp']}/{m['sl']} | {show(m['win_rate'])} | {show(m['avg_net_r'])} | {show(m['profit_factor'])} | {show(m['avg_mfe_r'])}/{show(m['avg_mae_r'])} | {show(m['max_consecutive_losses'])} | {m['sample_status']} |")
-    lines += ['', '| モデル | 資金制限後約定 | 確定 | 実現損益 USDC | 最終ROI% | 保有/不確定 |', '|---|---:|---:|---:|---:|---:|']
+    lines += ['', '| モデル | 資金制限後約定 | 確定 | 実現損益 USDC | 既存取引の口座ROI% | 保有/不確定 |', '|---|---:|---:|---:|---:|---:|']
     for model,p in result['portfolios'].items():
         lines.append(f"| {model} | {p['filled']} | {p['resolved']} | {show(p['realized_net_pnl_usdc'])} | {show(p['closed_portfolio_roi_pct'])} | {p['active']}/{p['uncertain']} |")
+    lines += ['', '口座ROIは資金制限後の既存取引が全て終了した場合の値。保有・不確定が残れば不明。',
+              '途中週で数値が出ても、その週の最終ROIではない。研究口座は実運用口座と異なる。']
     lines += ['', '| モデル | 制約で失われた仮約定 | 除外理由 | 約定あり/なしの除外候補 |',
               '|---|---:|---|---:|']
     for model,audit in result['capital_admission_audit'].items():
@@ -129,6 +131,13 @@ def markdown(result):
             lines.append(f"| {model} | {counts['excluded_with_uncapped_fill']} | {reason} | {counts['excluded_with_uncapped_fill']}/{counts['excluded_without_uncapped_fill']} |")
     lines += ['', '元の固定研究口座の判断を観察。未約定候補の除外を失われた約定に数えない。',
               '予約・最小数量の診断は重複する。実運用口座の評価や予約解除の提案ではない。']
+    lines += ['', '| モデル | 除外理由 | 失われた仮約定 | 最小数量の建玉金額不足 | 最小数量のリスク予算不足 | 未約定予約あり |',
+              '|---|---|---:|---:|---:|---:|']
+    for model,audit in result['capital_admission_audit'].items():
+        for reason,counts in audit['reasons'].items():
+            if counts['excluded_with_uncapped_fill']:
+                lines.append(f"| {model} | {reason} | {counts['excluded_with_uncapped_fill']} | {counts['lost_filled_minimum_notional_above_remaining']} | {counts['lost_filled_minimum_risk_above_remaining']} | {counts['lost_filled_with_unfilled_reservations']} |")
+    lines += ['', '除外時の診断は同じ仮約定に重複し得るため合算しない。予約がなければ約定したという因果効果は未検証。']
     lines += ['', '| モデル | 候補 | 仮約定 | 未約定 | 約定率% | 未約定状態 | 資金制限後約定 |',
               '|---|---:|---:|---:|---:|---|---:|']
     for model,values in result['entry_execution_funnel'].items():
@@ -149,7 +158,7 @@ def markdown(result):
     c=result['comparison'];v=result['coverage']
     lines += ['',f"現行に対する仮想約定純増: {c['net_filled_count_difference']} / 資金制限後: {c['capped_filled_count_difference']}",
               f"有効市場時点: {v['valid_points']}/{v['expected_points_all_markets']} / 取得失敗: {v['failed_markets']}",
-              '', 'net平均R = 候補単位のexpectancy。資金のROIとは異なる。',
+              '', 'net平均R = 決着済み仮約定1件当たりの費用込み平均損益（net stop-risk基準）。候補数・未決済を分母に加えず、資金のROIとは異なる。',
               '判定は単独週の固定条件検査。過去・別週との合算や本番昇格の承認ではない。',
               f"ledger SHA256: `{result['report_sha256']}`"]
     return '\n'.join(lines)+'\n'

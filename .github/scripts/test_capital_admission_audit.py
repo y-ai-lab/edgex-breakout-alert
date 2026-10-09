@@ -56,6 +56,19 @@ class AdmissionTests(unittest.TestCase):
         self.assertEqual(counts['lost_filled_minimum_risk_above_remaining'],0)
         self.assertEqual(counts['lost_filled_with_unfilled_reservations'],1)
 
+    def test_report_distinguishes_notional_risk_and_overlapping_reservations(self):
+        rows=[row('A',narrow=True),row('B',created=START+STEP,fill=START+2*STEP,status='OPEN')]
+        audit_result,portfolio=run(rows)
+        result=fixtures.SummaryTests().run_fixture(fixtures.fixture())
+        result['capital_admission_audit'][study.MODEL]=audit_result
+        result['portfolios'][study.MODEL]=portfolio
+        before=deepcopy(result)
+        text=review.markdown(result)
+        self.assertIn(f'| {study.MODEL} | SIZE_OR_RISK_LIMIT | 1 | 1 | 0 | 1 |',text)
+        self.assertIn('重複し得るため合算しない',text)
+        self.assertIn('保有・不確定が残れば不明',text)
+        self.assertEqual(result,before)
+
     def test_same_ticker_conflict_does_not_claim_three_positions(self):
         second=row('A',created=START+STEP,fill=START+2*STEP,status='OPEN')
         second['key']+=':second'
