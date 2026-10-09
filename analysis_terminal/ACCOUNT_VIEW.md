@@ -78,6 +78,13 @@ post-await revocation, UI escaping and late responses after lock. Production
 smoke checks use public availability and rejected unauthenticated requests; the
 owner's private browser proof is not extracted or impersonated for validation.
 
+## Account table scrolling (v19.0.55)
+
+Freshness ticks leave unchanged position/conditional-order tables in place.
+Changed rows and additional history pages retain the table's scroll offsets.
+No private HTML or scroll state is cached outside the current DOM: stale data,
+failed reads and locking still clear values and remove the scroll element.
+
 ## Analysis capital (v19.0.49)
 
 Analysis defaults to the authenticated API's **USDC equity**, not collateral cash,

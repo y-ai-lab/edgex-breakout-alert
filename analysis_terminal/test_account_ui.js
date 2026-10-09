@@ -5,7 +5,9 @@ const source=script.slice(script.indexOf('// Private account values'),script.ind
 let now=100000,epoch=0,requests=[],fail=false,statusFailure=0,release=null,timers=new Map(),timerId=0;
 let orders={source:'EDGEX_ACTIVE_CONDITIONAL_ORDERS',read_only:true,complete:true,snapshot_age_seconds:0,observed_ms:now,items:[{ticker:'<img src=x>',kind:'SL',side:'SELL',status:'UNTRIGGERED',quantity:'.01',trigger_price:'50000',reduce_only:null}]};
 const ids=['accountOrdersCheck','accountOrdersStatus','accountOrdersData','accountViewData','accountViewStatus','accountViewBalances','accountViewPositions','accountViewTrades','accountViewCash','accountViewTradesMore','accountViewCashMore','accountViewOpen','accountViewLock','api'];
-const nodes=Object.fromEntries(ids.map(id=>[id,{hidden:false,innerHTML:'',textContent:'',classList:{contains:()=>true}}]));
+// Replacing innerHTML recreates the scroll element, as in the real browser.
+function node(){let html='',scroll=null,writes=0;return {hidden:false,textContent:'',classList:{contains:()=>true},get innerHTML(){return html},set innerHTML(value){html=value;writes++;scroll=value.includes('class="scroll"')?{scrollLeft:0,scrollTop:0}:null},querySelector(selector){assert.equal(selector,'.scroll');return scroll},get writes(){return writes}}}
+const nodes=Object.fromEntries(ids.map(id=>[id,node()]));
 let subscription={toJSON:()=>({endpoint:'private-browser-endpoint',keys:{auth:'browser-proof'}})};
 const row={time_ms:99999,type:'BUY_POSITION',ticker:'<img src=x onerror=bad()>',status:'L2_APPROVED',record_key:'a',price:'123',open_quantity:'1',close_quantity:'0',realized_pnl_usdc:null,open_fee_usdc:'0.1',close_fee_usdc:'0',funding_delta_usdc:null};
 const history={items:[row],complete:false,next_cursor:'c'.repeat(32),window_start_ms:1,window_end_ms:100000};
@@ -28,9 +30,16 @@ async function settle(){for(let i=0;i<4;i++)await new Promise(setImmediate)}
  assert(!nodes.accountViewTrades.innerHTML.includes('<img'));assert(nodes.accountViewTrades.innerHTML.includes('全件未取得'));assert(!nodes.accountViewTradesMore.hidden);
  assert(nodes.accountViewCash.innerHTML.includes('履歴はありません'));assert(nodes.accountViewCashMore.hidden);
  assert(!nodes.accountViewTrades.innerHTML.includes('費用込み純利益'));
+ let positionScroll=nodes.accountViewPositions.querySelector('.scroll');positionScroll.scrollLeft=231;positionScroll.scrollTop=7;
+ const positionWrites=nodes.accountViewPositions.writes;context.renderAccountPositions(context.accountViewSnapshot);
+ assert.equal(nodes.accountViewPositions.writes,positionWrites);assert.strictEqual(nodes.accountViewPositions.querySelector('.scroll'),positionScroll);
+ asset.positions[0].unrealized_pnl_usdc='-4';await context.refreshAccountPositions();
+ assert.equal(nodes.accountViewPositions.querySelector('.scroll').scrollLeft,231);assert.equal(nodes.accountViewPositions.querySelector('.scroll').scrollTop,7);assert(nodes.accountViewPositions.innerHTML.includes('-4.00'),'Updated values still render');
+ const historyScroll=nodes.accountViewTrades.querySelector('.scroll');historyScroll.scrollLeft=321;
  for(const r of requests.filter(r=>r.opt.method!=='POST'))assert.equal(r.opt.headers.Authorization,'Bearer '+'a'.repeat(43));
  assert(!requests.some(r=>r.url.includes('token=')||r.url.includes('endpoint=')));
  await context.moreAccountHistory('positions');assert.equal(context.accountViewHistory.positions.items.length,2);assert(nodes.accountViewTradesMore.hidden);assert(nodes.accountViewTrades.innerHTML.includes('末尾まで取得'));
+ assert.equal(nodes.accountViewTrades.querySelector('.scroll').scrollLeft,321,'Paging retains the history columns being read');
  now+=30000;context.renderAccountPositions(context.accountViewSnapshot);assert.equal(nodes.accountViewBalances.innerHTML,'');assert.equal(nodes.accountViewPositions.innerHTML,'');assert(nodes.accountViewStatus.textContent.includes('最新状態を確認できません'));
  now=100000;await context.loadAccountView();fail=true;await context.refreshAccountPositions();assert.equal(nodes.accountViewPositions.innerHTML,'');assert(nodes.accountViewTrades.innerHTML.includes('取引'));
  fail=false;await context.loadAccountView();context.document.visibilityState='hidden';listeners.visibilitychange();assert(nodes.accountViewData.hidden);assert.equal(context.accountViewSession,null);assert.equal(nodes.accountViewTrades.innerHTML,'');assert(requests.some(r=>r.url==='/api/account/logout'));
@@ -40,6 +49,12 @@ async function settle(){for(let i=0;i<4;i++)await new Promise(setImmediate)}
  now=100000;await context.loadAccountView();statusFailure=403;await context.refreshAccountPositions();assert(nodes.accountViewData.hidden);assert.equal(nodes.accountViewTrades.innerHTML,'');statusFailure=503;await context.loadAccountView();assert(nodes.accountViewStatus.textContent.includes('時間をおいて'));statusFailure=0;
  now=100000;let done;release={promise:new Promise(r=>done=r)};const pending=context.loadAccountView();await settle();context.lockAccountView();done();await pending;assert(nodes.accountViewData.hidden);assert.equal(context.accountViewSnapshot,null,'Late response cannot undo lock');
  await context.loadAccountView();await context.checkAccountOrders();assert(nodes.accountOrdersData.innerHTML.includes('&lt;img'));assert(!nodes.accountOrdersData.innerHTML.includes('<img'));assert(nodes.accountOrdersData.innerHTML.includes('未確認'));assert(nodes.accountOrdersStatus.textContent.includes('保証ではありません'));
+ const orderScroll=nodes.accountOrdersData.querySelector('.scroll'),orderWrites=nodes.accountOrdersData.writes;orderScroll.scrollLeft=287;orderScroll.scrollTop=4;
+ for(let tick=0;tick<20;tick++){now+=1000;context.renderAccountOrders(context.accountOrdersSnapshot)}
+ assert.strictEqual(nodes.accountOrdersData.querySelector('.scroll'),orderScroll,'Freshness ticks retain the actual scroll element');assert.equal(nodes.accountOrdersData.writes,orderWrites);assert.equal(orderScroll.scrollLeft,287);
+ context.accountOrdersSnapshot.items[0].quantity='.02';context.renderAccountOrders(context.accountOrdersSnapshot);
+ assert(nodes.accountOrdersData.innerHTML.includes('.02'));assert.equal(nodes.accountOrdersData.querySelector('.scroll').scrollLeft,287);assert.equal(nodes.accountOrdersData.querySelector('.scroll').scrollTop,4);
+ now=130000;context.renderAccountOrders(context.accountOrdersSnapshot);assert.equal(nodes.accountOrdersData.innerHTML,'');assert.equal(nodes.accountOrdersData.querySelector('.scroll'),null,'Scroll retention never retains stale private values');now=100000;await context.checkAccountOrders();assert.equal(nodes.accountOrdersData.querySelector('.scroll').scrollLeft,0,'A cleared view starts without the old scroll element');
  now+=30000;context.renderAccountOrders(context.accountOrdersSnapshot);assert.equal(nodes.accountOrdersData.innerHTML,'');now=100000;
  orders.items=[];await context.checkAccountOrders();assert(nodes.accountOrdersData.innerHTML.includes('見つかりません'));
  statusFailure=503;await context.checkAccountOrders();assert.equal(nodes.accountOrdersData.innerHTML,'');assert(nodes.accountOrdersStatus.textContent.includes('未確認'));statusFailure=0;
@@ -48,5 +63,5 @@ async function settle(){for(let i=0;i<4;i++)await new Promise(setImmediate)}
  assert(!source.includes('localStorage'));assert(!source.includes('sessionStorage'));
  assert(!requests.some(r=>r.url.includes('createOrder')||r.url.includes('cancelOrder')||r.url.includes('withdraw')));
  assert.equal(html.split("<script>")[0].match(/data-tab="/g).length,4);
- console.log('Private account UI: authentication, stale hiding, escaped data, missing fields, paging, logout and late-response lock: OK');
+ console.log('Private account UI: scroll retention across freshness ticks/updates/paging, authentication, stale hiding, escaped data, missing fields, logout and late-response lock: OK');
 })().catch(e=>{console.error(e);process.exitCode=1});
