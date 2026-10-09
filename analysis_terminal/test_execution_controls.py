@@ -62,6 +62,55 @@ class ControlApiTests(unittest.IsolatedAsyncioTestCase):
             self.assertNotIn(field,r.text)
         with self.db() as c:self.assertEqual(list(c.iterdump()),before)
         self.assertTrue(r.json()['can_request_on']);self.assertFalse(r.json()['armed'])
+        self.assertEqual(r.json()['on_blockers'],[])
+
+    async def test_ownership_block_is_visible_read_only_and_cannot_be_overridden(self):
+        h=await self.header()
+        with self.db() as c:
+            live.save(c,dict(setup_id='private-setup',status='OWNERSHIP_CONFLICT',
+                             ownership_quarantined=True,entry_client_id='private-order'),self.now)
+            before=list(c.iterdump())
+        r=await self.client.get('/api/execution/status',headers=h)
+        self.assertEqual(r.status_code,200)
+        self.assertEqual(r.json()['on_blockers'],['OWNERSHIP_UNCERTAIN'])
+        self.assertEqual(r.json()['active_orders'],1)
+        self.assertFalse(r.json()['can_request_on'])
+        self.assertNotIn('private-',r.text)
+        self.assertEqual((await self.send(headers=h))[0].status_code,409)
+        with self.db() as c:self.assertEqual(list(c.iterdump()),before)
+        self.assertFalse(self.state()['armed']);self.assertEqual(self.exchange.creates,[])
+        self.assertEqual(self.exchange.cancels,[])
+
+    async def test_unresolved_record_and_configuration_reasons_are_allowlisted(self):
+        h=await self.header()
+        with self.db() as c:
+            live.save(c,dict(setup_id='private-position',status='PROTECTED'),self.now)
+        self.controller.worker_available=False
+        self.config.mode='READ_ONLY'
+        r=await self.client.get('/api/execution/status',headers=h)
+        self.assertEqual(r.status_code,200)
+        self.assertEqual(r.json()['on_blockers'],['WORKER_UNAVAILABLE','LIVE_MODE_REQUIRED','UNRESOLVED_BOT_RECORDS'])
+        self.assertEqual((await self.send(headers=h))[0].status_code,409)
+        with self.db() as c:
+            before=list(c.iterdump())
+            state=self.controller.status(c,self.config,now_ms=self.now)
+            self.assertEqual(list(c.iterdump()),before)
+        self.assertEqual(state['on_blockers'],['WORKER_UNAVAILABLE','LIVE_MODE_REQUIRED','UNRESOLVED_BOT_RECORDS'])
+        self.assertFalse(state['can_request_on'])
+        self.assertNotIn('private-',json.dumps(state))
+
+    async def test_configuration_and_already_armed_reasons_do_not_change_runtime(self):
+        await self.engine.arm()
+        with self.db() as c:
+            before=list(c.iterdump());s=self.controller.status(c,self.config,now_ms=self.now)
+            self.assertEqual(s['on_blockers'],['ALREADY_ARMED'])
+            self.assertTrue(s['armed']);self.assertFalse(s['can_request_on'])
+            self.assertEqual(list(c.iterdump()),before)
+        with patch.object(self.config,'errors',return_value=['PRIVATE_CONFIGURATION_DETAIL']):
+            with self.db() as c:s=self.controller.status(c,self.config,now_ms=self.now)
+        self.assertEqual(s['on_blockers'],['CONFIGURATION_REQUIRED','ALREADY_ARMED'])
+        self.assertNotIn('PRIVATE_CONFIGURATION_DETAIL',json.dumps(s))
+        self.assertEqual(self.exchange.creates,[])
 
     async def test_forged_and_new_devices_cannot_enable_controls(self):
         other=account_fixtures.push_fixtures.subscription('https://web.push.apple.com/new')

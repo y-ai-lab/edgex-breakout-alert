@@ -52,14 +52,29 @@ class Controller:
         runtime = live.report(conn, config, now_ms=now_ms)
         row = conn.execute('''SELECT request_id,action,status,created_ms,completed_ms,code
             FROM execution_web_controls ORDER BY rowid DESC LIMIT 1''').fetchone()
-        active = sum(r['status'] not in live.TERMINAL for r in live.orders(conn))
+        records = [r for r in live.orders(conn) if r['status'] not in live.TERMINAL]
+        active = len(records)
+        # Read-only explanations for the existing ON gates, never an override.
+        blockers = []
+        if not self.worker_available:
+            blockers.append('WORKER_UNAVAILABLE')
+        if config.mode != 'LIVE':
+            blockers.append('LIVE_MODE_REQUIRED')
+        if config.errors():
+            blockers.append('CONFIGURATION_REQUIRED')
+        if s['armed']:
+            blockers.append('ALREADY_ARMED')
+        if active:
+            blockers.append('OWNERSHIP_UNCERTAIN' if any(
+                r.get('ownership_quarantined') or r['status'] in {'OWNERSHIP_CONFLICT','OWNERSHIP_UNVERIFIED'}
+                for r in records) else 'UNRESOLVED_BOT_RECORDS')
         return dict(scope='NEW_ENTRY_CONTROL', mode=config.mode, armed=s['armed'],
             control_epoch=s.get('control_epoch', 0), worker_available=self.worker_available,
             new_entries_enabled=bool(self.worker_available and runtime['real_orders_enabled']),
             protective_management_enabled=config.mode=='LIVE' and not config.errors(),
             can_request_on=self.worker_available and config.mode=='LIVE' and not config.errors()
                 and not s['armed'] and active==0,
-            active_orders=active, observed_ms=now_ms,
+            active_orders=active, on_blockers=blockers, observed_ms=now_ms,
             latest_request=dict(zip(('request_id','action','status','created_ms','completed_ms','code'),row)) if row else None)
 
     def submit(self, conn, config, authorization, *, action, request_id, expected_epoch, now_ms):

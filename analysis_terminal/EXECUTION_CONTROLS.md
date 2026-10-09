@@ -29,6 +29,14 @@ route is added. A compromised original browser/device/server remains a risk.
 
 ## Runtime and race handling
 
+v19.0.54: A disabled ON button labels the locked, unknown, pending or blocked state.
+The authenticated status includes fixed `on_blockers` codes explaining the original
+worker/mode/configuration/armed/unresolved-ledger gates, without credentials or
+order identifiers. Ownership quarantine and unresolved records show the required
+position/SL/TP/history checks next to the button. A closed exchange position alone
+does not reconcile a quarantined bot record. Reasons never authorize or override ON;
+the existing status, submit and final preflight conditions remain unchanged.
+
 Authenticated `GET /api/execution/status` distinguishes the stored armed setting
 from current runtime eligibility, worker availability and an ON request's phase.
 An acknowledgement of QUEUED/PROCESSING is not proof of ON. The UI uses actual
