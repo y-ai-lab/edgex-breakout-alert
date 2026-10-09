@@ -1,6 +1,7 @@
 """Read-only bot-ledger audit. Never orders, re-arms, infers flatness or repairs data."""
 from collections import Counter
 from decimal import Decimal, InvalidOperation
+from analysis_terminal import execution_incidents
 
 TERMINAL = {"SKIPPED", "NO_FILL", "CLOSED", "EXTERNAL_FLAT_VERIFIED"}
 PENDING = {"PREPARED", "SENDING_ENTRY", "ACKED_ENTRY"}
@@ -179,4 +180,6 @@ def report(records, connection, *, now_ms, events=()):
         "stop_explanation": STOP_REASONS.get(reason, "停止理由の照合が必要です。" if reason else None),
         "entry_review": "UNRESOLVED_LEDGER_REVIEW_REQUIRED" if active else "NOT_ENABLED" if connection.get("real_orders_enabled") is not True or not fresh else "CURRENT_READY_RULES_AND_EXECUTION_CHECKS_REQUIRED",
         "recent_events": recent,
+        "last_failure": execution_incidents.describe_failure(connection.get("last_failure"), now_ms),
+        "last_emergency_close": execution_incidents.recent_close(records, now_ms),
     }

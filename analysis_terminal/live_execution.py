@@ -17,6 +17,7 @@ import uuid
 from zoneinfo import ZoneInfo
 
 from analysis_terminal.edgex_orders import ExecutionError, decimal
+from analysis_terminal import execution_incidents
 from analysis_terminal.setups import setup_identity
 
 STEP = 900000
@@ -288,6 +289,7 @@ def report(conn, config, *, now_ms):
         live_configuration_errors=replace(config, mode="LIVE").errors(),
         last_success_ms=s["last_success_ms"],
         last_error=s["last_error"],
+        last_failure=execution_incidents.public_failure(s.get("last_reconciliation_failure"), now_ms),
         reason=s["reason"],
         active_orders=active,
         status_counts=dict(Counter(r["status"] for r in items)),
@@ -766,7 +768,13 @@ class Engine:
             raise
         self.update(r, "ACKED_" + kind.upper(), **{kind + "_order_id": oid})
 
-    async def emergency_close(self, r, quantity=None):
+    async def emergency_close(self, r, quantity=None, *, reason="UNSPECIFIED_EMERGENCY_CLOSE"):
+        if reason not in execution_incidents.CLOSE_REASONS:
+            raise ValueError("Unknown fixed emergency reason")
+        if r.get("emergency_close_reason") is None:
+            # Commit first cause before any close attempt. Retries/recovery keep it.
+            self.update(r, emergency_close_reason=reason,
+                        emergency_close_requested_ms=self.clock())
         self.halt("PROTECTION_OR_FILL_INVALID")
         if r.get("ownership_quarantined"):
             await self.quarantine(r)
@@ -890,12 +898,12 @@ class Engine:
                 and position * expected > 0
                 and not r.get("close_attempted")
             ):
-                await self.emergency_close(r, quantity=abs(position))
+                await self.emergency_close(r, quantity=abs(position), reason="PARTIAL_EXIT_REMAINDER")
                 return
             if r.get("isolated_contract"):
                 await self.quarantine(r)
                 return
-            await self.emergency_close(r)
+            await self.emergency_close(r, reason="POSITION_SIZE_MISMATCH")
             return
         if not r.get("isolated_contract") and any(
             v for k, v in a["positions"].items() if k != r["contract_id"]
@@ -926,28 +934,28 @@ class Engine:
             or value > decimal(r["notional_limit_usdc"]) + decimal("0.00000001")
             or self.clock() >= r["protection_deadline_ms"] - 60000
         ):
-            await self.emergency_close(r)
+            await self.emergency_close(r, reason="FILLED_ENTRY_OUTSIDE_LIMITS")
             return
         for kind in ("sl", "tp"):
             if not r.get(kind + "_attempted"):
                 try:
                     await self.send(r, kind)
                 except ExecutionError:
-                    await self.emergency_close(r)
+                    await self.emergency_close(r, reason="PROTECTION_SEND_FAILED")
                     return
             try:
                 order = await self.adapter.order(r[kind + "_client_id"])
             except ExecutionError:
-                await self.emergency_close(r)
+                await self.emergency_close(r, reason="PROTECTION_QUERY_FAILED")
                 return
             if order is None:
                 self.halt("PROTECTION_ACK_UNRESOLVED")
-                await self.emergency_close(r)
+                await self.emergency_close(r, reason="PROTECTION_ACK_UNRESOLVED")
                 return
             try:
                 verify_order(order, r, kind)
             except ExecutionError:
-                await self.emergency_close(r)
+                await self.emergency_close(r, reason="PROTECTION_CONTENT_INVALID")
                 return
             if order.get("status") != "UNTRIGGERED":
                 # An exit may have just executed. Reconcile the account before
@@ -955,7 +963,7 @@ class Engine:
                 a2 = await self.adapter.account()
                 if a2["positions"].get(r["contract_id"], decimal(0)) == 0:
                     return
-                await self.emergency_close(r)
+                await self.emergency_close(r, reason="PROTECTION_NOT_UNTRIGGERED")
                 return
             r[kind + "_verified_order_id"] = str(order["id"])
         try:
@@ -963,7 +971,7 @@ class Engine:
             verify_active_protection(active, r)
         except ExecutionError as exc:
             self.update(r, protection_check_error=str(exc), protection_check_ms=self.clock())
-            await self.emergency_close(r)
+            await self.emergency_close(r, reason="ACTIVE_PROTECTION_UNVERIFIED")
             return
         self.update(r, "PROTECTED", protection_check_error=None,
                     protection_check_ms=self.clock(), active_protection_verified_ms=self.clock())
@@ -1082,7 +1090,7 @@ class Engine:
                             # Known fill with unreadable protection/account:
                             # try a single reduce-only close, never a new entry.
                             if r.get("filled_size") and not r.get("close_attempted"):
-                                await self.emergency_close(r)
+                                await self.emergency_close(r, reason="RECONCILIATION_FAILED")
                             raise
             a = await self.adapter.account()
             active = await self.adapter.active_orders()
@@ -1167,7 +1175,7 @@ class Engine:
                     await self.reconcile(r)
                 except ExecutionError:
                     if r.get("filled_size") and not r.get("close_attempted"):
-                        await self.emergency_close(r)
+                        await self.emergency_close(r, reason="RECONCILIATION_FAILED")
                     raise
                 break
         except Exception as exc:
@@ -1177,6 +1185,8 @@ class Engine:
             with self.db_connect() as conn:
                 s = state(conn)
                 s.update(armed=False, reason="RECONCILIATION_REQUIRED", last_error=code)
+                # A healthy refresh may clear transient errors, but not this history.
+                s["last_reconciliation_failure"] = execution_incidents.failure(code, self.clock())
                 save_state(conn, s)
             # Caller logs only this fixed safe machine code.
             raise ExecutionError(code) from None

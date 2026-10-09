@@ -320,6 +320,9 @@ function renderExecutionHealth(j){
  out.textContent=prefix+h.summary+(h.stop_explanation?' '+h.stop_explanation:'');guide.textContent=h.guidance.filter(function(x){return typeof x==='string'}).join(' ');
  if(!fresh)guide.textContent+=' 最新の状態を取引所で確認し、記録が古いだけで決着・保護済みと判断しないでください。';
  timeline.textContent=h.recent_events.length?h.recent_events.map(function(e){return (Number.isFinite(e.observed_ms)?new Date(e.observed_ms).toLocaleString('ja-JP'):'記録時刻未確認')+' — '+e.label}).join('\n'):'まだ状態変化の記録はありません。';
+ var incidents=[];
+ [h.last_emergency_close,h.last_failure].forEach(function(e,i){if(!e||e.historical!==true||typeof e.label!=='string'||!Number.isInteger(e.observed_ms)||e.observed_ms<=0)return;incidents.push((i===0?'緊急決済の記録':'前回の照合エラー')+' / '+new Date(e.observed_ms).toLocaleString('ja-JP')+' — '+e.label+(i===0?' / '+(e.time_basis==='COMPLETION_RECORDED'?'決着記録時刻':'要求記録時刻')+'（送信・約定時刻の保証ではありません）':''));});
+ if(incidents.length)timeline.textContent=incidents.join('\n')+'\n\n'+timeline.textContent;
 }
 function liveExecutionView(j){
  var elapsed=j&&Number.isFinite(j._received_ms)?Date.now()-j._received_ms:Infinity;

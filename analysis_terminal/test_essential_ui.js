@@ -85,6 +85,10 @@ async function settle(){for(let i=0;i<8;i++)await new Promise(setImmediate)}
  assert(nodes.apiCheckResults.innerHTML.includes('稼働中 / 実注文有効'));
  const healthy=execution.health;execution.health={...healthy,state:'OWNERSHIP_UNCERTAIN',attention_required:true,severity:'CRITICAL',summary:'所有権未確認'};
  await context.checkApiConnections();assert(nodes.apiCheckStatus.textContent.includes('正常 5 / 要確認 1'));assert(nodes.apiCheckResults.innerHTML.includes('所有権未確認'));execution.health=healthy;
+ execution.health={...healthy,last_failure:{historical:true,label:'口座の確認に失敗',observed_ms:clock-1000},last_emergency_close:{historical:true,label:'旧記録の理由は未確定',observed_ms:clock-2000,time_basis:'COMPLETION_RECORDED'}};
+ context.renderExecutionHealth({...execution,_received_ms:clock});
+ assert(nodes.liveExecutionTimeline.textContent.includes('前回の照合エラー'));assert(nodes.liveExecutionTimeline.textContent.includes('旧記録の理由は未確定'));assert(nodes.liveExecutionTimeline.textContent.includes('決着記録時刻'));
+ execution.health=healthy;
  execution.mode='OFF';execution.status='OFF';execution.real_orders_enabled=false;
  assert(nodes.paperExecutionStatus.textContent.includes('現行READY待ち'));
  const originalTracking=paper.tracking;
