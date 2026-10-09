@@ -49,6 +49,7 @@ new Function(script);
 function extract(a,b){eval.call(null,script.slice(script.indexOf(a),script.indexOf(b,script.indexOf(a))))}
 global.candidateState={initialized:true,ready:[],near:['TESTUSDC']};
 global.localStorage={setItem(){}};
+extract('// Browser preferences are optional;', '// End optional browser storage.');
 global.alerts=[];global.pushCandidateAlert=x=>alerts.push(x);global.stageJa=x=>x;
 extract('function processCandidateTransitions(', 'function syncCandidateNotifyButton(');
 const first={ticker:'TESTUSDC',setup_id:'first',stage:'CONFIRMATION_WAIT'};

@@ -22,6 +22,7 @@ const ids = ['globalEntryBar','globalEntryLabel','globalEntryMeta','globalEntryA
 const nodes = Object.fromEntries(ids.map(x=>[x,element()])), tabButton = element();
 global.document={getElementById:id=>nodes[id],querySelector:()=>tabButton,visibilityState:'visible',title:''};
 global.localStorage={setItem(){},removeItem(){}};
+(0,eval)(script.slice(script.indexOf('// Browser preferences are optional;'),script.indexOf('// End optional browser storage.')));
 global.navigator={vibrate(){}};
 global.globalEntrySnapshot=null;global.entryHeartbeatBusy=false;global.lastReadySignature='';
 global.scan=()=>scanned++;global.tab=()=>{};global.analyze=()=>analyzed++;

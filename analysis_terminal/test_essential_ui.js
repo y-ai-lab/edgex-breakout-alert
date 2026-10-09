@@ -4,6 +4,11 @@ const html=fs.readFileSync(process.argv[2],'utf8'),markup=html.split('<script>')
 const script=html.match(/<script>([\s\S]*?)<\/script>/)[1];new Function(script);
 const nodes={},all=[],timers=new Map(),requests=[],storage=new Map();let clock=2_000_000,timerId=0;
 storage.set('edgexJournal','[{"ticker":"KEEPUSDC"}]');storage.set('edgexMarketHistory','[{"time_ms":1}]');
+const storageCase=process.argv[3]||'healthy';
+if(storageCase==='corrupt')for(const key of ['edgexWatch','edgexJournal','edgexMarketHistory','edgexRecentTickers','edgexCandidateState','edgexCandidateAlerts','edgexVisitBaseline'])storage.set(key,'{broken');
+if(storageCase==='shape')for(const key of ['edgexWatch','edgexJournal','edgexMarketHistory','edgexRecentTickers','edgexCandidateState','edgexCandidateAlerts','edgexVisitBaseline'])storage.set(key,'123');
+if(storageCase==='nested'){storage.set('edgexWatch','[null, {}]');storage.set('edgexJournal','[null]');storage.set('edgexMarketHistory','[null]');storage.set('edgexRecentTickers','[null]');storage.set('edgexCandidateAlerts','[null]');storage.set('edgexCandidateState','{"initialized":true,"identity_version":1,"ready":42,"near":[],"stages":null}');storage.set('edgexVisitBaseline','{"time_ms":1,"rows":{"BTCUSDC":null}}');}
+const storageBefore=new Map(storage);
 function element(tag,attributes=''){
  const attrs=Object.fromEntries(Array.from(attributes.matchAll(/([\w-]+)="([^"]*)"/g),m=>[m[1],m[2]]));
  const classes=new Set((attrs.class||'').split(/\s+/)),dataset={};
@@ -39,7 +44,7 @@ let historyReply={historical:true,totals:{setups:2,ready:1,near:2},items:[histor
 const context={console,URL,AbortController,Uint32Array,crypto:require('crypto').webcrypto,
  Date:class extends Date{static now(){return clock}},navigator:{userAgent:'test',vibrate(){}},
  location:{href:'https://test/',origin:'https://test'},history:{replaceState(){}},
- localStorage:{getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,String(v)),removeItem:k=>storage.delete(k)},
+ localStorage:{getItem:k=>{if(storageCase==='read_denied')throw Error('SecurityError');return storage.get(k)||null},setItem:(k,v)=>{if(storageCase==='write_denied')throw Error('QuotaExceededError');storage.set(k,String(v))},removeItem:k=>{if(storageCase==='remove_denied')throw Error('SecurityError');storage.delete(k)}},
  setTimeout(fn,delay){const id=++timerId;timers.set(id,{fn,delay});return id},clearTimeout:id=>timers.delete(id),setInterval(){},
  requestAnimationFrame(){},alert(){throw new Error('Unexpected alert')},
  document:{title:'',visibilityState:'visible',getElementById:id=>nodes[id]||null,addEventListener(){},createElement:tag=>element(tag),
@@ -75,7 +80,12 @@ async function settle(){for(let i=0;i<8;i++)await new Promise(setImmediate)}
  assert(nodes.entryNowContent.innerHTML.includes('TESTUSDC'));assert(nodes.nearCandidates.innerHTML.includes('NEXTUSDC'));
  assert(nodes.nearCandidates.innerHTML.includes('まだ待つ'));assert(nodes.nearCandidates.innerHTML.includes('15分足の確認待ち'));
  assert(nodes.nearCandidates.innerHTML.includes('Entry目安'));assert(nodes.nearCandidates.innerHTML.includes('SL'));assert(nodes.nearCandidates.innerHTML.includes('TP'));
- assert.equal(storage.get('edgexJournal'),'[{"ticker":"KEEPUSDC"}]');assert.equal(storage.get('edgexMarketHistory'),'[{"time_ms":1}]');
+ assert.equal(storage.get('edgexJournal'),storageBefore.get('edgexJournal'));assert.equal(storage.get('edgexMarketHistory'),storageBefore.get('edgexMarketHistory'));
+ if(storageCase!=='healthy')assert.equal(nodes.browserStorageStatus.hidden,false);
+ if(['corrupt','shape','nested','read_denied'].includes(storageCase)){
+  for(const [key,value] of storageBefore){assert.equal(storage.get(key),value,'Unreadable source must not be overwritten: '+key);assert.equal(context.browserStorageWrite(key,'[]'),false);assert.equal(context.browserStorageRemove(key),false);}
+  assert.equal(context.candidateNotifyEnabled,false,'Invalid saved state cannot enable notifications');
+ }
  assert(!requests.some(r=>/shadow-v2|strategy-comparison|replay|readiness-history|server-history|server-paper-signals|opportunity/.test(r.url)));
  assert(!requests.some(r=>r.url.startsWith('/api/entry-history')),'History must be lazy and leave ENTRY NOW boot unchanged');
  context.tab('api');await settle();assert(nodes.api.classList.contains('active'));assert(nodes.apiCheckStatus.textContent.includes('正常 5 / 要確認 1 / 失敗 0'));assert(nodes.paperExecutionStatus.textContent.includes('PAPER ONLY'));
@@ -149,5 +159,6 @@ async function settle(){for(let i=0;i<8;i++)await new Promise(setImmediate)}
  assert.equal(nodes.ticker.value,'NEXTUSDC');assert(nodes.analysis.classList.contains('active'));
  assert(requests.filter(r=>r.url.startsWith('/api/chart')).length>chartsBefore,'History action fetches current analysis');
  assert(requests.filter(r=>r.url.startsWith('/api/entry-history')).every(r=>r.method==='GET'));
- console.log('Complete UI boot, four tabs, candidates, stale rejection, analysis/risk, GET API checks, failures/races and retained local data: OK');
+ assert.equal(context.executionControlSession,null);assert(!requests.some(r=>/\/api\/execution\/(session|control)|createOrder|cancelOrder/.test(r.url)),'Boot/storage fallback never acquires trade authority or submits orders');
+ console.log('Complete UI boot, four tabs, candidates, stale rejection, analysis/risk, GET API checks, failures/races and retained local data:',storageCase,'OK');
 })().catch(e=>{console.error(e);process.exitCode=1});

@@ -112,6 +112,7 @@ button{-webkit-tap-highlight-color:transparent}
 </style>
 </head>
 <body><main>
+<div id="browserStorageStatus" class="status warn" role="status" hidden></div>
 <div class="appHeader">
   <div>
     <div class="eyebrow">EDGEX MARKET WORKSPACE</div>
@@ -222,10 +223,12 @@ button{-webkit-tap-highlight-color:transparent}
 <div class="dashboardHero"><div><div class="eyebrow">API STATUS</div><h2>接続・自動取引</h2><div class="sub">稼働状態と運用ルールを確認できます。自動取引をONにすると、開始後の現行READYから実注文を行います。</div></div><button class="primary" id="checkApi">再確認</button></div>
 <div class="analyticsBox"><div class="boxLabel">新規エントリー ON / OFF</div>
 <div class="row"><button class="ghost" id="executionControlUnlock">登録端末で操作を有効にする</button><button class="ghost" id="executionControlLock">操作をロック</button></div>
-<div class="row"><button class="primary" id="executionControlOn" aria-describedby="executionControlStatus" disabled>自動取引 ON（操作ロック中）</button><button class="ghost" id="executionControlOff" disabled>新規エントリー OFF</button><button class="ghost" id="executionControlRefresh" disabled>状態を再確認</button></div>
-<div class="row"><button class="ghost" id="executionControlReconcile" disabled>終了した建玉を照合</button></div><p class="sub">隔離された建玉が終了した後に使用します。対象銘柄の建玉ゼロ・残注文なし・送信済み注文の終了をAPIで再確認します。売買・注文取消は行いません。照合後もOFFのままで、損益を推定しません。</p>
+<div class="row"><button class="primary" id="executionControlOn" aria-describedby="executionControlStatus executionControlNextStep" disabled>自動取引 ON（操作ロック中）</button><button class="ghost" id="executionControlOff" aria-describedby="executionControlStatus executionControlNextStep" disabled>新規エントリー OFF</button><button class="ghost" id="executionControlRefresh" disabled>状態を再確認</button></div>
+<div class="row"><button class="ghost" id="executionControlReconcile" aria-describedby="executionControlStatus executionControlNextStep" disabled>終了した建玉を照合</button></div>
 <div id="executionControlStatus" class="status" role="status">操作はロック中です。残高閲覧の認証とは別に、登録済み端末で操作を有効にしてください。</div>
-<p class="sub">OFFは新規エントリーのみ停止します。送信済み・送信中の注文は取り消しません。既存建玉の照合・SL/TP管理はLIVEのまま継続します。操作ロックは取引停止ではありません。ONは口座・注文を再照合し、開始後の新しい確認足だけを対象にします。</p></div>
+<div id="executionControlNextStep" class="sub" role="status"></div>
+<p class="sub"><a href="https://pro.edgex.exchange/en-US/portfolio/overview" target="_blank" rel="noopener noreferrer">取引所で建玉・SL/TP・約定履歴を確認 ↗</a></p>
+<details class="help"><summary>OFF・操作ロック・終了後照合の違い</summary><div>OFFは新規エントリーのみ停止します。送信済み・送信中の注文は取り消しません。既存建玉の照合・SL/TP管理はLIVEのまま継続します。操作ロックは取引停止ではありません。ONは口座・注文を再照合し、開始後の新しい確認足だけを対象にします。</div><div>「終了した建玉を照合」は隔離された建玉が終了した後に使用します。対象銘柄の建玉ゼロ・残注文なし・送信済み注文の終了をAPIで再確認します。売買・注文取消は行いません。照合後もOFFのままで、損益を推定しません。</div></details></div>
 <details class="dashboardDrawer" id="accountViewDetails" open><summary>自分の口座 — 残高・建玉・履歴</summary><div class="drawerBody">
 <div class="row"><button class="primary" id="accountViewOpen">口座情報を表示・更新</button><button class="ghost" id="accountViewLock">非表示・ロック</button></div>
 <div id="accountViewStatus" class="status" role="status">閲覧は登録済み端末限定です。口座情報を表示してください。</div>
@@ -298,7 +301,20 @@ button{-webkit-tap-highlight-color:transparent}
 </section>
 </main>
 <script>
-var rows=[], watch=new Set(JSON.parse(localStorage.getItem("edgexWatch")||"[]")), showWatch=false, lastAnalysis=null, journal=JSON.parse(localStorage.getItem("edgexJournal")||"[]"), marketHistory=JSON.parse(localStorage.getItem("edgexMarketHistory")||"[]"), autoScanTimer=null, lastMarketPayload=null, autoJournalReady=localStorage.getItem("edgexAutoJournalReady")!=="false", serverSync={history:0,paper:0,ok:false}, deferredInstallPrompt=null, recentTickers=JSON.parse(localStorage.getItem("edgexRecentTickers")||"[]"), candidateState=JSON.parse(localStorage.getItem("edgexCandidateState")||"null"), candidateAlerts=JSON.parse(localStorage.getItem("edgexCandidateAlerts")||"[]"), candidateNotifyEnabled=localStorage.getItem("edgexCandidateNotify")==="true", visitBaseline=JSON.parse(localStorage.getItem("edgexVisitBaseline")||"null"), currentVisitSnapshot=null, pushPreferenceState={}, watchSyncKey=localStorage.getItem("edgexWatchSyncKey")||"", customAlerts=[], lastReadySignature=localStorage.getItem("edgexLastReadySignature")||"", globalEntrySnapshot=null, entryHeartbeatBusy=false;
+// Browser preferences are optional; failed storage must not disable the terminal.
+var browserStorageInvalidKeys=new Set();
+function browserStorageNotice(){var el=document.getElementById('browserStorageStatus');if(el){el.hidden=false;el.textContent='端末の保存データを読み込めない、または変更を保存できない項目があります。該当項目はこの画面内だけで使用します。読み込めない元データは削除・上書きしません。'}}
+function browserStorageRead(key){try{return localStorage.getItem(key)}catch(e){browserStorageInvalidKeys.add(key);browserStorageNotice();return null}}
+function browserStorageWrite(key,value){if(browserStorageInvalidKeys.has(key))return false;try{localStorage.setItem(key,value);return true}catch(e){browserStorageNotice();return false}}
+function browserStorageRemove(key){if(browserStorageInvalidKeys.has(key))return false;try{localStorage.removeItem(key);return true}catch(e){browserStorageNotice();return false}}
+function browserRecord(x){return !!x&&typeof x==='object'&&!Array.isArray(x)}
+function browserStrings(x){return Array.isArray(x)&&x.every(function(v){return typeof v==='string'})}
+function browserRecords(x){return Array.isArray(x)&&x.every(browserRecord)}
+function browserCandidateState(x){return x===null||browserRecord(x)&&x.initialized===true&&x.identity_version===1&&browserStrings(x.ready)&&browserStrings(x.near)&&browserRecord(x.stages)&&Object.values(x.stages).every(function(v){return typeof v==='string'})}
+function browserVisitState(x){return x===null||browserRecord(x)&&Number.isFinite(x.time_ms)&&browserRecord(x.rows)&&Object.values(x.rows).every(function(v){return browserRecord(v)&&typeof v.stage==='string'&&Number.isFinite(v.score)})}
+function browserStorageJSON(key,fallback,valid){var raw=browserStorageRead(key);if(raw===null)return fallback;try{var value=JSON.parse(raw);if(!valid(value))throw new Error('INVALID_BROWSER_PREFERENCE');return value}catch(e){browserStorageInvalidKeys.add(key);browserStorageNotice();return fallback}}
+// End optional browser storage.
+var rows=[], watch=new Set(browserStorageJSON('edgexWatch',[],browserStrings)), showWatch=false, lastAnalysis=null, journal=browserStorageJSON('edgexJournal',[],browserRecords), marketHistory=browserStorageJSON('edgexMarketHistory',[],browserRecords), autoScanTimer=null, lastMarketPayload=null, autoJournalReady=browserStorageRead('edgexAutoJournalReady')!=="false", serverSync={history:0,paper:0,ok:false}, deferredInstallPrompt=null, recentTickers=browserStorageJSON('edgexRecentTickers',[],browserStrings), candidateState=browserStorageJSON('edgexCandidateState',null,browserCandidateState), candidateAlerts=browserStorageJSON('edgexCandidateAlerts',[],browserRecords), candidateNotifyEnabled=browserStorageRead('edgexCandidateNotify')==="true", visitBaseline=browserStorageJSON('edgexVisitBaseline',null,browserVisitState), currentVisitSnapshot=null, pushPreferenceState={}, watchSyncKey=browserStorageRead('edgexWatchSyncKey')||"", customAlerts=[], lastReadySignature=browserStorageRead('edgexLastReadySignature')||"", globalEntrySnapshot=null, entryHeartbeatBusy=false;
 function fmt(x,d){return x==null?"—":Number(x).toLocaleString("ja-JP",{maximumFractionDigits:d==null?4:d})}
 function pct(x){return x==null?"—":(x>=0?"+":"")+Number(x).toFixed(2)+"%"}
 function card(k,v){return '<div class="card"><div class="k">'+k+'</div><div class="v">'+v+'</div></div>'}
@@ -449,16 +465,16 @@ document.getElementById('entryHistoryDetails').ontoggle=function(){if(this.open&
 document.getElementById('entryHistoryRefresh').onclick=function(){loadEntryHistory(false)};
 document.getElementById('entryHistoryMore').onclick=function(){loadEntryHistory(true)};
 ['entryHistoryKind','entryHistoryDays','entryHistoryTicker'].forEach(function(id){document.getElementById(id).onchange=function(){loadEntryHistory(false)}});
-function saveWatch(){localStorage.setItem("edgexWatch",JSON.stringify(Array.from(watch)));renderQuickAccess();saveWatchToServer()}
+function saveWatch(){browserStorageWrite("edgexWatch",JSON.stringify(Array.from(watch)));renderQuickAccess();saveWatchToServer()}
 function newSyncKey(){var a=new Uint32Array(4);crypto.getRandomValues(a);return Array.from(a).map(x=>x.toString(16).padStart(8,"0")).join("")}
 function showWatchSyncStatus(msg,cls){var e=document.getElementById("watchSyncStatus");if(e)e.innerHTML='<span class="'+(cls||"muted")+'">'+msg+'</span>'}
 async function saveWatchToServer(){if(!watchSyncKey)return;try{await jf("/api/watchlist",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sync_key:watchSyncKey,tickers:Array.from(watch)})});showWatchSyncStatus("お気に入りをサーバー同期済み","good")}catch(e){showWatchSyncStatus("同期失敗: "+e.message,"error")}}
 async function loadWatchFromServer(key,replaceLocal){
- if(!key)return;try{var j=await jf("/api/watchlist?sync_key="+encodeURIComponent(key)),remote=j.tickers||[];watchSyncKey=key;localStorage.setItem("edgexWatchSyncKey",key);document.getElementById("watchSyncKey").value=key;
-  if(remote.length||replaceLocal){watch=new Set(remote);localStorage.setItem("edgexWatch",JSON.stringify(remote));renderQuickAccess();showWatchSyncStatus("同期しました — "+remote.length+"銘柄","good")}else{await saveWatchToServer()}
+ if(!key)return;try{var j=await jf("/api/watchlist?sync_key="+encodeURIComponent(key)),remote=j.tickers||[];watchSyncKey=key;browserStorageWrite("edgexWatchSyncKey",key);document.getElementById("watchSyncKey").value=key;
+  if(remote.length||replaceLocal){watch=new Set(remote);browserStorageWrite("edgexWatch",JSON.stringify(remote));renderQuickAccess();showWatchSyncStatus("同期しました — "+remote.length+"銘柄","good")}else{await saveWatchToServer()}
  }catch(e){showWatchSyncStatus("同期失敗: "+e.message,"error")}
 }
-async function initWatchSync(){if(!watchSyncKey){watchSyncKey=newSyncKey();localStorage.setItem("edgexWatchSyncKey",watchSyncKey)}document.getElementById("watchSyncKey").value=watchSyncKey;await loadWatchFromServer(watchSyncKey,false)}
+async function initWatchSync(){if(!watchSyncKey){watchSyncKey=newSyncKey();browserStorageWrite("edgexWatchSyncKey",watchSyncKey)}document.getElementById("watchSyncKey").value=watchSyncKey;await loadWatchFromServer(watchSyncKey,false)}
 function tab(name){if(name==="risk"){openRiskCalculator();return}if(name==="compare"||name==="journal")name="dashboard";var b=document.querySelector('[data-tab="'+name+'"]');if(b)b.click()}
 function updateUrl(tabName,ticker){var u=new URL(location.href);u.searchParams.set("tab",tabName);if(tabName==="analysis"&&ticker)u.searchParams.set("ticker",ticker);else u.searchParams.delete("ticker");history.replaceState(null,"",u)}
 document.querySelectorAll("[data-tab]").forEach(function(b){b.onclick=function(){document.querySelectorAll("[data-tab]").forEach(x=>x.classList.remove("active"));document.querySelectorAll(".panel").forEach(x=>x.classList.remove("active"));b.classList.add("active");document.getElementById(b.dataset.tab).classList.add("active");updateUrl(b.dataset.tab,b.dataset.tab==="analysis"?document.getElementById("ticker").value.trim():"");if(b.dataset.tab==="api"){checkApiConnections();loadPaperExecution()}}});
@@ -477,11 +493,11 @@ function renderSinceLastChanges(j){
  el.innerHTML=group("READYへ昇格",newReady,t=>changeTickerButton(t,t))+group("新しい直前候補",newNear,t=>changeTickerButton(t,t))+group("候補から外れた",dropped,t=>changeTickerButton(t,t))+group("スコア+10以上",scoreUp,x=>changeTickerButton(x.t,x.t+" +"+fmt(x.d,1)));
  el.querySelectorAll(".sinceTicker").forEach(function(b){b.onclick=function(){document.getElementById("ticker").value=this.dataset.ticker;tab("analysis");analyze()}});
 }
-function persistVisitBaseline(){if(currentVisitSnapshot)localStorage.setItem("edgexVisitBaseline",JSON.stringify(currentVisitSnapshot))}
+function persistVisitBaseline(){if(currentVisitSnapshot)browserStorageWrite("edgexVisitBaseline",JSON.stringify(currentVisitSnapshot))}
 window.addEventListener("pagehide",persistVisitBaseline);document.addEventListener("visibilitychange",function(){if(document.visibilityState==="hidden")persistVisitBaseline()});
 function formatClock(ms){var s=Math.max(0,Math.ceil(ms/1000)),m=Math.floor(s/60),r=s%60;return String(m).padStart(2,"0")+":"+String(r).padStart(2,"0")}
 function updateCandleCountdown(){var el=document.getElementById("candleCountdown");if(!el)return;var now=Date.now(),step=15*60*1000,next=Math.ceil(now/step)*step;if(next===now)next+=step;el.textContent=formatClock(next-now)}
-function saveCandidateAlerts(){localStorage.setItem("edgexCandidateAlerts",JSON.stringify(candidateAlerts.slice(0,50)))}
+function saveCandidateAlerts(){browserStorageWrite("edgexCandidateAlerts",JSON.stringify(candidateAlerts.slice(0,50)))}
 function checkJa(v){return v?'<span class="good">OK</span>':'<span class="warn">未達</span>'}
 var paperExecutionRequest=0;
 function paperTrackingStatus(j){
@@ -725,7 +741,7 @@ function processCandidateTransitions(j){
   ready.forEach(function(x){if(!prevReady.has(x.setup_id)){pushCandidateAlert({time_ms:now,ticker:x.ticker,setup_id:x.setup_id,kind:"READY",label:prevNear.has(x.setup_id)?"直前候補からエントリー可能へ昇格":"新しくエントリー可能",stage:x.stage,direction:x.direction,score:x.score,rr:x.rr})}});
   near.forEach(function(x){if(!prevNear.has(x.setup_id)&&!prevReady.has(x.setup_id)){pushCandidateAlert({time_ms:now,ticker:x.ticker,setup_id:x.setup_id,kind:"NEAR",label:"有力な直前候補に追加",stage:x.stage,direction:x.direction,score:x.score,rr:x.rr})}else if(prevNear.has(x.setup_id)&&candidateState.stages&&candidateState.stages[x.setup_id]&&candidateState.stages[x.setup_id]!==x.stage){pushCandidateAlert({time_ms:now,ticker:x.ticker,setup_id:x.setup_id,kind:"NEAR",label:stageJa(candidateState.stages[x.setup_id])+" → "+stageJa(x.stage),stage:x.stage,direction:x.direction,score:x.score,rr:x.rr})}});
  }
- candidateState=newState;localStorage.setItem("edgexCandidateState",JSON.stringify(candidateState));
+ candidateState=newState;browserStorageWrite("edgexCandidateState",JSON.stringify(candidateState));
 }
 function syncCandidateNotifyButton(){var b=document.getElementById("candidateNotify");if(!b)return;b.textContent="画面内通知 "+(candidateNotifyEnabled?"ON":"OFF");b.classList.toggle("good",candidateNotifyEnabled)}
 function urlBase64ToUint8Array(base64String){var padding="=".repeat((4-base64String.length%4)%4),base64=(base64String+padding).replace(/-/g,"+").replace(/_/g,"/"),raw=atob(base64),out=new Uint8Array(raw.length);for(var i=0;i<raw.length;i++)out[i]=raw.charCodeAt(i);return out}
@@ -824,9 +840,9 @@ async function toggleBackgroundPush(){
   loadNotificationCenter();
  }catch(e){s.innerHTML='<span class="error">有効化できません: '+lifecycleEscape(e.message)+'</span>'}
 }
-async function toggleCandidateNotify(){if(!("Notification" in window)){alert("このブラウザは通知に対応していません。");return}if(!candidateNotifyEnabled){var p=Notification.permission;if(p!=="granted")p=await Notification.requestPermission();if(p!=="granted"){alert("通知が許可されていません。ブラウザ設定から許可できます。");return}candidateNotifyEnabled=true;localStorage.setItem("edgexCandidateNotify","true");if(!autoScanTimer){autoScanTimer=setInterval(function(){scan(false)},240000);document.getElementById("autoScan").textContent="自動更新 ON (4分)"}}else{candidateNotifyEnabled=false;localStorage.setItem("edgexCandidateNotify","false")}syncCandidateNotifyButton()}
+async function toggleCandidateNotify(){if(!("Notification" in window)){alert("このブラウザは通知に対応していません。");return}if(!candidateNotifyEnabled){var p=Notification.permission;if(p!=="granted")p=await Notification.requestPermission();if(p!=="granted"){alert("通知が許可されていません。ブラウザ設定から許可できます。");return}candidateNotifyEnabled=true;browserStorageWrite("edgexCandidateNotify","true");if(!autoScanTimer){autoScanTimer=setInterval(function(){scan(false)},240000);document.getElementById("autoScan").textContent="自動更新 ON (4分)"}}else{candidateNotifyEnabled=false;browserStorageWrite("edgexCandidateNotify","false")}syncCandidateNotifyButton()}
 function renderWatchStatus(items){var el=document.getElementById("dashWatch");if(!el)return;var m={};(items||[]).forEach(x=>m[x.ticker]=x);var names=Array.from(watch);if(!names.length){el.innerHTML='<span class="muted">まだありません</span>';return}el.innerHTML=names.map(function(t){var x=m[t];return '<div class="watchState"><button class="ghost quickTicker" data-ticker="'+lifecycleEscape(t)+'">'+lifecycleEscape(t)+'</button>'+(x?'<span class="badge '+x.stage+'">'+stageJa(x.stage)+'</span><span class="pill">'+directionJa(x.direction)+'</span><span class="pill">'+fmt(x.score,1)+'点</span>':'<span class="muted">次回スキャンで更新</span>')+'</div>'}).join("");el.querySelectorAll(".quickTicker").forEach(function(b){b.onclick=function(){document.getElementById("ticker").value=this.dataset.ticker;tab("analysis");analyze()}})}
-function addRecentTicker(ticker){if(!ticker)return;recentTickers=[ticker].concat(recentTickers.filter(x=>x!==ticker)).slice(0,8);localStorage.setItem("edgexRecentTickers",JSON.stringify(recentTickers));renderQuickAccess()}
+function addRecentTicker(ticker){if(!ticker)return;recentTickers=[ticker].concat(recentTickers.filter(x=>x!==ticker)).slice(0,8);browserStorageWrite("edgexRecentTickers",JSON.stringify(recentTickers));renderQuickAccess()}
 function quickButtons(items){return items&&items.length?items.map(t=>'<button class="ghost quickTicker" data-ticker="'+lifecycleEscape(t)+'">'+lifecycleEscape(t)+'</button>').join(" "):'<span class="muted">まだありません</span>'}
 function renderQuickAccess(){var w=document.getElementById("dashWatch"),r=document.getElementById("recentTickers");if(w)w.innerHTML=quickButtons(Array.from(watch));if(r)r.innerHTML=quickButtons(recentTickers);document.querySelectorAll(".quickTicker").forEach(function(b){b.onclick=function(){document.getElementById("ticker").value=this.dataset.ticker;tab("analysis");analyze()}})}
 function regimeBiasJa(v){return ({LONG_BIASED:"ロング優勢",SHORT_BIASED:"ショート優勢",BALANCED:"ほぼ均衡"}[v]||"不明")}
@@ -899,9 +915,9 @@ function renderGlobalEntryBar(j){
  if(ready.length){
   bar.classList.add("ready");var names=ready.slice(0,2).map(x=>x.ticker).join(" / ");label.textContent="READY "+ready.length+"件 — "+names;meta.textContent="戦略条件成立 / スキャン "+Math.round(age)+"秒前 / タップして確認";action.textContent="ENTRYを見る";action.onclick=function(){if(entryFreshness(j).stale){refreshGlobalEntryAge();return}var r=ready[0];document.getElementById("ticker").value=r.ticker;tab("analysis");analyze()};
   document.title="READY "+ready[0].ticker+" | EdgeX";setTodayTabReady(true);
-  var sig=readySignature(ready);if(sig&&sig!==lastReadySignature){bar.classList.add("globalEntryPulse");lastReadySignature=sig;localStorage.setItem("edgexLastReadySignature",sig);if(navigator.vibrate)try{navigator.vibrate([80,60,80])}catch(e){}}
+  var sig=readySignature(ready);if(sig&&sig!==lastReadySignature){bar.classList.add("globalEntryPulse");lastReadySignature=sig;browserStorageWrite("edgexLastReadySignature",sig);if(navigator.vibrate)try{navigator.vibrate([80,60,80])}catch(e){}}
  }else{
-  bar.classList.add("waiting");label.textContent="WAIT — 現在READYなし";meta.textContent=(near.length?("直前候補 "+near.length+"件"):"直前候補なし")+" / スキャン "+Math.round(age)+"秒前";action.textContent=near.length?"候補を見る":"今日を見る";action.onclick=function(){tab("dashboard")};document.title="WAIT | EdgeX";setTodayTabReady(false);lastReadySignature="";localStorage.removeItem("edgexLastReadySignature")
+  bar.classList.add("waiting");label.textContent="WAIT — 現在READYなし";meta.textContent=(near.length?("直前候補 "+near.length+"件"):"直前候補なし")+" / スキャン "+Math.round(age)+"秒前";action.textContent=near.length?"候補を見る":"今日を見る";action.onclick=function(){tab("dashboard")};document.title="WAIT | EdgeX";setTodayTabReady(false);lastReadySignature="";browserStorageRemove("edgexLastReadySignature")
  }
 }
 function refreshGlobalEntryAge(){
@@ -974,7 +990,7 @@ async function hydrateServerState(){
   saveJournalStore();serverSync={history:history.length,paper:signals.length,ok:true};renderJournal();renderDashboard();
  }catch(e){serverSync={history:0,paper:0,ok:false,error:e.message};renderDashboard()}
 }
-function saveMarketHistory(){localStorage.setItem("edgexMarketHistory",JSON.stringify(marketHistory))}
+function saveMarketHistory(){browserStorageWrite("edgexMarketHistory",JSON.stringify(marketHistory))}
 function recordMarketSnapshot(j){
  if(!j||!j.summary)return;var now=Date.now(),bucket=Math.floor(now/900000)*900000,s=j.summary;
  var snap={time_ms:bucket,universe:j.universe,scanned:j.scanned,coverage_pct:j.coverage_pct,ready:s.ready_count||0,near:s.near_signal_count||0,qualified_near:s.qualified_near_count||0,avg_score:s.average_score||0,long:(s.direction_counts&&s.direction_counts.LONG)||0,short:(s.direction_counts&&s.direction_counts.SHORT)||0,neutral:(s.direction_counts&&s.direction_counts.NEUTRAL)||0,stages:s.stage_counts||{},top_ready:s.top_ready||[],top_near:s.top_near||[],top_qualified_near:s.top_qualified_near||[]};
@@ -1107,7 +1123,7 @@ document.getElementById("sharePlan").onclick=async function(){if(!lastAnalysis)r
 
 
 document.getElementById("dashScan").onclick=function(){scan(true)};
-function saveJournalStore(){localStorage.setItem("edgexJournal",JSON.stringify(journal));renderDashboard()}
+function saveJournalStore(){browserStorageWrite("edgexJournal",JSON.stringify(journal));renderDashboard()}
 function journalResultClass(s){return s==="TP"?"resultTP":s==="SL"?"resultSL":s==="TP1"?"resultTP1":s==="AMBIGUOUS"?"resultAMBIGUOUS":"muted"}
 function journalStats(){
  var signals=journal.filter(x=>x.eligible===true),resolved=signals.filter(x=>verifiedResult(x.result)&&(x.result.status==="TP"||x.result.status==="SL"));
@@ -1233,7 +1249,7 @@ async function analysisRiskPlan(params){
  }return result;
 }
 function changeCapitalSource(){clearRiskDerived();analysisCapitalObserved=null;document.getElementById('equity').value='';document.getElementById('equity').readOnly=apiCapitalMode();document.getElementById('capitalRefresh').hidden=!apiCapitalMode();document.getElementById('capitalStatus').textContent=apiCapitalMode()?'API資金を取得・更新してください。':'手動の仮定資金です。実口座の残高や自動取引設定には反映しません。';if(apiCapitalMode())syncAnalysisCapital(accountViewSnapshot);else recalculateAnalysisCapital()}
-function loadRiskProfile(){try{localStorage.removeItem('edgexRiskProfile')}catch(e){}}
+function loadRiskProfile(){try{browserStorageRemove('edgexRiskProfile')}catch(e){}}
 document.getElementById('capitalSource').onchange=changeCapitalSource;
 document.getElementById('capitalRefresh').onclick=loadAccountView;
 ['equity','riskPct'].forEach(function(id){document.getElementById(id).addEventListener('input',function(){clearRiskDerived();recalculateAnalysisCapital()})});
@@ -1276,6 +1292,7 @@ function executionControlFresh(j){var elapsed=j&&Number.isFinite(j._received_ms)
 function executionControlBlockedReason(j){
  var labels={OWNERSHIP_UNCERTAIN:'未照合のボット取引が残っています。建玉・SL/TPを確認してください。建玉終了後に「終了した建玉を照合」を押し、照合が完了してからONを押してください。建玉や残注文がある間は再開できません。',UNRESOLVED_BOT_RECORDS:'未決着・未照合のボット記録があります。建玉・SL/TP・決済の状態を確認してください。',WORKER_UNAVAILABLE:'実行workerを確認できません。状態を再確認してください。',LIVE_MODE_REQUIRED:'実行モードがLIVEではありません。稼働設定を確認してください。',CONFIGURATION_REQUIRED:'接続・実行設定の確認が必要です。API状態を確認してください。',ALREADY_ARMED:'ON設定済みです。現在の稼働状態を確認してください。'},codes=j&&Array.isArray(j.on_blockers)?j.on_blockers:[],messages=[];
  ['OWNERSHIP_UNCERTAIN','UNRESOLVED_BOT_RECORDS','WORKER_UNAVAILABLE','LIVE_MODE_REQUIRED','CONFIGURATION_REQUIRED','ALREADY_ARMED'].forEach(function(code){if(codes.includes(code))messages.push(labels[code])});
+ if(codes.includes('OWNERSHIP_UNCERTAIN')&&j.can_request_flat_reconciliation!==true)messages[0]='同銘柄の所有権・注文を照合できていません。取引所で建玉とSL/TPを確認してください。終了後照合の対象が確定するまで、ONと終了後照合は使えません。';
  if(messages.length)return messages.join(' ');
  if(j&&Number.isInteger(j.active_orders)&&j.active_orders>0)return labels.UNRESOLVED_BOT_RECORDS;
  if(j&&!j.worker_available)return labels.WORKER_UNAVAILABLE;
@@ -1290,11 +1307,17 @@ function renderExecutionControls(message){
  document.getElementById('executionControlOff').disabled=!valid;
  document.getElementById('executionControlRefresh').disabled=!valid;
  document.getElementById('executionControlUnlock').disabled=valid;
- st.textContent=message||(!valid?'操作はロック中です。「登録端末で操作を有効にする」を押してください。残高閲覧の認証とは別です。':!fresh?'開始状態は未確認です。状態を再確認してください。OFFは停止要求を送れます。':pending?'ONの開始条件を照合中です。ON完了とは判断しないでください。':blocked?'ONにできません — '+executionControlBlockedReason(j):j.armed?(j.new_entries_enabled?'ON — 新規エントリー有効。現行READYを待ちます。':'ON設定 — 稼働状態を確認してください。'):'OFF — 新規エントリー停止。既存建玉の管理設定は維持します。');
- if(!message&&valid&&fresh&&j.latest_request&&j.latest_request.action==='reconcile_flat'){var reasons={FLAT_REVIEW_DONE:'終了後の照合が完了しました。現在はOFFです。再開する場合はONを押してください。損益は未確定のまま保持します。',FLAT_REVIEW_POSITION_OR_ORDERS_REMAIN:'対象銘柄の建玉または残注文があるため、照合を完了できません。既存SL/TPは変更していません。',FLAT_REVIEW_ORDER_UNCONFIRMED:'送信済み注文の終了を確認できません。停止を維持し、取引所の履歴を確認してください。',FLAT_REVIEW_DATA_UNAVAILABLE:'取引所の照合データを取得できません。停止を維持します。',FLAT_REVIEW_STATE_CHANGED:'操作中に状態が変わりました。状態を再確認してください。',FLAT_REVIEW_REFUSED:'照合を完了できません。停止を維持し、再認証と状態確認をしてください。'};if(reasons[j.latest_request.code])st.textContent=reasons[j.latest_request.code]}
- on.title=st.textContent;
- if(!message&&valid&&fresh&&j.latest_request&&j.latest_request.status==='REFUSED')st.textContent+=' 直近の開始要求は拒否されました。状態・開始条件を確認してください。';
+ var operation=executionControlSubmitting&&executionControlPending?executionControlPending.action:j&&j.latest_request&&j.latest_request.action;
+ st.textContent=message||(!valid?'操作はロック中です。「登録端末で操作を有効にする」を押してください。残高閲覧の認証とは別です。':!fresh?'開始状態は未確認です。状態を再確認してください。OFFは停止要求を送れます。':pending?(operation==='reconcile_flat'?'終了した建玉を照合中です。取引の開始要求ではありません。':operation==='pause'?'新規エントリーの停止結果を確認中です。停止済みとは判断しないでください。':'ONの開始条件を照合中です。ON完了とは判断しないでください。'):blocked?'ONにできません — '+executionControlBlockedReason(j):j.armed?(j.new_entries_enabled?'ON — 新規エントリー有効。現行READYを待ちます。':'ON設定 — 稼働状態を確認してください。'):'OFF — 新規エントリー停止。既存建玉の管理設定は維持します。');
+ // An old request result must never override the current armed/runtime state.
+ if(!message&&valid&&fresh&&!pending&&j.latest_request){
+  var request=j.latest_request,labels={arm:'開始',pause:'停止',reconcile_flat:'終了後照合'},reasons={FLAT_REVIEW_DONE:'終了後の照合が完了しました。損益は未確定のまま保持します。',FLAT_REVIEW_POSITION_OR_ORDERS_REMAIN:'対象銘柄の建玉または残注文があるため、照合を完了できません。既存SL/TPは変更していません。',FLAT_REVIEW_ORDER_UNCONFIRMED:'送信済み注文の終了を確認できません。取引所の履歴を確認してください。',FLAT_REVIEW_DATA_UNAVAILABLE:'取引所の照合データを取得できません。',FLAT_REVIEW_STATE_CHANGED:'操作中に状態が変わりました。状態を再確認してください。',FLAT_REVIEW_REFUSED:'照合を完了できません。再認証と状態確認をしてください。',AUTHORIZATION_LOST:'操作認証が期限切れ、ロックまたは再起動で失効しました。',STALE_CONTROL_STATE:'操作中に状態が変わりました。状態を再確認してください。',CONTROL_EXPIRED:'要求の有効期限を過ぎました。状態を再確認してください。',UNRESOLVED_EXECUTION_LEDGER:'未決着・未照合のボット記録があります。',SUPERSEDED_BY_OFF:'OFF操作により以前の要求を中止しました。'};
+  if(request.action==='reconcile_flat'&&request.status==='DONE'&&request.code==='FLAT_REVIEW_DONE')st.textContent+=' 直近の操作結果: '+reasons.FLAT_REVIEW_DONE+(!j.armed?' 現在はOFFです。再開する場合はONを押してください。':'');
+  else if(request.status==='REFUSED')st.textContent+=' 直近の'+(labels[request.action]||'操作')+'要求は拒否されました。'+(reasons[request.code]||'状態・開始条件を確認してください。');
+ }
  if(!message&&valid&&fresh&&!j.worker_available&&!blocked)st.textContent+=' 実行workerを確認できないため、ONにはできません。';
+ on.title=st.textContent;
+ var next=document.getElementById('executionControlNextStep');if(next)next.textContent=!valid?'次の操作: ① 元の登録端末で操作を有効にする → ② 状態を再確認 → ③ 開始条件を満たす場合だけON。認証・操作ロックは取引の開始や停止ではありません。':!fresh?'次の操作: 「状態を再確認」を押してください。取引所の建玉・注文も確認できます。':pending?'次の操作: 照合結果を待ち、状態を再確認してください。不明な要求を繰り返さないでください。新規停止はOFFで要求できます。':blocked?executionControlBlockedReason(j):j.armed?'次の操作: 新規エントリーを止める場合はOFF。既存建玉のSL/TPを確認する場合は口座情報を表示してください。':'次の操作: 再開する場合はON。開始前に口座・注文を再照合します。認証の残り '+Math.max(0,Math.ceil((executionControlSession.expires-Date.now())/1000))+'秒。';
 }
 function lockExecutionControls(message){
  var old=executionControlSession;executionControlVersion++;executionControlSession=null;executionControlSnapshot=null;executionControlPending=null;executionControlSubmitting=false;renderExecutionControls(message);
