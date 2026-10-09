@@ -4144,7 +4144,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="EdgeX Analysis Terminal",
-    version="19.0.52",
+    version="19.0.53",
     lifespan=lifespan,
 )
 app.add_middleware(push_security.BrowserSecurityMiddleware)
@@ -4701,6 +4701,29 @@ def _account_view_authorize(authorization):
 async def account_view_positions_api(authorization: str | None = Header(default=None)):
     _account_view_authorize(authorization)
     return account_view.STORE.positions(now_ms=int(time.time()*1000))
+
+
+_account_orders_lock = asyncio.Lock()
+
+
+@app.get("/api/account/conditional-orders")
+async def account_conditional_orders_api(authorization: str | None = Header(default=None)):
+    _account_view_authorize(authorization)
+    async with _account_orders_lock:
+        _account_view_authorize(authorization)
+        reader = account_view.STORE.reader
+        if reader is None:
+            raise HTTPException(503, "Fresh conditional order data unavailable")
+        try:
+            result = await asyncio.wait_for(reader.conditional_orders(), timeout=7)
+        except Exception:
+            raise HTTPException(503, "Fresh conditional order data unavailable") from None
+        _account_view_authorize(authorization)
+        age = int(time.time()*1000) - result["observed_ms"]
+        if not 0 <= age < 30000:
+            raise HTTPException(503, "Fresh conditional order data unavailable")
+        result["snapshot_age_seconds"] = age / 1000
+        return result
 
 
 class AccountRiskRequest(BaseModel):

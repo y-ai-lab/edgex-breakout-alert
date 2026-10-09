@@ -546,6 +546,11 @@ def prepare(row, meta, account, quote, config, *, now_ms, armed_ms, snapshot_ms)
 
 
 def verify_order(order, r, kind):
+    oid = str(order.get("id", ""))
+    if (not oid.isdigit() or int(oid) <= 0
+            or r.get(kind + "_order_id") is not None
+            and oid != str(r[kind + "_order_id"])):
+        raise ExecutionError("ORDER_ID_MISMATCH")
     if (
         order.get("clientOrderId") != r[kind + "_client_id"]
         or str(order.get("contractId")) != r["contract_id"]
@@ -602,6 +607,29 @@ def verify_order(order, r, kind):
         ):
             raise ExecutionError("PROTECTION_MISMATCH")
     return order
+
+
+def verify_active_protection(active, r):
+    """An individual lookup alone is not evidence of active-list presence."""
+    for kind in ("sl", "tp"):
+        matches = [o for o in active if o.get("clientOrderId") == r[kind + "_client_id"]]
+        if len(matches) != 1:
+            raise ExecutionError("PROTECTION_NOT_ACTIVE")
+        o = matches[0]
+        # The active-page schema can omit trigger/fee fields. Full terms are
+        # verified by the individual lookup; here require the same active ID.
+        if (str(o.get("id")) != r[kind + "_verified_order_id"]
+                or str(o.get("contractId")) != r["contract_id"]
+                or o.get("side") != ("SELL" if r["side"] == "LONG" else "BUY")
+                or o.get("type") != ("STOP_MARKET" if kind == "sl" else "TAKE_PROFIT_MARKET")
+                or o.get("status") != "UNTRIGGERED"
+                or decimal(o.get("size")) != decimal(r["filled_size"])):
+            raise ExecutionError("PROTECTION_NOT_ACTIVE")
+        if ("reduceOnly" in o and o["reduceOnly"] is not True
+                or "triggerPriceType" in o and o["triggerPriceType"] != "LAST_PRICE"
+                or "triggerPrice" in o and decimal(o["triggerPrice"]) != decimal(r["stop_price" if kind == "sl" else "target_price"])
+                or "expireTime" in o and decimal(o["expireTime"]) != decimal(r["protection_deadline_ms"])):
+            raise ExecutionError("PROTECTION_NOT_ACTIVE")
 
 
 class Engine:
@@ -929,7 +957,16 @@ class Engine:
                     return
                 await self.emergency_close(r)
                 return
-        self.update(r, "PROTECTED")
+            r[kind + "_verified_order_id"] = str(order["id"])
+        try:
+            active = await self.adapter.active_orders()
+            verify_active_protection(active, r)
+        except ExecutionError as exc:
+            self.update(r, protection_check_error=str(exc), protection_check_ms=self.clock())
+            await self.emergency_close(r)
+            return
+        self.update(r, "PROTECTED", protection_check_error=None,
+                    protection_check_ms=self.clock(), active_protection_verified_ms=self.clock())
 
     async def preflight(self):
         # A failed fresh check must not leave a previous flat-account result

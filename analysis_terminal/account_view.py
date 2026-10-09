@@ -16,6 +16,7 @@ READ_PATHS = {
     'asset': '/api/v2/private/account/getAccountAsset',
     'positions': '/api/v2/private/account/getPositionTransactionPage',
     'collateral': '/api/v2/private/account/getCollateralTransactionPage',
+    'orders': '/api/v2/private/order/getActiveOrderPage',
 }
 DAY = 86400000
 PAGE_SIZE = 50
@@ -266,6 +267,48 @@ class Reader:
         raw=await self.get(kind,dict(size=str(PAGE_SIZE),offsetData=offset,filterCoinIdList='1000',
             filterStartCreatedTimeInclusive=str(start_ms),filterEndCreatedTimeExclusive=str(end_ms)))
         return history_page(raw,self.config.account_id,self.names,kind,observed_ms=observed,start_ms=start_ms,end_ms=end_ms)
+
+    async def conditional_orders(self):
+        """Fresh, complete GET-only list; unknown fields never mean protection."""
+        observed=int(time.time()*1000)
+        result=[]; seen_ids=set(); seen_offsets=set(); offset=''
+        types={'STOP_MARKET','STOP_LIMIT','TAKE_PROFIT_MARKET','TAKE_PROFIT_LIMIT'}
+        for _ in range(20):
+            raw=await self.get('orders',dict(size='200',offsetData=offset))
+            if (not isinstance(raw,dict) or not isinstance(raw.get('dataList'),list)
+                    or len(raw['dataList'])>200 or not isinstance(raw.get('nextPageOffsetData'),str)):
+                raise AccountDataError()
+            for o in raw['dataList']:
+                if not isinstance(o,dict) or str(o.get('accountId'))!=self.config.account_id:
+                    raise AccountDataError()
+                oid=str(o.get('id',''))
+                if not oid.isdigit() or int(oid)<=0 or oid in seen_ids:
+                    raise AccountDataError()
+                seen_ids.add(oid)
+                if o.get('type') not in types:
+                    continue
+                if (o.get('side') not in {'BUY','SELL'} or o.get('status') not in {'UNTRIGGERED','OPEN','PENDING','CANCELING'}
+                        or not str(o.get('contractId','')).isdigit() or int(o['contractId'])<=0):
+                    raise AccountDataError()
+                flags={k:o.get(k) for k in ('reduceOnly','isPositionTpsl')}
+                if any(v is not None and type(v) is not bool for v in flags.values()):
+                    raise AccountDataError()
+                size=number(o.get('size'),required=True)
+                trigger=number(o.get('triggerPrice'))
+                if Decimal(size)<0 or trigger is not None and Decimal(trigger)<=0:
+                    raise AccountDataError()
+                result.append(dict(ticker=contract_name(str(o['contractId']),self.names),
+                    kind='SL' if o['type'].startswith('STOP_') else 'TP',order_type=o['type'],
+                    side=o['side'],status=o['status'],quantity=size,trigger_price=trigger,
+                    reduce_only=flags['reduceOnly'],position_tpsl=flags['isPositionTpsl']))
+            offset=raw['nextPageOffsetData']
+            if not offset:
+                return dict(source='EDGEX_ACTIVE_CONDITIONAL_ORDERS',read_only=True,complete=True,
+                    observed_ms=observed,items=result,protection_guaranteed=False)
+            if offset in seen_offsets:
+                raise AccountDataError()
+            seen_offsets.add(offset)
+        raise AccountDataError()
 
     async def close(self):
         await self.client.close()

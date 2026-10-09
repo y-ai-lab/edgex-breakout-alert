@@ -230,6 +230,7 @@ button{-webkit-tap-highlight-color:transparent}
 <div id="accountViewStatus" class="status" role="status">閲覧は登録済み端末限定です。口座情報を表示してください。</div>
 <div id="accountViewData" hidden><div id="accountViewBalances" class="summary"></div>
 <h3>現在のポジション</h3><div id="accountViewPositions"></div>
+<h3>取引所の条件注文</h3><button class="ghost" id="accountOrdersCheck">SL/TPを確認（読取専用）</button><div id="accountOrdersStatus" class="status">過去の登録記録とは別に、取引所の現在の条件注文を取得します。</div><div id="accountOrdersData"></div>
 <details class="dashboardDrawer"><summary>取引・Funding履歴（直近30日）</summary><div class="drawerBody"><div id="accountViewTrades"></div><button id="accountViewTradesMore" class="ghost" hidden>続きを読む</button></div></details>
 <details class="dashboardDrawer"><summary>入出金・資金増減履歴（直近30日）</summary><div class="drawerBody"><div id="accountViewCash"></div><button id="accountViewCashMore" class="ghost" hidden>続きを読む</button></div></details>
 <p class="sub">EdgeX取引口座のUSDC評価額・利用可能額です。Arcウォレットの未入金残高は含みません。手動・外部の建玉も含みますが、この画面から売買・取消・出金はできません。表示した取引履歴と資金増減を合算すると二重計上になり得ます。取引所のrealized PnL・手数料・Fundingを別々に表示し、費用込み損益や口座ROIを推測しません。</p>
@@ -354,10 +355,11 @@ async function loadLiveExecution(){
 }
 // Private account values and short-lived view tokens stay in memory only.
 var accountViewSession=null,accountViewSnapshot=null,accountViewBusy=false,accountViewEpoch=0,accountViewHistory={};
+var accountOrdersSnapshot=null,accountOrdersBusy=false;
 function accountMoney(value){if(value==null||value===''||!Number.isFinite(Number(value)))return '未確認';return Number(value).toLocaleString('ja-JP',{maximumFractionDigits:2,minimumFractionDigits:2})}
 function accountExact(value){return value==null?'未確認':lifecycleEscape(String(value))}
 function accountFresh(j){var age=j&&Number.isFinite(j._received_ms)?Date.now()-j._received_ms:Infinity;return !!j&&Number.isFinite(j.snapshot_age_seconds)&&j.snapshot_age_seconds>=0&&age>=0&&age+j.snapshot_age_seconds*1000<30000}
-function clearAccountValues(){accountViewSnapshot=null;syncAnalysisCapital(null);accountViewHistory={};document.getElementById('accountViewData').hidden=true;['accountViewBalances','accountViewPositions','accountViewTrades','accountViewCash'].forEach(function(id){document.getElementById(id).innerHTML=''});['accountViewTradesMore','accountViewCashMore'].forEach(function(id){document.getElementById(id).hidden=true})}
+function clearAccountValues(){accountViewSnapshot=null;accountOrdersSnapshot=null;renderAccountOrders(null);syncAnalysisCapital(null);accountViewHistory={};document.getElementById('accountViewData').hidden=true;['accountViewBalances','accountViewPositions','accountViewTrades','accountViewCash'].forEach(function(id){document.getElementById(id).innerHTML=''});['accountViewTradesMore','accountViewCashMore'].forEach(function(id){document.getElementById(id).hidden=true})}
 function lockAccountView(message){if(typeof executionControlSession!=='undefined'&&executionControlSession)lockExecutionControls();var old=accountViewSession;accountViewSession=null;accountViewEpoch++;clearAccountValues();document.getElementById('accountViewStatus').textContent=message||'口座情報を非表示にしました。';if(old)fetch('/api/account/logout',{method:'POST',headers:{Authorization:'Bearer '+old.token,'Content-Type':'application/json'},body:'{}',keepalive:true}).catch(function(){})}
 async function accountRequest(url,options){if(!accountViewSession||Date.now()>=accountViewSession.expires)throw new Error('AUTH');var controller=new AbortController(),timer=setTimeout(function(){controller.abort()},8000);try{var response=await fetch(url,Object.assign({},options||{},{headers:Object.assign({},options&&options.headers||{},{Authorization:'Bearer '+accountViewSession.token}),signal:controller.signal}));if(!response.ok){var failure=new Error('ACCOUNT_REQUEST');failure.status=response.status;throw failure}return await response.json()}finally{clearTimeout(timer)}}
 function renderAccountPositions(j){
@@ -394,6 +396,19 @@ async function moreAccountHistory(kind){
 document.getElementById('accountViewOpen').onclick=loadAccountView;document.getElementById('accountViewLock').onclick=function(){lockAccountView()};document.getElementById('accountViewTradesMore').onclick=function(){moreAccountHistory('positions')};document.getElementById('accountViewCashMore').onclick=function(){moreAccountHistory('collateral')};
 setInterval(function(){if(accountViewSnapshot&&!accountFresh(accountViewSnapshot))renderAccountPositions(accountViewSnapshot);if(accountViewSession&&document.visibilityState==='visible'&&(document.getElementById('api').classList.contains('active')||apiCapitalMode()))refreshAccountPositions()},15000);
 document.addEventListener('visibilitychange',function(){if(document.visibilityState!=='visible'&&accountViewSession)lockAccountView('画面を離れたため口座情報をロックしました。再度表示してください。')});
+function renderAccountOrders(j){
+ var status=document.getElementById('accountOrdersStatus'),data=document.getElementById('accountOrdersData');
+ if(!j||!accountViewSession||Date.now()>=accountViewSession.expires||j.source!=='EDGEX_ACTIVE_CONDITIONAL_ORDERS'||j.read_only!==true||j.complete!==true||!Array.isArray(j.items)||!accountFresh(j)){data.innerHTML='';status.textContent='条件注文は未確認です。口座を表示してSL/TPを確認してください。';return}
+ status.textContent='取引所取得 '+new Date(j.observed_ms).toLocaleString('ja-JP')+' / 新規用の条件注文も含みます。方向・数量・Reduce-onlyを確認してください。約定・保護の保証ではありません。建玉と別時点の取得です。';
+ data.innerHTML=j.items.length?'<div class="scroll"><table><thead><tr><th>銘柄 / 種類</th><th>売買 / 状態</th><th>トリガー価格</th><th>数量</th><th>Reduce-only</th></tr></thead><tbody>'+j.items.map(function(o){return '<tr><td>'+lifecycleEscape(o.ticker)+' / '+lifecycleEscape(o.kind)+'</td><td>'+lifecycleEscape(o.side)+' / '+lifecycleEscape(o.status)+'</td><td>'+accountExact(o.trigger_price)+'</td><td>'+accountExact(o.quantity)+'</td><td>'+(o.reduce_only===true?'はい':o.reduce_only===false?'いいえ':'未確認')+'</td></tr>'}).join('')+'</tbody></table></div>':'取得時点で条件注文が見つかりません。建玉がある場合は取引所で保護状態を確認してください。';
+}
+async function checkAccountOrders(){
+ if(accountOrdersBusy)return;accountOrdersBusy=true;var epoch=accountViewEpoch;
+ accountOrdersSnapshot=null;renderAccountOrders(null);document.getElementById('accountOrdersStatus').textContent='取引所の条件注文を確認中…';
+ try{var j=await accountRequest('/api/account/conditional-orders');if(epoch!==accountViewEpoch)return;j._received_ms=Date.now();accountOrdersSnapshot=j;renderAccountOrders(j)}catch(e){if(epoch===accountViewEpoch){if(e.status===401||e.status===403)lockAccountView('閲覧認証が無効になりました。');else renderAccountOrders(null)}}finally{accountOrdersBusy=false}
+}
+document.getElementById('accountOrdersCheck').onclick=checkAccountOrders;
+setInterval(function(){if(accountOrdersSnapshot)renderAccountOrders(accountOrdersSnapshot)},1000);
 async function checkApiConnections(){
  var st=document.getElementById('apiCheckStatus'),out=document.getElementById('apiCheckResults'),button=document.getElementById('checkApi');if(!st||!out||!button)return;
  var version=++apiCheckRequest;button.disabled=true;st.textContent='APIを確認中…';out.innerHTML='';

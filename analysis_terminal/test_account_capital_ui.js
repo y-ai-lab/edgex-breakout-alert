@@ -33,8 +33,8 @@ async function tick(){await new Promise(setImmediate)}
  context.lastAnalysis=row;await context.renderQuickRisk(row);assert(nodes.quickRiskOut.innerHTML.includes('0.29'));assert.equal(nodes.readyActionCard.innerHTML,'PRIVATE_SIZE');
  context.lockAccountView();assert.equal(nodes.equity.value,'');assert.equal(nodes.riskOut.innerHTML,'');assert.equal(nodes.quickRiskOut.innerHTML,'');assert.equal(nodes.readyActionCard.innerHTML,'PUBLIC_LEVELS');assert(!nodes.capitalStatus.textContent.includes('80.00'));
  context.lastAnalysis=null;setup();let done;gate={promise:new Promise(r=>done=r)};let pending=nodes.calc.onclick();await tick();context.lockAccountView();done();await pending;assert.equal(nodes.riskOut.innerHTML,'','late calculation cannot undo lock');
- setup();now+=30000;intervals.find(x=>x.ms===1000).fn();assert.equal(nodes.equity.value,'');await assert.rejects(context.analysisRiskPlan({entry:100,stop:90}),/API/);
- now=100000;setup();context.accountViewSession.expires=now;intervals.find(x=>x.ms===1000).fn();assert.equal(nodes.equity.value,'');
+ setup();now+=30000;intervals.filter(x=>x.ms===1000).forEach(x=>x.fn());assert.equal(nodes.equity.value,'');await assert.rejects(context.analysisRiskPlan({entry:100,stop:90}),/API/);
+ now=100000;setup();context.accountViewSession.expires=now;intervals.filter(x=>x.ms===1000).forEach(x=>x.fn());assert.equal(nodes.equity.value,'');
  setup();gate={promise:new Promise(r=>done=r)};pending=context.analysisRiskPlan({entry:100,stop:90});await tick();nodes.capitalSource.value='MANUAL';context.changeCapitalSource();assert.equal(nodes.equity.value,'');assert.equal(nodes.equity.readOnly,false);done();await assert.rejects(pending,/再確認/);
  nodes.equity.value='500';await context.analysisRiskPlan({entry:100,stop:90});sent=requests.at(-1);assert.equal(sent.url,'/api/risk');assert.equal(JSON.parse(sent.opt.body).equity,500);assert(!sent.opt.headers.Authorization);
  nodes.capitalSource.value='API';context.changeCapitalSource();assert.equal(nodes.equity.readOnly,true);assert.equal(nodes.equity.value,'100');
