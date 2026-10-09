@@ -4,6 +4,7 @@ import uuid
 
 from fastapi import HTTPException
 from analysis_terminal import account_view as view, live_execution as live
+from analysis_terminal import flat_reconciliation
 
 TTL = 120
 
@@ -75,13 +76,15 @@ class Controller:
             can_request_on=self.worker_available and config.mode=='LIVE' and not config.errors()
                 and not s['armed'] and active==0,
             active_orders=active, on_blockers=blockers, observed_ms=now_ms,
+            can_request_flat_reconciliation=bool(self.worker_available and config.mode=='LIVE'
+                and not config.errors() and not s['armed'] and flat_reconciliation.eligible(records)),
             latest_request=dict(zip(('request_id','action','status','created_ms','completed_ms','code'),row)) if row else None)
 
     def submit(self, conn, config, authorization, *, action, request_id, expected_epoch, now_ms):
         self.authorize(conn, config, authorization)
         identifier(request_id)
-        if action not in {'arm','pause'}:
-            raise HTTPException(422, 'Only new-entry ON/OFF is permitted')
+        if action not in {'arm','pause','reconcile_flat'}:
+            raise HTTPException(422, 'Unknown owner control')
         conn.execute('BEGIN IMMEDIATE')
         prior = conn.execute('SELECT action,expected_epoch,fingerprint FROM execution_web_controls WHERE request_id=?', (request_id,)).fetchone()
         if prior:
@@ -92,17 +95,20 @@ class Controller:
         if conn.execute('SELECT 1 FROM live_execution_controls WHERE request_id=?',(request_id,)).fetchone():
             raise HTTPException(409, 'Operation ID already consumed')
         s = live.state(conn)
-        if action=='arm':
+        if action in {'arm','reconcile_flat'}:
             if config.mode!='LIVE' or config.errors() or not self.worker_available:
                 raise HTTPException(409, 'LIVE worker and configuration required')
             if s['armed'] or s.get('control_epoch',0)!=expected_epoch:
                 raise HTTPException(409, 'State changed; refresh before ON')
-            if any(r['status'] not in live.TERMINAL for r in live.orders(conn)):
+            records = [r for r in live.orders(conn) if r['status'] not in live.TERMINAL]
+            if action=='arm' and records:
                 raise HTTPException(409, 'Unresolved managed position; keep protection active')
+            if action=='reconcile_flat' and not flat_reconciliation.eligible(records):
+                raise HTTPException(409, 'Only quarantined records with a known fill may be reviewed')
             if conn.execute("SELECT 1 FROM execution_web_controls WHERE status IN ('QUEUED','PROCESSING')").fetchone():
                 raise HTTPException(409, 'An ON operation is already pending')
         conn.execute('INSERT INTO execution_web_controls VALUES(?,?,?,?,?,?,NULL,NULL)',
-            (request_id,action,expected_epoch,config.fingerprint(),now_ms,'QUEUED' if action=='arm' else 'DONE'))
+            (request_id,action,expected_epoch,config.fingerprint(),now_ms,'DONE' if action=='pause' else 'QUEUED'))
         if action=='pause':
             # Immediate local commit, even while an ON preflight awaits the SDK.
             live.pause(conn,'MANUAL_PAUSE')
@@ -127,10 +133,10 @@ class Controller:
     async def process(self, engine):
         with engine.db_connect() as conn:
             conn.execute('BEGIN IMMEDIATE')
-            row = conn.execute("SELECT request_id,expected_epoch,fingerprint,created_ms FROM execution_web_controls WHERE status='QUEUED' ORDER BY rowid LIMIT 1").fetchone()
+            row = conn.execute("SELECT request_id,expected_epoch,fingerprint,created_ms,action FROM execution_web_controls WHERE status='QUEUED' ORDER BY rowid LIMIT 1").fetchone()
             if row is None:
                 return
-            request_id, epoch, fingerprint, created_ms = row
+            request_id, epoch, fingerprint, created_ms, action = row
             authorization = self.pending_auth.get(request_id)
             try:
                 self.authorize(conn,engine.config,authorization)
@@ -139,7 +145,7 @@ class Controller:
                     raise HTTPException(409,'STALE_CONTROL_STATE')
                 if not 0 <= engine.clock()-created_ms < 30000:
                     raise HTTPException(409,'CONTROL_EXPIRED')
-                if any(r['status'] not in live.TERMINAL for r in live.orders(conn)):
+                if action=='arm' and any(r['status'] not in live.TERMINAL for r in live.orders(conn)):
                     raise HTTPException(409,'UNRESOLVED_EXECUTION_LEDGER')
             except HTTPException as exc:
                 code = exc.detail if exc.detail in {'STALE_CONTROL_STATE','CONTROL_EXPIRED','UNRESOLVED_EXECUTION_LEDGER'} else 'AUTHORIZATION_LOST'
@@ -157,6 +163,16 @@ class Controller:
                 raise HTTPException(409,'Operation no longer pending')
 
         try:
+            if action=='reconcile_flat':
+                try:
+                    await flat_reconciliation.reconcile(engine, authorize=final_authorize, expected_epoch=epoch)
+                    code,status='FLAT_REVIEW_DONE','DONE'
+                except Exception as exc:
+                    code = str(exc) if str(exc) in {'FLAT_REVIEW_POSITION_OR_ORDERS_REMAIN','FLAT_REVIEW_ORDER_UNCONFIRMED','FLAT_REVIEW_DATA_UNAVAILABLE','FLAT_REVIEW_STATE_CHANGED'} else 'FLAT_REVIEW_REFUSED'
+                    status='REFUSED'
+                with engine.db_connect() as conn:
+                    conn.execute("UPDATE execution_web_controls SET status=?,completed_ms=?,code=? WHERE request_id=? AND status='PROCESSING'",(status,engine.clock(),code,request_id))
+                return
             await live.apply_control(engine, 'arm:'+request_id, authorize=final_authorize, expected_epoch=epoch)
             with engine.db_connect() as conn:
                 control = conn.execute('SELECT status,code FROM live_execution_controls WHERE request_id=?',(request_id,)).fetchone()

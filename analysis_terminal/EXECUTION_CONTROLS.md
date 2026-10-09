@@ -1,5 +1,34 @@
 # Explicit owner ON/OFF controls — v19.0.50
 
+## Quarantined-position completion review — v19.0.56
+
+With new entries OFF, the original owner may explicitly press **終了した建玉を照合**.
+The existing short-lived control capability queues `reconcile_flat`; a read-only
+view token cannot perform this ledger operation. No private proof is used by
+production smoke, and deploying the feature never invokes the operation.
+
+Only quarantined isolated-contract records with known positive entry fills are
+eligible. The serialized worker reads complete active-order pages and fresh
+account positions twice, before and after querying every attempted bot order.
+Any remaining target-contract position/order, missing/stale data, nonterminal or
+mismatched bot order, changed fill, policy/account change, expired/revoked owner
+or OFF during the wait refuses the review. Other contracts are not attributed
+to this bot. SDK create/cancel/signing methods are never called by the review.
+
+Successful review saves `EXTERNAL_FLAT_VERIFIED` and its timestamp/original
+status; all original fills, reserved-risk fields, order IDs, quarantine flag and
+events remain. It does not invent exit prices, fees, TP/SL, realized PnL or ROI.
+Health reports it separately from CLOSED. Research/paper portfolios and their
+uncertain capital are unchanged. It confirms no current contract exposure, not
+the lot ownership or financial outcome of its earlier manual/external activity.
+Exchange reads are repeated observations, not an atomic exchange lock.
+
+The engine stays paused; review does not automatically arm or retry an entry.
+The owner must separately press ON, which runs the unchanged fresh-account
+preflight and excludes occupied contracts. With a bot position still open,
+restart remains blocked. Queued/interrupted review does not resume after a
+restart. No manual-protection adoption, force-clear or close-all is introduced.
+
 The API tab adds **自動取引 ON** and **新規エントリー OFF**, within the existing
 four-tab interface. The original owner explicitly presses **登録端末で操作を有効にする**
 first. ON enables future real orders from the unchanged CURRENT READY strategy.

@@ -44,6 +44,35 @@ class MathTests(unittest.TestCase):
             self.assertTrue(r['margin_capped']);self.assertLessEqual(D(r['notional'])*D('1.0005'),limit)
             self.assertLessEqual(D(r['max_loss']),D(3))
 
+    def test_budget_reference_is_cost_adjusted_and_floor_never_exceeds_budget(self):
+        r=self.calculate(step_size=.01,leverage=10)
+        self.assertEqual(D(r['budget_reference_size']),D('.29'))
+        self.assertEqual(D(r['budget_reference_loss_usdc']),D(r['max_loss']))
+        self.assertLessEqual(D(r['budget_reference_loss_usdc']),D(r['risk_budget']))
+        self.assertTrue(r['budget_reference_within_limits'])
+        self.assertEqual(D(r['budget_reference_margin_usdc']),D(r['budget_reference_notional_usdc'])/10)
+        self.assertEqual(D(r['unused_risk_budget_usdc']),D(r['risk_budget'])-D(r['max_loss']))
+        self.assertIn('ORDER_STEP_ROUNDING',r['sizing_constraints'])
+
+    def test_full_budget_reference_shows_notional_policy_constraint_without_increasing_size(self):
+        q=server.AccountRiskRequest(entry=100,stop=99,leverage=10,step_size=.01)
+        r=risk.plan(q,snapshot(),config())
+        self.assertGreater(D(r['budget_reference_size']),D(r['size']))
+        self.assertLessEqual(D(r['notional'])*D('1.0005'),D(80))
+        self.assertFalse(r['budget_reference_within_limits'])
+        self.assertIn('NOTIONAL_POLICY_LIMIT',r['sizing_constraints'])
+        self.assertLess(D(r['risk_budget_used_pct']),100)
+        self.assertLessEqual(D(r['budget_reference_loss_usdc']),D(3))
+
+    def test_constraints_distinguish_maximum_minimum_and_zero_available(self):
+        r=self.calculate(max_order_size=.05)
+        self.assertIn('MAX_ORDER_SIZE',r['sizing_constraints']);self.assertFalse(r['budget_reference_within_limits'])
+        r=self.calculate(min_order_size=.5)
+        self.assertIn('BELOW_MIN_ORDER_SIZE',r['sizing_constraints']);self.assertFalse(r['budget_reference_within_limits'])
+        r=risk.plan(server.AccountRiskRequest(entry=100,stop=90),snapshot(available='0'),config())
+        self.assertEqual(D(r['size']),0);self.assertGreater(D(r['budget_reference_size']),0)
+        self.assertFalse(r['budget_reference_within_limits']);self.assertEqual(D(r['unused_risk_budget_usdc']),D(3))
+
     def test_lower_requested_risk_and_configured_caps_never_expand_policy(self):
         c=config();c.risk_pct='1';c.max_risk_usdc='.5';c.max_notional_usdc='4'
         r=risk.plan(server.AccountRiskRequest(entry=100,stop=90,risk_pct=2),snapshot(),c)

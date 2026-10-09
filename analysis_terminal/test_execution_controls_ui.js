@@ -3,14 +3,14 @@ const fs=require('fs'),vm=require('vm'),assert=require('assert'),crypto=require(
 const html=fs.readFileSync(process.argv[2],'utf8'),script=html.match(/<script>([\s\S]*?)<\/script>/)[1];new Function(script);
 const code=script.slice(script.indexOf('// Deliberate new-entry authority'));
 let now=100000,requests=[],intervals=[],listeners={},loads=0,gate=null,offline=false,denied=0,sub=true,bootGate=null;
-const nodes={};for(const id of ['executionControlOn','executionControlOff','executionControlUnlock','executionControlLock','executionControlRefresh','executionControlStatus'])nodes[id]={disabled:false,textContent:''};
+const nodes={};for(const id of ['executionControlOn','executionControlOff','executionControlUnlock','executionControlLock','executionControlRefresh','executionControlReconcile','executionControlStatus'])nodes[id]={disabled:false,textContent:''};
 let state={scope:'NEW_ENTRY_CONTROL',mode:'LIVE',armed:false,new_entries_enabled:false,worker_available:true,can_request_on:true,control_epoch:0,protective_management_enabled:true,latest_request:null};
 const context={Date:class extends Date{static now(){return now}},Number,Math,JSON,Promise,AbortController,crypto,
  document:{visibilityState:'visible',getElementById:id=>nodes[id],addEventListener:(name,fn)=>listeners[name]=fn},setInterval:(fn,ms)=>intervals.push({fn,ms}),setTimeout,clearTimeout,
  loadLiveExecution:()=>loads++,currentPushSubscription:async()=>sub?{toJSON:()=>({endpoint:'SYNTHETIC',keys:{auth:'TEST_ONLY'}})}:null,
  fetch:async(url,opt={})=>{requests.push({url,opt});if(url==='/api/execution/logout')return {ok:true,json:async()=>({ok:true})};if(denied)return {ok:false,status:denied};if(offline)throw Error('offline');
   if(url==='/api/execution/session'){if(bootGate){const g=bootGate;bootGate=null;await g.promise}return {ok:true,json:async()=>({scope:'NEW_ENTRY_CONTROL',read_only:false,expires_in_seconds:120,control_token:'c'.repeat(43)})}}
-  if(url==='/api/execution/control'){const r=JSON.parse(opt.body);if(r.action==='arm')state.latest_request={request_id:r.request_id,action:r.action,status:'QUEUED'};else{state.armed=false;state.new_entries_enabled=false;state.can_request_on=true;state.control_epoch++;state.latest_request={request_id:r.request_id,action:r.action,status:'DONE'}}
+  if(url==='/api/execution/control'){const r=JSON.parse(opt.body);if(r.action==='arm'||r.action==='reconcile_flat')state.latest_request={request_id:r.request_id,action:r.action,status:'QUEUED'};else{state.armed=false;state.new_entries_enabled=false;state.can_request_on=true;state.control_epoch++;state.latest_request={request_id:r.request_id,action:r.action,status:'DONE'}}
    const value=JSON.parse(JSON.stringify(state));if(gate){const g=gate;gate=null;await g.promise}return {ok:true,json:async()=>value}}
   return {ok:true,json:async()=>JSON.parse(JSON.stringify(state))};}
 };vm.createContext(context);vm.runInContext(code,context);
@@ -22,9 +22,9 @@ function finishOn(){state.armed=true;state.new_entries_enabled=true;state.can_re
  await context.unlockExecutionControls();assert(!nodes.executionControlOn.disabled);assert(!nodes.executionControlOff.disabled);assert(nodes.executionControlUnlock.disabled);assert(!state.armed);
  const originalState=JSON.parse(JSON.stringify(state));state.can_request_on=false;state.active_orders=1;state.on_blockers=['OWNERSHIP_UNCERTAIN'];
  await context.refreshExecutionControls();assert(nodes.executionControlOn.disabled);assert(!nodes.executionControlOff.disabled);
- assert(nodes.executionControlOn.textContent.includes('開始不可'));assert(nodes.executionControlStatus.textContent.includes('SL/TPを確認'));assert(nodes.executionControlStatus.textContent.includes('既に決済済み'));
+ assert(nodes.executionControlOn.textContent.includes('開始不可'));assert(nodes.executionControlStatus.textContent.includes('SL/TP'));assert(nodes.executionControlStatus.textContent.includes('終了した建玉を照合'));
  const blockedRequests=requests.filter(r=>r.url==='/api/execution/control').length;
- await context.setExecutionControl('arm');intervals.find(x=>x.ms===1000).fn();assert(nodes.executionControlStatus.textContent.includes('建玉・注文の対応が未確認'));
+ await context.setExecutionControl('arm');intervals.find(x=>x.ms===1000).fn();assert(nodes.executionControlStatus.textContent.includes('未照合のボット取引'));
  assert.equal(requests.filter(r=>r.url==='/api/execution/control').length,blockedRequests,'explaining a block never submits ON');
  state.on_blockers=['<img src=x onerror=bad()>'];await context.refreshExecutionControls();assert(nodes.executionControlStatus.textContent.includes('未決着・未照合'));assert(!nodes.executionControlStatus.textContent.includes('<img'));
  state.active_orders=0;state.worker_available=false;state.on_blockers=['WORKER_UNAVAILABLE'];await context.refreshExecutionControls();assert(nodes.executionControlStatus.textContent.includes('実行worker'));
@@ -48,7 +48,12 @@ function finishOn(){state.armed=true;state.new_entries_enabled=true;state.can_re
  sub=false;await context.unlockExecutionControls();assert(nodes.executionControlOn.disabled);assert(nodes.executionControlStatus.textContent.includes('登録済み'));sub=true;
  bootGate={promise:new Promise(r=>done=r)};const boot=context.unlockExecutionControls();await tick();context.lockExecutionControls();done();await boot;assert.equal(context.executionControlSession,null);
  await context.unlockExecutionControls();state.armed=true;state.new_entries_enabled=false;state.mode='OFF';state.can_request_on=false;state.worker_available=false;state.latest_request=null;await context.refreshExecutionControls();assert(!nodes.executionControlStatus.textContent.includes('新規エントリー有効'));assert(nodes.executionControlOn.disabled);
- assert(requests.filter(r=>r.url==='/api/execution/control').every(r=>['arm','pause'].includes(JSON.parse(r.opt.body).action)));
+ state.armed=false;state.mode='LIVE';state.worker_available=true;state.can_request_on=false;state.can_request_flat_reconciliation=true;state.latest_request=null;await context.refreshExecutionControls();assert(!nodes.executionControlReconcile.disabled);
+ await nodes.executionControlReconcile.onclick();assert.equal(state.latest_request.action,'reconcile_flat');assert.equal(state.latest_request.status,'QUEUED');assert(nodes.executionControlOn.disabled);assert(nodes.executionControlReconcile.disabled);assert(!nodes.executionControlOff.disabled);assert(!state.armed);
+ state.latest_request.status='REFUSED';state.latest_request.code='FLAT_REVIEW_POSITION_OR_ORDERS_REMAIN';await context.refreshExecutionControls();assert(nodes.executionControlStatus.textContent.includes('建玉または残注文'));assert(!state.armed);
+ state.latest_request.status='DONE';state.latest_request.code='FLAT_REVIEW_DONE';state.can_request_flat_reconciliation=false;state.can_request_on=true;await context.refreshExecutionControls();assert(nodes.executionControlStatus.textContent.includes('現在はOFF'));assert(nodes.executionControlReconcile.disabled);assert(!nodes.executionControlOn.disabled);assert(!state.armed,'Review does not arm');
+ context.lockExecutionControls();assert(nodes.executionControlReconcile.disabled);
+ assert(requests.filter(r=>r.url==='/api/execution/control').every(r=>['arm','pause','reconcile_flat'].includes(JSON.parse(r.opt.body).action)));
  assert(!requests.some(r=>/token=|createOrder|cancelOrder|withdraw/.test(r.url)));
  console.log('ON/OFF UI: separate scope, deliberate actions, acknowledgement gap, OFF priority, stale state, lock/expiry and late responses: OK');
 })().catch(e=>{console.error(e);process.exitCode=1});

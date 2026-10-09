@@ -20,7 +20,7 @@ from analysis_terminal.edgex_orders import ExecutionError, decimal
 from analysis_terminal.setups import setup_identity
 
 STEP = 900000
-TERMINAL = {"NO_FILL", "CLOSED", "SKIPPED"}
+TERMINAL = {"NO_FILL", "CLOSED", "SKIPPED", "EXTERNAL_FLAT_VERIFIED"}
 
 
 @dataclass

@@ -1,5 +1,22 @@
 # Private account view (v19.0.48)
 
+## Full risk-budget sizing reference — v19.0.56
+
+The private calculator adds quantity/notional/loss at the requested risk budget,
+capped by the existing configured risk budget and floored to the supplied order
+step. This cost-adjusted **theoretical reference** ignores notional/maximum-order
+caps and is labeled separately from the unchanged cap-compliant reference size.
+Optional margin is notional divided by the supplied leverage, excludes fees and
+is not a venue margin quote. Increasing calculator leverage never increases the
+execution notional policy. Constraint codes distinguish that policy, available
+margin, maximum/minimum quantity and step rounding. Remaining loss budget and
+its used percentage describe the reference calculation, not realized risk.
+
+No actual order quantity, policy, leverage setting, stop or strategy is changed.
+The owner session, API equity source, freshness/lock clearing, escaped rendering
+and revision guards apply to every added private result. Missing capital still
+blocks calculation; it is never replaced with cash or a fabricated zero.
+
 The API tab shows USDC equity, available collateral, cash, unrealized PnL, margin,
 all current positions (including manual positions), and separate transaction and
 collateral-change histories for the last 30 days. It adds no tab, strategy change,

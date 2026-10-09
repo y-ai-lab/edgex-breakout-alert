@@ -223,6 +223,7 @@ button{-webkit-tap-highlight-color:transparent}
 <div class="analyticsBox"><div class="boxLabel">新規エントリー ON / OFF</div>
 <div class="row"><button class="ghost" id="executionControlUnlock">登録端末で操作を有効にする</button><button class="ghost" id="executionControlLock">操作をロック</button></div>
 <div class="row"><button class="primary" id="executionControlOn" aria-describedby="executionControlStatus" disabled>自動取引 ON（操作ロック中）</button><button class="ghost" id="executionControlOff" disabled>新規エントリー OFF</button><button class="ghost" id="executionControlRefresh" disabled>状態を再確認</button></div>
+<div class="row"><button class="ghost" id="executionControlReconcile" disabled>終了した建玉を照合</button></div><p class="sub">隔離された建玉が終了した後に使用します。対象銘柄の建玉ゼロ・残注文なし・送信済み注文の終了をAPIで再確認します。売買・注文取消は行いません。照合後もOFFのままで、損益を推定しません。</p>
 <div id="executionControlStatus" class="status" role="status">操作はロック中です。残高閲覧の認証とは別に、登録済み端末で操作を有効にしてください。</div>
 <p class="sub">OFFは新規エントリーのみ停止します。送信済み・送信中の注文は取り消しません。既存建玉の照合・SL/TP管理はLIVEのまま継続します。操作ロックは取引停止ではありません。ONは口座・注文を再照合し、開始後の新しい確認足だけを対象にします。</p></div>
 <details class="dashboardDrawer" id="accountViewDetails" open><summary>自分の口座 — 残高・建玉・履歴</summary><div class="drawerBody">
@@ -1062,7 +1063,7 @@ var quickRiskVersion=0;
 async function renderQuickRisk(r){
  var out=document.getElementById('quickRiskOut');if(!out)return;var version=++quickRiskVersion;out.innerHTML='';
  if(!r||!r.entry_reference||!r.stop_loss)return;
- try{var x=await analysisRiskPlan(scenarioRiskParams(r));if(version!==quickRiskVersion)return;renderReadyActionCard(r,x);out.innerHTML='<div class="section"><h2>このシナリオの資金計算</h2><div class="sub">'+riskEstimateNote(x)+'</div><div class="grid">'+card('計算用資金',fmt(x.equity_usdc,2)+' USDC')+card('損失予算',fmt(x.risk_budget,2)+' USDC')+card('参考数量',fmt(x.size,8))+card('想定建玉',fmt(x.notional,2)+' USDC')+card('SL時の想定損失',fmt(x.max_loss,2)+' USDC')+card('目標利益',x.target_profit==null?'—':fmt(x.target_profit,2)+' USDC')+card('構造RR',fmt(x.rr,2))+(x.cost_adjusted_rr!=null?card('費用込みRR',fmt(x.cost_adjusted_rr,2)):'')+'</div></div>'}catch(e){if(version===quickRiskVersion){renderReadyActionCard(r,null);out.innerHTML='<div class="status">'+lifecycleEscape(e.message)+'</div>'}}
+ try{var x=await analysisRiskPlan(scenarioRiskParams(r));if(version!==quickRiskVersion)return;renderReadyActionCard(r,x);out.innerHTML='<div class="section"><h2>このシナリオの資金計算</h2><div class="sub">'+riskEstimateNote(x)+'</div><div class="grid">'+card('計算用資金',fmt(x.equity_usdc,2)+' USDC')+riskSizingCards(x)+card('目標利益',x.target_profit==null?'—':fmt(x.target_profit,2)+' USDC')+card('構造RR',fmt(x.rr,2))+(x.cost_adjusted_rr!=null?card('費用込みRR',fmt(x.cost_adjusted_rr,2)):'')+'</div></div>'}catch(e){if(version===quickRiskVersion){renderReadyActionCard(r,null);out.innerHTML='<div class="status">'+lifecycleEscape(e.message)+'</div>'}}
 }
 function renderEntryBand(r){
  var b=r.entry_band;
@@ -1208,6 +1209,12 @@ function syncAnalysisCapital(j){
  document.getElementById('capitalStatus').textContent=valid?'APIのUSDC評価額 / 利用可能 '+accountMoney(j.balance.available_usdc)+' USDC / 取得 '+new Date(j.observed_ms).toLocaleString('ja-JP')+'。未入金のArcウォレット残高は含みません。':'最新のAPI資金を確認できません。登録済み端末で取得・更新してください。古い値や手動資金への自動切替は行いません。';
  if(valid)recalculateAnalysisCapital();
 }
+function riskSizingCards(x){
+ var labels={NOTIONAL_POLICY_LIMIT:'運用設定の建玉額上限（口座評価額・利用可能額）',AVAILABLE_MARGIN_LIMIT:'指定レバレッジでの利用可能証拠金',MAX_ORDER_SIZE:'最大注文量',BELOW_MIN_ORDER_SIZE:'最小注文量未満',ORDER_STEP_ROUNDING:'注文刻みで予算以下に切り捨て'},reasons=(Array.isArray(x.sizing_constraints)?x.sizing_constraints:[]).filter(function(code){return Object.prototype.hasOwnProperty.call(labels,code)}).map(function(code){return labels[code]});
+ var budget=card('損失予算',fmt(x.risk_budget,4)+' USDC');
+ if(x.budget_reference_size!=null){budget+=card('損失予算基準の数量（理論）',fmt(x.budget_reference_size,8))+card('その建玉額（理論）',fmt(x.budget_reference_notional_usdc,2)+' USDC')+card('そのSL時の想定損失',fmt(x.budget_reference_loss_usdc,4)+' USDC');if(x.budget_reference_margin_usdc!=null)budget+=card('指定レバレッジでの必要証拠金（概算・費用別）',fmt(x.budget_reference_margin_usdc,2)+' USDC');budget+='<div class="status" style="grid-column:1/-1">'+(x.budget_reference_within_limits===true?'損失予算基準の数量は現在の数量・資金上限内です。板・約定は未確認です。':'損失予算基準の数量は理論値です。現行上限ではその数量を提示できません。下記の上限内数量を確認してください。')+(reasons.length?' 制約：'+reasons.join(' / '):'')+'</div>'}
+ return budget+card('現行上限内の参考数量',fmt(x.size,8))+card('現行上限内の建玉額',fmt(x.notional,2)+' USDC')+card('SL時の想定損失',fmt(x.max_loss,4)+' USDC')+(x.unused_risk_budget_usdc!=null?card('未使用の損失予算',fmt(x.unused_risk_budget_usdc,4)+' USDC')+card('損失予算の使用率',fmt(x.risk_budget_used_pct,2)+'%'):'');
+}
 function riskEstimateNote(x){return x.capital_source==='EDGEX_USDC_EQUITY'?'API口座資金・費用込みの参考値（片道手数料 '+lifecycleEscape(x.fee_bps)+'bps / スリッページ '+lifecycleEscape(x.slippage_bps)+'bps）。Funding・板・約定は未確認。':'手動の仮定資金・費用未計上の参考値。'}
 async function analysisRiskPlan(params){
  var api=apiCapitalMode(),revision=analysisCapitalRevision,epoch=accountViewEpoch,p=Object.assign({},params),result;
@@ -1254,7 +1261,7 @@ document.getElementById('calc').onclick=async function(){
  function v(id){return document.getElementById(id).value}var version=++manualCalcVersion,p={risk_pct:+v('riskPct'),entry:+v('entry'),stop:+v('stop')};
  if(v('target'))p.target=+v('target');if(v('step'))p.step_size=+v('step');if(v('minOrder'))p.min_order_size=+v('minOrder');if(v('maxOrder'))p.max_order_size=+v('maxOrder');if(v('lev'))p.leverage=+v('lev');
  var s=document.getElementById('riskStatus'),o=document.getElementById('riskOut');o.innerHTML='';s.textContent='参考数量を計算中…';
- try{var r=await analysisRiskPlan(p);if(version!==manualCalcVersion)return;s.innerHTML='計算完了 — '+directionJa(r.side)+(r.below_min_order?' / 最小注文量未満':'')+(r.margin_capped?' / 利用可能資金の上限で調整':'')+'<br>'+riskEstimateNote(r);o.innerHTML=card('損失予算',fmt(r.risk_budget,4)+' USDC')+card('参考数量',fmt(r.size,8))+card('想定建玉',fmt(r.notional,2)+' USDC')+card('SL時の想定損失',fmt(r.max_loss,4)+' USDC')+card('概算リスク率',pct(r.actual_risk_pct))+card('構造RR',fmt(r.rr,2))+card('目標利益',r.target_profit==null?'—':fmt(r.target_profit,4)+' USDC')+(r.cost_adjusted_rr!=null?card('費用込みRR',fmt(r.cost_adjusted_rr,2)):'')}
+ try{var r=await analysisRiskPlan(p);if(version!==manualCalcVersion)return;s.innerHTML='計算完了 — '+directionJa(r.side)+(r.below_min_order?' / 最小注文量未満':'')+(r.margin_capped?' / 利用可能資金の上限で調整':'')+'<br>'+riskEstimateNote(r);o.innerHTML=riskSizingCards(r)+card('概算リスク率',pct(r.actual_risk_pct))+card('構造RR',fmt(r.rr,2))+card('目標利益',r.target_profit==null?'—':fmt(r.target_profit,4)+' USDC')+(r.cost_adjusted_rr!=null?card('費用込みRR',fmt(r.cost_adjusted_rr,2)):'')}
  catch(e){if(version===manualCalcVersion)s.textContent=e.message}
 };
 ['entry','stop','target','step','minOrder','maxOrder','lev'].forEach(function(id){document.getElementById(id).addEventListener('input',function(){manualCalcVersion++;document.getElementById('riskOut').innerHTML='';document.getElementById('riskStatus').textContent='価格・数量条件を更新しました。再計算してください。'})});
@@ -1264,7 +1271,7 @@ var executionControlSession=null,executionControlSnapshot=null,executionControlV
 function executionControlAuthenticated(){return !!executionControlSession&&Date.now()<executionControlSession.expires&&document.visibilityState==='visible'}
 function executionControlFresh(j){var elapsed=j&&Number.isFinite(j._received_ms)?Date.now()-j._received_ms:Infinity;return !!j&&j.scope==='NEW_ENTRY_CONTROL'&&['LIVE','OFF','READ_ONLY'].includes(j.mode)&&typeof j.worker_available==='boolean'&&typeof j.new_entries_enabled==='boolean'&&typeof j.armed==='boolean'&&typeof j.can_request_on==='boolean'&&Number.isInteger(j.control_epoch)&&j.control_epoch>=0&&elapsed>=0&&elapsed<10000}
 function executionControlBlockedReason(j){
- var labels={OWNERSHIP_UNCERTAIN:'建玉・注文の対応が未確認です。口座を表示して「SL/TPを確認（読取専用）」と取引所の建玉・注文履歴を確認してください。既に決済済みでも、ボットの記録が未照合なら開始できません。',UNRESOLVED_BOT_RECORDS:'未決着・未照合のボット記録があります。建玉・SL/TP・決済の状態を確認してください。',WORKER_UNAVAILABLE:'実行workerを確認できません。状態を再確認してください。',LIVE_MODE_REQUIRED:'実行モードがLIVEではありません。稼働設定を確認してください。',CONFIGURATION_REQUIRED:'接続・実行設定の確認が必要です。API状態を確認してください。',ALREADY_ARMED:'ON設定済みです。現在の稼働状態を確認してください。'},codes=j&&Array.isArray(j.on_blockers)?j.on_blockers:[],messages=[];
+ var labels={OWNERSHIP_UNCERTAIN:'未照合のボット取引が残っています。建玉・SL/TPを確認してください。建玉終了後に「終了した建玉を照合」を押し、照合が完了してからONを押してください。建玉や残注文がある間は再開できません。',UNRESOLVED_BOT_RECORDS:'未決着・未照合のボット記録があります。建玉・SL/TP・決済の状態を確認してください。',WORKER_UNAVAILABLE:'実行workerを確認できません。状態を再確認してください。',LIVE_MODE_REQUIRED:'実行モードがLIVEではありません。稼働設定を確認してください。',CONFIGURATION_REQUIRED:'接続・実行設定の確認が必要です。API状態を確認してください。',ALREADY_ARMED:'ON設定済みです。現在の稼働状態を確認してください。'},codes=j&&Array.isArray(j.on_blockers)?j.on_blockers:[],messages=[];
  ['OWNERSHIP_UNCERTAIN','UNRESOLVED_BOT_RECORDS','WORKER_UNAVAILABLE','LIVE_MODE_REQUIRED','CONFIGURATION_REQUIRED','ALREADY_ARMED'].forEach(function(code){if(codes.includes(code))messages.push(labels[code])});
  if(messages.length)return messages.join(' ');
  if(j&&Number.isInteger(j.active_orders)&&j.active_orders>0)return labels.UNRESOLVED_BOT_RECORDS;
@@ -1273,13 +1280,15 @@ function executionControlBlockedReason(j){
  return '開始条件を確認できません。状態を再確認してください。';
 }
 function renderExecutionControls(message){
- var valid=executionControlAuthenticated(),j=executionControlSnapshot,fresh=executionControlFresh(j),pending=(executionControlSubmitting&&executionControlPending&&executionControlPending.action==='arm')||(j&&j.latest_request&&['QUEUED','PROCESSING'].includes(j.latest_request.status)),st=document.getElementById('executionControlStatus'),on=document.getElementById('executionControlOn'),blocked=valid&&fresh&&!pending&&!j.armed&&!j.can_request_on;
+ var valid=executionControlAuthenticated(),j=executionControlSnapshot,fresh=executionControlFresh(j),pending=(executionControlSubmitting&&executionControlPending&&executionControlPending.action!=='pause')||(j&&j.latest_request&&['QUEUED','PROCESSING'].includes(j.latest_request.status)),st=document.getElementById('executionControlStatus'),on=document.getElementById('executionControlOn'),blocked=valid&&fresh&&!pending&&!j.armed&&!j.can_request_on;
  on.disabled=!valid||!fresh||!j.can_request_on||pending;
  on.textContent=!valid?'自動取引 ON（操作ロック中）':!fresh?'自動取引 ON（状態未確認）':pending?'自動取引 ON（照合中）':blocked?'自動取引 ON（開始不可）':'自動取引 ON';
+ document.getElementById('executionControlReconcile').disabled=!valid||!fresh||pending||j.can_request_flat_reconciliation!==true;
  document.getElementById('executionControlOff').disabled=!valid;
  document.getElementById('executionControlRefresh').disabled=!valid;
  document.getElementById('executionControlUnlock').disabled=valid;
  st.textContent=message||(!valid?'操作はロック中です。「登録端末で操作を有効にする」を押してください。残高閲覧の認証とは別です。':!fresh?'開始状態は未確認です。状態を再確認してください。OFFは停止要求を送れます。':pending?'ONの開始条件を照合中です。ON完了とは判断しないでください。':blocked?'ONにできません — '+executionControlBlockedReason(j):j.armed?(j.new_entries_enabled?'ON — 新規エントリー有効。現行READYを待ちます。':'ON設定 — 稼働状態を確認してください。'):'OFF — 新規エントリー停止。既存建玉の管理設定は維持します。');
+ if(!message&&valid&&fresh&&j.latest_request&&j.latest_request.action==='reconcile_flat'){var reasons={FLAT_REVIEW_DONE:'終了後の照合が完了しました。現在はOFFです。再開する場合はONを押してください。損益は未確定のまま保持します。',FLAT_REVIEW_POSITION_OR_ORDERS_REMAIN:'対象銘柄の建玉または残注文があるため、照合を完了できません。既存SL/TPは変更していません。',FLAT_REVIEW_ORDER_UNCONFIRMED:'送信済み注文の終了を確認できません。停止を維持し、取引所の履歴を確認してください。',FLAT_REVIEW_DATA_UNAVAILABLE:'取引所の照合データを取得できません。停止を維持します。',FLAT_REVIEW_STATE_CHANGED:'操作中に状態が変わりました。状態を再確認してください。',FLAT_REVIEW_REFUSED:'照合を完了できません。停止を維持し、再認証と状態確認をしてください。'};if(reasons[j.latest_request.code])st.textContent=reasons[j.latest_request.code]}
  on.title=st.textContent;
  if(!message&&valid&&fresh&&j.latest_request&&j.latest_request.status==='REFUSED')st.textContent+=' 直近の開始要求は拒否されました。状態・開始条件を確認してください。';
  if(!message&&valid&&fresh&&!j.worker_available&&!blocked)st.textContent+=' 実行workerを確認できないため、ONにはできません。';
@@ -1307,8 +1316,9 @@ async function unlockExecutionControls(){
 async function setExecutionControl(action){
  if(!executionControlAuthenticated()){lockExecutionControls('登録端末で操作を有効にしてください。');return}
  if(action==='arm'&&(!executionControlFresh(executionControlSnapshot)||!executionControlSnapshot.can_request_on)){renderExecutionControls(executionControlFresh(executionControlSnapshot)?'ONにできません — '+executionControlBlockedReason(executionControlSnapshot):'開始状態を再確認してください。');return}
+ if(action==='reconcile_flat'&&(!executionControlFresh(executionControlSnapshot)||executionControlSnapshot.can_request_flat_reconciliation!==true)){renderExecutionControls('照合対象または最新の状態を確認できません。状態を再確認してください。');return}
  var version=++executionControlVersion,request={action:action,request_id:crypto.randomUUID(),expected_epoch:executionControlSnapshot?executionControlSnapshot.control_epoch:0};executionControlPending=request;executionControlSubmitting=true;
- if(action==='arm')document.getElementById('executionControlOn').disabled=true;renderExecutionControls(action==='arm'?'ONの開始要求を送っています…':'新規エントリーの停止要求を送っています…');if(action==='arm')document.getElementById('executionControlOn').disabled=true;
+ if(action==='arm')document.getElementById('executionControlOn').disabled=true;renderExecutionControls(action==='arm'?'ONの開始要求を送っています…':action==='reconcile_flat'?'建玉終了・残注文の照合要求を送っています。取引は開始しません…':'新規エントリーの停止要求を送っています…');if(action==='arm')document.getElementById('executionControlOn').disabled=true;
  try{var j=await executionControlRequest('/api/execution/control',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(request)});if(version!==executionControlVersion||!executionControlAuthenticated())return;j._received_ms=Date.now();if(!executionControlFresh(j))throw new Error('CONTROL_STATE');executionControlSnapshot=j;executionControlSubmitting=false;renderExecutionControls();await refreshExecutionControls()}
  catch(e){if(version===executionControlVersion){executionControlSnapshot=null;if(e.status===401||e.status===403)lockExecutionControls('操作認証が無効です。再認証してください。');else{executionControlSubmitting=false;renderExecutionControls(e.status===409?'開始できません。最新の状態・管理中建玉・開始条件を確認してください。':'操作結果は未確認です。状態を再確認してください。同じ要求を自動再送しません。');refreshExecutionControls()}}}
 }
@@ -1317,6 +1327,7 @@ document.getElementById('executionControlLock').onclick=function(){lockExecution
 document.getElementById('executionControlOn').onclick=function(){return setExecutionControl('arm')};
 document.getElementById('executionControlOff').onclick=function(){return setExecutionControl('pause')};
 document.getElementById('executionControlRefresh').onclick=refreshExecutionControls;
+document.getElementById('executionControlReconcile').onclick=function(){return setExecutionControl('reconcile_flat')};
 setInterval(function(){if(executionControlSession&&!executionControlAuthenticated())lockExecutionControls('操作認証の期限が切れました。取引は停止されません。');else renderExecutionControls()},1000);
 setInterval(function(){if(executionControlAuthenticated())refreshExecutionControls()},5000);
 document.addEventListener('visibilitychange',function(){if(document.visibilityState!=='visible'&&executionControlSession)lockExecutionControls('画面を離れたため操作をロックしました。取引は停止されません。')});

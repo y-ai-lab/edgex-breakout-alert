@@ -2,12 +2,13 @@
 from collections import Counter
 from decimal import Decimal, InvalidOperation
 
-TERMINAL = {"SKIPPED", "NO_FILL", "CLOSED"}
+TERMINAL = {"SKIPPED", "NO_FILL", "CLOSED", "EXTERNAL_FLAT_VERIFIED"}
 PENDING = {"PREPARED", "SENDING_ENTRY", "ACKED_ENTRY"}
 PROTECTING = {"SENDING_SL", "ACKED_SL", "SENDING_TP", "ACKED_TP"}
 EXITING = {"SENDING_CLOSE", "ACKED_CLOSE", "CLOSE_PENDING"}
 KNOWN = TERMINAL | PENDING | PROTECTING | EXITING | {"PROTECTED", "OWNERSHIP_CONFLICT", "OWNERSHIP_UNVERIFIED"}
 LABELS = {
+    "EXTERNAL_FLAT_VERIFIED": "隔離後の建玉ゼロ・注文終了を照合（損益未確定）",
     "SKIPPED": "注文対象外・過去setupの基準記録",
     "NO_FILL": "未約定を照合した記録",
     "CLOSED": "約定照合による決着の記録（Funding別）",
@@ -83,7 +84,9 @@ def report(records, connection, *, now_ms, events=()):
             invalid = invalid or not fill or timestamp(r.get("outcome_observed_ms"), now_ms) is None
         if status in {"SKIPPED", "NO_FILL"} and fill:
             invalid = True
-        if status in TERMINAL and (r.get("ownership_quarantined") or status != "CLOSED" and r.get("close_attempted")):
+        if status == "EXTERNAL_FLAT_VERIFIED":
+            invalid = invalid or not fill or r.get('ownership_quarantined') is not True or r.get('isolated_contract') is not True or r.get('reconciliation_original_status') != 'OWNERSHIP_CONFLICT' or r.get('financial_outcome_verified') is not False or timestamp(r.get('external_flat_verified_ms'), now_ms) is None
+        elif status in TERMINAL and (r.get("ownership_quarantined") or status != "CLOSED" and r.get("close_attempted")):
             invalid = True
         if invalid:
             active += 1
@@ -93,7 +96,7 @@ def report(records, connection, *, now_ms, events=()):
         if fill > 0:
             counts["recorded_fills"] += 1
         if status in TERMINAL:
-            counts[{"SKIPPED": "skipped", "NO_FILL": "no_fill", "CLOSED": "closed"}[status]] += 1
+            counts[{"SKIPPED": "skipped", "NO_FILL": "no_fill", "CLOSED": "closed", "EXTERNAL_FLAT_VERIFIED": "external_flat_verified"}[status]] += 1
             continue
         active += 1
         if r.get("ownership_quarantined") or status in {"OWNERSHIP_CONFLICT", "OWNERSHIP_UNVERIFIED"}:

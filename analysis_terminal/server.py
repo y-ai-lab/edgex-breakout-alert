@@ -4144,7 +4144,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="EdgeX Analysis Terminal",
-    version="19.0.55",
+    version="19.0.56",
     lifespan=lifespan,
 )
 app.add_middleware(push_security.BrowserSecurityMiddleware)
@@ -4624,7 +4624,7 @@ class AccountViewSessionRequest(BaseModel):
 
 class ExecutionControlRequest(BaseModel):
     model_config = {"extra": "forbid"}
-    action: Literal["arm", "pause"]
+    action: Literal["arm", "pause", "reconcile_flat"]
     request_id: str = Field(min_length=36, max_length=36)
     expected_epoch: int = Field(ge=0, le=9223372036854775807, strict=True)
 

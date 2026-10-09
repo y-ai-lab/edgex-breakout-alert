@@ -48,7 +48,13 @@ def plan(req, snapshot, config):
         adverse_stop = stop * (1 - sign*slip)
         risk_unit = abs(adverse_entry-adverse_stop) + (adverse_entry+adverse_stop)*fee
         theoretical = budget / risk_unit
+        budget_size = theoretical
+        if req.step_size is not None:
+            step = number(req.step_size)
+            budget_size = (budget_size/step).to_integral_value(rounding=ROUND_FLOOR)*step
+        budget_notional = budget_size*adverse_entry
         cap = limit / (adverse_entry*(1+fee))
+        notional_cap = cap
         # A smaller manual leverage input may tighten, never expand the policy.
         if req.leverage is not None:
             cap = min(cap, available*number(req.leverage)/(adverse_entry*(1+fee)))
@@ -67,6 +73,17 @@ def plan(req, snapshot, config):
             adverse_target = target*(1-sign*slip)
             reward_unit = sign*(adverse_target-adverse_entry)-(adverse_entry+adverse_target)*fee
         loss = size*risk_unit
+        reasons = []
+        if notional_cap < theoretical:
+            reasons.append('NOTIONAL_POLICY_LIMIT')
+        if req.leverage is not None and available*number(req.leverage)/(adverse_entry*(1+fee)) < theoretical:
+            reasons.append('AVAILABLE_MARGIN_LIMIT')
+        if max_capped:
+            reasons.append('MAX_ORDER_SIZE')
+        if below_min:
+            reasons.append('BELOW_MIN_ORDER_SIZE')
+        elif req.step_size is not None and size*risk_unit < min(theoretical, cap, number(req.max_order_size) if req.max_order_size is not None else theoretical)*risk_unit:
+            reasons.append('ORDER_STEP_ROUNDING')
         result = dict(side=side, capital_source="EDGEX_USDC_EQUITY", read_only=True,
             calculation_scope="ANALYSIS_REFERENCE_ONLY", equity_usdc=equity, available_usdc=available,
             risk_budget=budget, applied_risk_pct=budget/equity*100, theoretical_size=theoretical,
@@ -75,6 +92,14 @@ def plan(req, snapshot, config):
             rr=abs(target-entry)/abs(entry-stop) if target is not None else None,
             cost_adjusted_rr=reward_unit/risk_unit if reward_unit is not None else None,
             max_order_capped=max_capped, margin_capped=cap < theoretical, below_min_order=below_min,
+            budget_reference_size=budget_size, budget_reference_notional_usdc=budget_notional,
+            budget_reference_loss_usdc=budget_size*risk_unit,
+            budget_reference_margin_usdc=budget_notional/number(req.leverage) if req.leverage is not None else None,
+            budget_reference_within_limits=budget_size > 0 and budget_size <= cap
+                and (req.max_order_size is None or budget_size <= number(req.max_order_size))
+                and (req.min_order_size is None or budget_size >= number(req.min_order_size)),
+            sizing_constraints=reasons, unused_risk_budget_usdc=budget-loss,
+            risk_budget_used_pct=loss/budget*100, requested_leverage=req.leverage,
             min_order_size=req.min_order_size, notional_limit_usdc=limit,
             fee_bps=config.fee_bps, slippage_bps=config.slippage_bps,
             funding_included=False, quote_verified=False, loss_cap_guaranteed=False,
