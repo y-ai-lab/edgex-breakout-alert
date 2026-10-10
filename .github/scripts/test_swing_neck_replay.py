@@ -103,6 +103,15 @@ class SwingTests(unittest.TestCase):
             r=study.replay_market(CONTRACT,m,e,start_ms=SIGNAL+STEP,end_ms=SIGNAL+4*STEP)
             self.assertFalse(r['records']);self.assertGreaterEqual(r['exclusions'].get('ALREADY_CONSUMED_PAIR',0),1)
 
+    def test_failed_room_first_cross_is_consumed_and_not_repriced(self):
+        m,e=market();e.append(candle(SIGNAL+STEP,open=100,close=100,high=100.2,low=99.8))
+        e.append(candle(SIGNAL+2*STEP,open=100.45,close=100.6,high=100.7,low=100.45))
+        with patch.object(study,'price_candidate',return_value=(None,'NET_ROOM_BELOW_2R')) as pricing:
+            r=study.replay_market(CONTRACT,m,e,start_ms=SIGNAL+STEP,end_ms=SIGNAL+4*STEP)
+            self.assertFalse(r['records']);self.assertEqual(pricing.call_count,1)
+            self.assertEqual(r['exclusions']['NET_ROOM_BELOW_2R'],1)
+            self.assertEqual(r['exclusions']['ALREADY_CONSUMED_PAIR'],1)
+
     def test_preperiod_cross_identity_only_and_gap_origin_not_reconstructed(self):
         m,e=market();e.append(candle(SIGNAL+STEP,open=100,close=100,high=100.2,low=99.8))
         e.append(candle(SIGNAL+2*STEP,open=100.45,close=100.6,high=100.7,low=100.45))
