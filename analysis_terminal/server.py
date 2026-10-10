@@ -37,6 +37,7 @@ from analysis_terminal import entry_history
 from analysis_terminal import pending_live
 from analysis_terminal import pending_evidence
 from analysis_terminal import vwap_live
+from analysis_terminal import vwap_evidence
 from analysis_terminal import live_execution
 from analysis_terminal import account_view
 from analysis_terminal import account_risk
@@ -336,6 +337,7 @@ def _init_db() -> None:
         pending_live.initialize(conn, now_ms=int(time.time()*1000))
         pending_evidence.initialize(conn, now_ms=int(time.time()*1000))
         vwap_live.initialize(conn, now_ms=int(time.time()*1000))
+        vwap_evidence.initialize(conn, now_ms=int(time.time()*1000))
         live_execution.initialize(conn, now_ms=int(time.time()*1000))
         account_view.initialize(conn, _live_execution_config, now_ms=int(time.time()*1000))
         execution_controls.initialize(conn)
@@ -3911,11 +3913,23 @@ def _vwap_live_cycle(contracts) -> None:
     try:
         with _db_connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
+            observation_ms = int(time.time()*1000)
             vwap_live.cycle(conn, contracts=contracts, snapshots=cache[1] if cache else {},
-                            analyze=analyze_contract, settings=SETTINGS, now_ms=int(time.time()*1000))
+                            analyze=analyze_contract, settings=SETTINGS, now_ms=observation_ms)
     except Exception as exc:
         with _db_connect() as conn:
             vwap_live.record_error(conn, type(exc).__name__)
+        return
+    # The frozen collector commits first. Proof never feeds back into its ledger.
+    try:
+        with _db_connect() as conn:
+            vwap_evidence.capture(conn, observation_ms=observation_ms, recorded_ms=int(time.time()*1000))
+    except Exception as exc:
+        try:
+            with _db_connect() as conn:
+                vwap_evidence.record_error(conn, type(exc).__name__)
+        except Exception as audit_error:
+            print(f"VWAP observation proof unavailable: {type(audit_error).__name__}", flush=True)
 
 
 async def _background_collector() -> None:
@@ -4144,7 +4158,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="EdgeX Analysis Terminal",
-    version="19.0.58",
+    version="19.0.59",
     lifespan=lifespan,
 )
 app.add_middleware(push_security.BrowserSecurityMiddleware)
@@ -4858,7 +4872,21 @@ async def pending_entry_evidence_api(limit: int = Query(default=50, ge=1, le=500
 async def vwap_entry_shadow_api(limit: int = Query(default=50, ge=1, le=500)):
     with _db_connect() as conn:
         conn.execute("BEGIN")
-        return vwap_live.review(conn, now_ms=int(time.time()*1000), limit=limit)
+        now_ms=int(time.time()*1000)
+        result=vwap_live.review(conn, now_ms=now_ms, limit=limit)
+        try:
+            proof=vwap_evidence.review(conn,now_ms=now_ms,limit=0)
+            result['observation_evidence']={k:v for k,v in proof.items() if k!='latest'}
+        except Exception as exc:
+            result['observation_evidence']={'status':'UNAVAILABLE_ERROR','error_type':type(exc).__name__}
+        return result
+
+
+@app.get("/api/vwap-entry-evidence")
+async def vwap_entry_evidence_api(limit: int = Query(default=50, ge=1, le=500)):
+    with _db_connect() as conn:
+        conn.execute("BEGIN")
+        return vwap_evidence.review(conn,now_ms=int(time.time()*1000),limit=limit)
 
 
 @app.get("/api/outcome-tracking")
