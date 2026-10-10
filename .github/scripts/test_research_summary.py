@@ -106,6 +106,68 @@ class SummaryTests(unittest.TestCase):
         self.assertIsNone(p['closed_portfolio_roi_pct']);self.assertIsNone(p['equity_usdc'])
         self.assertIn('不明',review.markdown(r));self.assertEqual(r['metrics'][study.MODEL]['resolved'],0)
 
+    def test_twenty_resolved_with_open_is_not_a_complete_cohort(self):
+        parts=fixture(7,wins=20,uncertain=True);before=copy.deepcopy(parts)
+        out=self.run_fixture(parts);c=out['outcome_completion'][study.MODEL]
+        self.assertEqual(out['decision'],'CONTINUE_FORWARD_SHADOW_REQUIRED')
+        self.assertEqual((c['verified_resolved'],c['filled'],c['open_filled']),(20,21,1))
+        self.assertEqual(c['sample_status'],'SUFFICIENT SAMPLE')
+        self.assertEqual(c['status'],'AWAITING_OUTCOMES');self.assertFalse(c['cohort_complete'])
+        self.assertEqual(c['closed_portfolio_roi_pct'],parts[1]['portfolios'][study.MODEL]['closed_portfolio_roi_pct'])
+        self.assertEqual(parts,before)
+        self.assertIn('20決着以上でもOPEN・品質保留',review.markdown(out))
+
+    def test_closed_small_cohort_is_complete_but_still_insufficient(self):
+        out=self.run_fixture(fixture(7,wins=1));c=out['outcome_completion'][study.MODEL]
+        self.assertTrue(c['cohort_complete']);self.assertEqual(c['status'],'COMPLETE')
+        self.assertEqual(c['sample_status'],'INSUFFICIENT SAMPLE')
+        self.assertEqual(c['resolved_pct'],100)
+        self.assertEqual(out['decision'],'CONTINUE_INSUFFICIENT_SAMPLE')
+
+    def test_partial_closed_and_empty_cohorts_are_not_complete_or_zero_win_rates(self):
+        out=self.run_fixture(fixture(1,wins=1))
+        for c in out['outcome_completion'].values():
+            self.assertFalse(c['cohort_complete']);self.assertEqual(c['status'],'PARTIAL_PERIOD')
+        empty=out['outcome_completion']['current_next_open']
+        self.assertIsNone(empty['resolved_pct']);self.assertEqual(empty['filled'],0)
+
+    def test_quality_holds_before_and_after_fill_are_not_resolved_or_released(self):
+        for status,fill in (('AMBIGUOUS',True),('DATA_GAP',True),('DATA_GAP',False),('INVALIDATED_GAP',False)):
+            s,r,p=fixture(7,uncertain=True);row=r['records'][0]
+            row.update(status=status,outcome_ms=ORIGIN+STEP)
+            if not fill:row['filled_ms']=None
+            r['metrics'][study.MODEL]=study.metrics(r['records'])
+            r['portfolios'][study.MODEL]=study.portfolio(r['records'])
+            r['opportunities']['additional_filled_setups_vs_current']=int(fill)
+            before=copy.deepcopy((s,r,p));out=self.run_fixture((s,r,p));c=out['outcome_completion'][study.MODEL]
+            self.assertEqual(c['status'],'BLOCKED_DATA_QUALITY');self.assertFalse(c['cohort_complete'])
+            self.assertEqual((c['blocked_records'],c['blocked_filled'],c['verified_resolved']),(1,int(fill),0))
+            self.assertEqual((s,r,p),before)
+            self.assertEqual(out['decision'],'CONTINUE_INSUFFICIENT_SAMPLE')
+            if status in {'AMBIGUOUS','DATA_GAP'}:
+                self.assertEqual(c['capped_uncertain'],1);self.assertIsNone(c['closed_portfolio_roi_pct'])
+
+    def test_unfilled_expiry_is_not_a_resolved_trade_and_pending_is_separate(self):
+        checked=review.funnel.summarize(fixture(7,wins=1)[1])
+        values=checked['models'][study.MODEL]['uncapped']
+        values.update(candidates=4,unfilled=3,unfilled_status_counts={'EXPIRED':2,'PENDING':1})
+        c=review.outcome_completion(checked,period_complete=True,quality_blocked=False)[study.MODEL]
+        self.assertEqual((c['total_candidates'],c['filled'],c['verified_resolved'],c['pending_unfilled']),(4,1,1,1))
+        self.assertEqual(c['resolved_pct'],100);self.assertFalse(c['cohort_complete'])
+        self.assertEqual(c['status'],'AWAITING_OUTCOMES')
+
+    def test_positive_r_without_capped_net_fill_increase_is_explicit_without_new_rule(self):
+        out=self.run_fixture(fixture(7,wins=20));before=copy.deepcopy(out)
+        out['comparison']['capped_filled_count_difference']=-1
+        text=review.markdown(out)
+        self.assertIn('資金制限後の約定純増は確認できていない',text)
+        self.assertEqual(out['decision'],before['decision'])
+        self.assertFalse(out['eligible_for_live_promotion'])
+
+    def test_old_summary_without_completion_remains_readable(self):
+        out=self.run_fixture(fixture(7,wins=1));del out['outcome_completion']
+        self.assertIn('net平均R',review.markdown(out))
+
     def test_partial_closed_account_roi_is_not_labeled_final_week_roi(self):
         result=self.run_fixture(fixture(1,wins=1))
         self.assertIsNotNone(result['portfolios'][study.MODEL]['closed_portfolio_roi_pct'])
@@ -168,6 +230,8 @@ class SummaryTests(unittest.TestCase):
         p['manifest']['universe'].append(other);p['manifest']['failures']=[dict(ticker='MISSINGUSDC')]
         r['coverage'].update(requested_markets=2,failed_markets=1,expected_points_all_markets=2*7*96)
         out=self.run_fixture((s,r,p));self.assertEqual(out['decision'],'DATA_QUALITY_BLOCKED');self.assertEqual(out['metrics'][study.MODEL]['resolved'],20)
+        for c in out['outcome_completion'].values():
+            self.assertEqual(c['status'],'BLOCKED_DATA_QUALITY');self.assertFalse(c['cohort_complete'])
 
 
 if __name__=='__main__':unittest.main()

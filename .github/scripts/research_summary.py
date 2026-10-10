@@ -22,6 +22,32 @@ def read(path):
     return json.loads(path.read_text())
 
 
+def outcome_completion(checked, *, period_complete, quality_blocked):
+    """Describe remaining evidence, without changing the frozen rule decision."""
+    result={}
+    blocked_statuses={'AMBIGUOUS','DATA_GAP','INVALIDATED_GAP'}
+    for model,values in checked['models'].items():
+        uncapped=values['uncapped'];filled=uncapped['filled_status_counts'];unfilled=uncapped['unfilled_status_counts']
+        resolved=uncapped['observed_metrics']['resolved']
+        blocked=sum(filled.get(s,0)+unfilled.get(s,0) for s in blocked_statuses)
+        opened=filled.get('OPEN',0);pending=unfilled.get('PENDING',0)
+        complete=period_complete and not (quality_blocked or blocked or opened or pending)
+        status=('BLOCKED_DATA_QUALITY' if quality_blocked or blocked else
+                'PARTIAL_PERIOD' if not period_complete else
+                'AWAITING_OUTCOMES' if opened or pending else 'COMPLETE')
+        p=values['capped']
+        result[model]=dict(total_candidates=uncapped['candidates'],filled=uncapped['filled'],
+                           verified_resolved=resolved,open_filled=opened,pending_unfilled=pending,
+                           blocked_records=blocked,
+                           blocked_filled=sum(filled.get(s,0) for s in blocked_statuses),
+                           resolved_pct=funnel.percentage(resolved,uncapped['filled']),
+                           entry_period_complete=period_complete,cohort_complete=complete,status=status,
+                           sample_status=uncapped['observed_metrics']['sample_status'],
+                           capped_active=p['active'],capped_uncertain=p['uncertain'],
+                           closed_portfolio_roi_pct=p['closed_portfolio_roi_pct'])
+    return result
+
+
 def summarize(directory, *, now_ms):
     state=read(directory/'run-status.json')
     protocol=read(study.PROTOCOL)
@@ -85,6 +111,7 @@ def summarize(directory, *, now_ms):
         report['metrics'][model],report['portfolios'][model]) for model in study.MODELS}
     quality_blocked=bool(failures) or coverage['valid_points']==0
     out.update(collection_status='DATA_QUALITY_BLOCKED' if quality_blocked else 'RESULTS_VERIFIED',
+               outcome_completion=outcome_completion(checked,period_complete=days==7,quality_blocked=quality_blocked),
                current_cohort_rule_decision=raw,
                decision='DATA_QUALITY_BLOCKED' if quality_blocked else raw if days==7 else 'PROVISIONAL_'+raw,
                coverage=coverage,metrics=report['metrics'],portfolios=report['portfolios'],
@@ -134,6 +161,14 @@ def markdown(result):
         lines.append(f"| {model} | {p['filled']} | {p['resolved']} | {show(p['realized_net_pnl_usdc'])} | {show(p['closed_portfolio_roi_pct'])} | {p['active']}/{p['uncertain']} |")
     lines += ['', '口座ROIは資金制限後の既存取引が全て終了した場合の値。保有・不確定が残れば不明。',
               '途中週で数値が出ても、その週の最終ROIではない。研究口座は実運用口座と異なる。']
+    if result.get('outcome_completion') is not None:
+        lines += ['', '| モデル | 決着/仮約定 | 未決済約定 | 未約定待機 | 品質保留（うち約定済み） | cohort全件完了 | 状態 |',
+                  '|---|---:|---:|---:|---:|---|---|']
+        for model,c in result['outcome_completion'].items():
+            lines.append(f"| {model} | {c['verified_resolved']}/{c['filled']} | {c['open_filled']} | {c['pending_unfilled']} | {c['blocked_records']}（{c['blocked_filled']}） | {c['cohort_complete']} | {c['status']} |")
+        lines += ['', '20決着以上でもOPEN・品質保留が残る全cohort成績は暫定。未約定の期限切れを決着済み取引に数えない。',
+                  '全件完了とサンプル充足は別。資金制限後口座の終了も全候補の決着とは別で、不確かな資金を解放しない。',
+                  '品質保留はAMBIGUOUS / DATA_GAP / INVALIDATED_GAP。元の固定判定・成績を変更せず、本番昇格の承認に使わない。']
     if result.get('cost_headroom_audit') is not None:
         lines += ['', '| モデル | 決着済みR集計の追加費用ゼロ損益bps | 資金制限後の決着済み現金集計bps |',
                   '|---|---:|---:|']
@@ -195,6 +230,8 @@ def markdown(result):
               '', 'net平均R = 決着済み仮約定1件当たりの費用込み平均損益（net stop-risk基準）。候補数・未決済を分母に加えず、資金のROIとは異なる。',
               '判定は単独週の固定条件検査。過去・別週との合算や本番昇格の承認ではない。',
               f"ledger SHA256: `{result['report_sha256']}`"]
+    if c['capped_filled_count_difference']<=0:
+        lines += ['', '資金制限後の約定純増は確認できていない。候補増・制約前の約定増・正の平均Rだけで実用性改善とは判断しない。']
     return '\n'.join(lines)+'\n'
 
 
