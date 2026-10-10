@@ -397,7 +397,7 @@ function renderLiveExecution(j){
  policy.innerHTML=card('元本の基準','EdgeX取引口座のUSDC評価額')+card('1取引の想定損失予算',risk+'（仮定費用込み）')+card('日次損失制限',s.daily_loss_stop_enabled?'有効':'なし')+card('管理建玉',positionLimit+' / 同銘柄の併用不可');
  var notes=['3%等の予算は保証上限ではありません。急変・滑り・Funding・障害で超過し得ます。','約定とSL/TP設置は同時ではありません。約定後に条件注文を登録します。建玉欄に表示されない場合は、取引所の条件注文一覧を確認してください。','同じ銘柄への手動SL/TP追加・変更や売買は、自動管理の隔離とボット自身の保護注文の取消につながります。手動注文の管理は引き継ぎません。'];
  if(!s.daily_loss_stop_enabled)notes.push('日次上限がないため、連敗による損失は積み重なります。');
- if(unlimited)notes.push('建玉ごとに損失予算を使うため、複数建玉の合計リスクは3%を超えます。追加前に既存SL/TPと証拠金を照合します。');
+ if(unlimited)notes.push('建玉ごとに損失予算を使うため、複数建玉の合計リスクは3%を超える場合があります。追加前に既存SL/TPと証拠金を照合します。');
  if(j.last_error||j.status==='ERROR')notes.unshift('異常を検出しています。新規エントリー状態と取引所の建玉・保護注文を確認してください。');
  if(!j.status_counts||!j.status_counts.CLOSED)notes.push('実約定からSL/TP決着までの運用検証は未完了です。');
  warnings.textContent=notes.join(' ');
