@@ -1,0 +1,167 @@
+{
+  "protocol": "trend_two_nested_inside_bars_release_net2r_v1",
+  "model": "trend_two_nested_inside_bars_release_net2r",
+  "registration_base_sha": "72144a251cc7c8f70d9da295545a7267070ffaaa",
+  "registered_utc": "2026-10-10T14:45:04.764406+00:00",
+  "hypothesis": "Independent price-compression family: two consecutively strictly narrower nested 15M inside bars within one mother candle define observed volatility contraction. Test only the immediately following strict mother-range break in closed 4H trend direction. No UTC clock, rolling range retest, sweep, EMA pullback or VWAP entry; no outcome-derived filters/grid.",
+  "periods": [
+    {
+      "id": "development",
+      "start_ms": 1790391600000,
+      "end_ms": 1790996400000,
+      "source_report_sha256": "f7395ff494b4c34c44f1f8c7f1c66c39fe1204dc4897a22d386631d5926043a0",
+      "market_already_viewed": true
+    },
+    {
+      "id": "historical_replication_1",
+      "start_ms": 1789182000000,
+      "end_ms": 1789786800000,
+      "source_report_sha256": "957d1f196650f20a41b25c36f302d682f5c448821b74bc513f4cb0a3c28d8ca9",
+      "market_already_viewed": true
+    },
+    {
+      "id": "historical_replication_2",
+      "start_ms": 1789786800000,
+      "end_ms": 1790391600000,
+      "source_report_sha256": "9914f63e362a34c08f66b9d046a6370cadbabc3764c05accbbadc0ee216e6bb1",
+      "market_already_viewed": true
+    },
+    {
+      "id": "future_validation_1",
+      "start_ms": 1792800000000,
+      "end_ms": 1793404800000,
+      "market_already_viewed": false
+    },
+    {
+      "id": "future_validation_2",
+      "start_ms": 1793404800000,
+      "end_ms": 1794009600000,
+      "market_already_viewed": false
+    }
+  ],
+  "production_parameters": {
+    "monitor_interval": "HOUR_4",
+    "entry_interval": "MINUTE_15",
+    "trend_fast_ema": 20,
+    "trend_slow_ema": 50,
+    "atr_period": 14,
+    "roll_lookback": 20,
+    "roll_max_age": 6,
+    "retest_lookback": 4,
+    "atr_stop_buffer": 0.5,
+    "atr_target_buffer": 0.25,
+    "retest_atr_tolerance": 0.35,
+    "min_rr": 2.0
+  },
+  "production_rule_fingerprint": "9b2df54f9d908d4b653fc270992ad3e1ada2e812f2d38133581f476516e55afd",
+  "source_universe_sha256": "1ee2f543d56f61b4adf0560f2ccf12bb29b755358ab686b9c107c778978681cd",
+  "indicator_windows": {
+    "HOUR_4": 180,
+    "MINUTE_15": 180
+  },
+  "scanner_sha256": {
+    "published": "b1f4d4d15dc1ce4665f0f9f776de050059b60fb18faa4cf1583b04bf02a6c4af",
+    "local_with_one_extra_eof_newline": "2e24f61e47ee40fdb3ae5f18152129f6632e83d508b73d27bf33fda0919ac9ab",
+    "equivalence": "Only exact published bytes plus one LF equal exact local bytes; no general whitespace normalization."
+  },
+  "rules": {
+    "mother_bars": 1,
+    "nested_inside_bars": 2,
+    "immediate_signal_bars": 1,
+    "atr_period": 14,
+    "atr_stop_buffer": 0.5,
+    "atr_target_buffer": 0.25,
+    "min_net_rr": 2.0,
+    "pending_bars": 4,
+    "trend": "Exactly 180 contiguous closed 4H bars. Last close>EMA20>EMA50 LONG or strict inverse SHORT, same EMA implementation. No future/formed candles.",
+    "compression": "At signal close require exactly preceding three closed 15M bars mother, inside1, inside2. Each inside high<=previous high and low>=previous low AND strictly smaller high-low width. Mother range must be positive. Two nested bars are the whole predefined pattern, no selected best lookback.",
+    "confirmation": "Immediately next 15M candle after inside2: LONG signal low<=mother high, close>mother high AND close>open, SHORT high>=mother low and close<mother low AND close<open. Require strict closed 4H trend match. A failed signal is never waited for/rearmed; each mother timestamp has only this fixed immediate signal.",
+    "stop": "Mother low minus .5 ATR14(15M) LONG, mother high plus .5 ATR SHORT, from exactly 180 closed bars at signal. Freeze independent structural stop; never change production 4H SL or shrink/widen after signal.",
+    "target": "Freeze fee/slippage-inclusive 2R target at confirmation-close limit price. Require inside prior 179 closed 15M highest high minus .25 ATR LONG or lowest low plus .25 ATR SHORT; exclude signal from room. Reject nonpositive or invalid range/target. No future maximum.",
+    "identity": "inside-release-v1:ticker:direction:mother-time. Exactly one immediate signal opportunity; no later candle or alternate mother selected. Contiguous 180 windows include the whole pattern, so missing pattern/indicator data cannot become a valid zero or inferred trade.",
+    "pending": "Exactly unchanged four-bar frozen limit evaluator. Before executable candle only prior closed windows; matching 4H trend, candle color, strict close beyond frozen OR break level, last-four low/high touch and SL validity. No expiration extension.",
+    "chronology": "signal close+1ms created_ms. Executable bar starts at signal close, exclude signal/prior bars. Unknown fill/any exit on fill bar AMBIGUOUS; subsequent TP/SL same bar AMBIGUOUS. Missing indicator/window/candle DATA_GAP, halt and retain uncertain cash. Adverse SL gap charged at worse open. Cutoff closed bars only.",
+    "warmup": "Only indicator input warmup. No pre-period signals, candidate pricing, outcomes or sealed-period entry evaluations. The mother pattern may start before the study, with its unique immediate confirmation inside the fixed study."
+  },
+  "costs": {
+    "fee_bps_each_side": 5,
+    "slippage_bps_each_side": 2
+  },
+  "stress_costs": {
+    "fee_bps_each_side": 10,
+    "slippage_bps_each_side": 5
+  },
+  "portfolio": {
+    "initial_cash_usdc": 10000,
+    "risk_pct": 1,
+    "max_positions": 3,
+    "max_total_risk_pct": 3,
+    "max_notional_multiple": 1,
+    "daily_loss_pct": 3,
+    "daily_loss_timezone": "Asia/Tokyo"
+  },
+  "decision": {
+    "early_kill_minimum_resolved": 20,
+    "early_kill": "Any complete registered period >=20 resolved with base AvgR<=1e-12 or PF<=1+1e-12: KILL_NO_LIVE_PROMOTION. Stop this model; leave subsequent periods unrun. No variants/retuning.",
+    "selection": {
+      "minimum_resolved_each_period": 50,
+      "minimum_net_win_rate_pct": 40,
+      "minimum_base_pf": 1.2,
+      "base_avg_net_r_positive": true,
+      "stress_avg_net_r_positive": true,
+      "stress_pf_greater_than": 1,
+      "proposal_pure_fill_increase_each_period_positive": true,
+      "proposal_capped_pure_fill_increase_each_period_positive": true,
+      "capped_minimum_resolved_each_period": 20,
+      "known_closed_portfolio_roi_each_period_positive": true,
+      "no_open_or_uncertain_capital": true
+    },
+    "historical_positive": "Both historical_replication periods meeting every selection gate may only be a retrospective research candidate. They are previously viewed under other models; require both untouched future weeks and separately captured-live Shadow. No global optimum or production completion claim.",
+    "future_positive": "Both future_validation periods separately >=50 resolved and each selection gate; thereafter separate actual-observation Shadow resolved>=20, AvgR>0/PF>1, fee/capital/quality and execution evidence required for any promotion proposal. No automatic promotion.",
+    "insufficient": "No pooling development, weeks, daily reports, replay or live capture. Insufficient resolved count or partial periods remain INSUFFICIENT SAMPLE; never substitute a tuned variant.",
+    "sequential": "Process development, historical_replication_1, historical_replication_2, future_validation_1, future_validation_2 in that order. Reproduce original previous ledgers/sources before next period. Do not open next after KILL or quality mismatch.",
+    "quality": "All source/candle hashes and original first-entry control sets must reproduce. Any mismatch stops with BLOCKED_DATA_QUALITY and metrics/ROI null; no repaired prices/rows or replacing first archive. Indicator unavailable observations remain disclosed; fetch failures block qualification."
+  },
+  "sealed_periods": [
+    {
+      "start_ms": 1787281200000,
+      "end_ms": 1788490800000
+    },
+    {
+      "start_ms": 1788566400000,
+      "end_ms": 1789171200000
+    },
+    {
+      "start_ms": 1791504000000,
+      "end_ms": 1792713600000
+    }
+  ],
+  "frozen_dependencies_sha256": {
+    "analysis_terminal/replay.py": "67417c93cdbab1640945c55f3f2c5d99552af711b40006f2db204e2ac55bdd5e",
+    "analysis_terminal/pending_entry_replay.py": "111686641afe5e61c64311fa730716b5198d3a74e34440e06f48d99da3c53df8",
+    "analysis_terminal/confirmation_zone_replay.py": "fa62fd6571a5a153ef8b1b5a4a8f95551159edece717549d8b4816df696e7602",
+    "analysis_terminal/pending_entry_protocol.json": "1ed8af4b9bb0dd7281e80a21956677bb6d9e315f47fb0c00689992662a29ee0f",
+    "analysis_terminal/vwap_reclaim_replay.py": "228347266f5e17956c9110475d037c0be52a0a3d57ffd2da27eeadbe277f5ba5",
+    "analysis_terminal/history.py": "c29829d3872c58cfcfdf644e004f50bc59c99a0331895d609288d10e61f8eb89",
+    "analysis_terminal/run_replay.py": "4bc1bcc08e0f2bb94c6b42e252858f8dcc0a67bfba18b8c85d7a9df3159050f1",
+    ".github/scripts/historical_robustness.py": "d3b37b2c913664660d25d4cbd6cd2c6a0e22486eb29dd237b0050c06a747ca86",
+    ".github/research/historical_robustness_protocol.json": "5f92a471c1aecb302c7e610b0f947e6e1737c5f12e78aa2ea1f482e5650ec667",
+    ".github/scripts/opening_range_replay.py": "b38615cc2706a6b45560356def6d39db407b6983f0e62d291e707a73cdf441cc",
+    ".github/research/opening_range_latest.json": "98a0b3a0348ab46c08ad91c2f6e78bef23cec8c5b043a4a79bf5b8d26a58b33d"
+  },
+  "changes_live_rules": false,
+  "real_orders_enabled": false,
+  "automatic_promotion": false,
+  "eligible_for_live_promotion": false,
+  "forward_collection_enabled": false,
+  "limitations": [
+    "Historical development/replication market data previously viewed; reused research prices are not untouched independent confirmation or live samples.",
+    "Many failed hypotheses and correlated market events cause multiple-testing/selection bias; positive historical performance alone cannot prove optimality.",
+    "Fixed archived 182-market universe has listing/survivorship bias; disclose missing indicator windows and every market without outcome-based exclusions.",
+    "OHLC limit touch is hypothetical; funding, tick, depth, queue, liquidity and actual fills unverified.",
+    "Net R uses fee-inclusive stop-risk; MFE/MAE use price stop distance, neither is portfolio ROI.",
+    "Fixed research accounts are 10k USDC/1%/max3/total3%/1x/JST daily3%, unchanged. OPEN/AMBIGUOUS/DATA_GAP cash never released to create favorable ROI.",
+    "Existing KILL models, pending/VWAP protocols, collectors, production, UI, auth, notifications and account settings remain unchanged."
+  ],
+  "previous_hypothesis_decision": "opening_range_first_break KILL: 104 resolved, avg_net_r=-0.48076923076923195, PF=0.4186046511627893"
+}
