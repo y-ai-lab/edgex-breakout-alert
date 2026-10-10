@@ -1,0 +1,321 @@
+{
+  "registration_commit": "5f15ca139d96a8bf030493489472043f6e3545a1",
+  "engine_commit": "b206838772d9634732619ec5c39e590eaf5bf057",
+  "decision": "KILL_NO_LIVE_PROMOTION",
+  "periods": [
+    {
+      "protocol": "confirmed_4h_setup_local15_stop_structural4h_target_v1",
+      "dataset": "RETROSPECTIVE",
+      "role": "development",
+      "start_ms": 1790391600000,
+      "end_ms": 1790996400000,
+      "period_complete": true,
+      "eligible_for_live_promotion": false,
+      "automatic_promotion": false,
+      "real_orders_enabled": false,
+      "changes_live_rules": false,
+      "forward_collection_enabled": false,
+      "protocol_sha256": "5ddc5d2e11a5b058bf00dc4754f088c2df821d9c2e910e2a73efc084865213dd",
+      "engine_sha256": "2e279905309f8eb0f69b3be4a54480993468c86747f75bc7f9422bfff16a9b9a",
+      "source_report_sha256": "f7395ff494b4c34c44f1f8c7f1c66c39fe1204dc4897a22d386631d5926043a0",
+      "original_baseline_first_entries_reproduced": true,
+      "source_files_verified": 182,
+      "coverage": {
+        "expected_points": 122304,
+        "valid_points": 108492,
+        "failed_markets": 0,
+        "requested_markets": 182,
+        "fetched_markets": 182,
+        "expected_points_all_markets": 122304,
+        "valid_indicator_points_pct": 88.70682888540031
+      },
+      "metrics": {
+        "current_next_open": {
+          "candidates": 2,
+          "filled": 2,
+          "resolved": 1,
+          "tp": 1,
+          "sl": 0,
+          "statuses": {
+            "TP": 1,
+            "OPEN": 1
+          },
+          "win_rate": 100.0,
+          "avg_net_r": 2.487539965833246,
+          "expectancy_net_r": 2.487539965833246,
+          "profit_factor": "INF",
+          "avg_mfe_r": 2.9020737938932344,
+          "avg_mae_r": 0.936294236942566,
+          "max_consecutive_losses": 0,
+          "sample_status": "INSUFFICIENT SAMPLE"
+        },
+        "shadow_v2_next_open": {
+          "candidates": 235,
+          "filled": 0,
+          "resolved": 0,
+          "tp": 0,
+          "sl": 0,
+          "statuses": {
+            "REJECTED_AT_FILL": 235
+          },
+          "win_rate": null,
+          "avg_net_r": null,
+          "expectancy_net_r": null,
+          "profit_factor": null,
+          "avg_mfe_r": null,
+          "avg_mae_r": null,
+          "max_consecutive_losses": null,
+          "sample_status": "INSUFFICIENT SAMPLE"
+        },
+        "confirmed_pullback_cost_2r": {
+          "candidates": 295,
+          "filled": 13,
+          "resolved": 11,
+          "tp": 3,
+          "sl": 8,
+          "statuses": {
+            "EXPIRED": 282,
+            "AMBIGUOUS": 2,
+            "TP": 3,
+            "SL": 8
+          },
+          "win_rate": 27.272727272727273,
+          "avg_net_r": -0.18181818181818363,
+          "expectancy_net_r": -0.18181818181818363,
+          "profit_factor": 0.7499999999999976,
+          "avg_mfe_r": 1.646513011076935,
+          "avg_mae_r": 1.000076234052739,
+          "max_consecutive_losses": 4,
+          "sample_status": "INSUFFICIENT SAMPLE"
+        },
+        "confirmed_local15_stop_4h_target_next_open": {
+          "candidates": 25,
+          "filled": 25,
+          "resolved": 20,
+          "tp": 1,
+          "sl": 19,
+          "statuses": {
+            "SL": 19,
+            "OPEN": 5,
+            "TP": 1
+          },
+          "win_rate": 5.0,
+          "avg_net_r": -0.846163442354875,
+          "expectancy_net_r": -0.846163442354875,
+          "profit_factor": 0.1093016396264474,
+          "avg_mfe_r": 0.9317463488094903,
+          "avg_mae_r": 1.3230348160992194,
+          "max_consecutive_losses": 16,
+          "sample_status": "SUFFICIENT SAMPLE"
+        }
+      },
+      "stress_metrics": {
+        "current_next_open": {
+          "candidates": 2,
+          "filled": 2,
+          "resolved": 1,
+          "tp": 1,
+          "sl": 0,
+          "statuses": {
+            "TP": 1,
+            "OPEN": 1
+          },
+          "win_rate": 100.0,
+          "avg_net_r": 2.242070218101477,
+          "expectancy_net_r": 2.242070218101477,
+          "profit_factor": "INF",
+          "max_consecutive_losses": 0,
+          "sample_status": "INSUFFICIENT SAMPLE"
+        },
+        "shadow_v2_next_open": {
+          "candidates": 235,
+          "filled": 0,
+          "resolved": 0,
+          "tp": 0,
+          "sl": 0,
+          "statuses": {
+            "REJECTED_AT_FILL": 235
+          },
+          "win_rate": null,
+          "avg_net_r": null,
+          "expectancy_net_r": null,
+          "profit_factor": null,
+          "max_consecutive_losses": null,
+          "sample_status": "INSUFFICIENT SAMPLE"
+        },
+        "confirmed_pullback_cost_2r": {
+          "candidates": 295,
+          "filled": 13,
+          "resolved": 11,
+          "tp": 3,
+          "sl": 8,
+          "statuses": {
+            "EXPIRED": 282,
+            "AMBIGUOUS": 2,
+            "TP": 3,
+            "SL": 8
+          },
+          "win_rate": 27.272727272727273,
+          "avg_net_r": -0.37357990648583483,
+          "expectancy_net_r": -0.37357990648583483,
+          "profit_factor": 0.4863276285819771,
+          "max_consecutive_losses": 4,
+          "sample_status": "INSUFFICIENT SAMPLE"
+        },
+        "confirmed_local15_stop_4h_target_next_open": {
+          "candidates": 25,
+          "filled": 25,
+          "resolved": 20,
+          "tp": 1,
+          "sl": 19,
+          "statuses": {
+            "SL": 19,
+            "OPEN": 5,
+            "TP": 1
+          },
+          "win_rate": 5.0,
+          "avg_net_r": -0.8612677946867194,
+          "expectancy_net_r": -0.8612677946867194,
+          "profit_factor": 0.09340232138240057,
+          "max_consecutive_losses": 16,
+          "sample_status": "SUFFICIENT SAMPLE"
+        }
+      },
+      "portfolios": {
+        "current_next_open": {
+          "initial_cash_usdc": 10000,
+          "known_cash_usdc": 10248.222119437434,
+          "realized_net_pnl_usdc": 248.6130476074348,
+          "admitted": 2,
+          "filled": 2,
+          "resolved": 1,
+          "active": 1,
+          "uncertain": 0,
+          "exclusions": {},
+          "realized_roi_pct": 2.4861304760743477,
+          "closed_portfolio_roi_pct": null,
+          "equity_usdc": null,
+          "max_known_cash_drawdown_pct": 0.023616453346203343,
+          "profit_factor": "INF",
+          "notes": [
+            "Realized return is not total ROI when positions remain open.",
+            "Cash drawdown excludes unrealized losses; not equity drawdown.",
+            "Intrabar fills booked at bar close; reservations prevent future-profit sizing."
+          ]
+        },
+        "shadow_v2_next_open": {
+          "initial_cash_usdc": 10000,
+          "known_cash_usdc": 10000.0,
+          "realized_net_pnl_usdc": 0.0,
+          "admitted": 197,
+          "filled": 0,
+          "resolved": 0,
+          "active": 0,
+          "uncertain": 0,
+          "exclusions": {
+            "SIZE_OR_RISK_LIMIT": 15,
+            "CAPACITY_OR_TICKER": 23
+          },
+          "realized_roi_pct": 0.0,
+          "closed_portfolio_roi_pct": 0.0,
+          "equity_usdc": 10000.0,
+          "max_known_cash_drawdown_pct": 0.0,
+          "profit_factor": null,
+          "notes": [
+            "Realized return is not total ROI when positions remain open.",
+            "Cash drawdown excludes unrealized losses; not equity drawdown.",
+            "Intrabar fills booked at bar close; reservations prevent future-profit sizing."
+          ]
+        },
+        "confirmed_pullback_cost_2r": {
+          "initial_cash_usdc": 10000,
+          "known_cash_usdc": 9938.073985590689,
+          "realized_net_pnl_usdc": -60.661374060074465,
+          "admitted": 104,
+          "filled": 7,
+          "resolved": 6,
+          "active": 1,
+          "uncertain": 1,
+          "exclusions": {
+            "CAPACITY_OR_TICKER": 82,
+            "SIZE_OR_RISK_LIMIT": 109
+          },
+          "realized_roi_pct": null,
+          "closed_portfolio_roi_pct": null,
+          "equity_usdc": null,
+          "max_known_cash_drawdown_pct": 1.4297423422017494,
+          "profit_factor": 0.7310951186642383,
+          "notes": [
+            "Realized return is not total ROI when positions remain open.",
+            "Cash drawdown excludes unrealized losses; not equity drawdown.",
+            "Intrabar fills booked at bar close; reservations prevent future-profit sizing."
+          ]
+        },
+        "confirmed_local15_stop_4h_target_next_open": {
+          "initial_cash_usdc": 10000,
+          "known_cash_usdc": 9170.541746973071,
+          "realized_net_pnl_usdc": -824.871622336575,
+          "admitted": 19,
+          "filled": 19,
+          "resolved": 17,
+          "active": 2,
+          "uncertain": 0,
+          "exclusions": {
+            "SIZE_OR_RISK_LIMIT": 6
+          },
+          "realized_roi_pct": -8.248716223365749,
+          "closed_portfolio_roi_pct": null,
+          "equity_usdc": null,
+          "max_known_cash_drawdown_pct": 8.29458253026929,
+          "profit_factor": 0.045618438398236955,
+          "notes": [
+            "Realized return is not total ROI when positions remain open.",
+            "Cash drawdown excludes unrealized losses; not equity drawdown.",
+            "Intrabar fills booked at bar close; reservations prevent future-profit sizing."
+          ]
+        }
+      },
+      "comparison": {
+        "shared_filled_setups": 1,
+        "proposal_only_filled_setups": 24,
+        "current_filled_missing_in_proposal": 1,
+        "net_filled_count_difference": 23,
+        "capped_filled_count_difference": 17,
+        "capped_shared_setup_count": null
+      },
+      "limitations": [
+        "Multiple failed hypotheses exist; selecting best from many historical studies has selection bias. No optimality or profit guarantee.",
+        "Archived 182-market universe has survivorship/listing bias; every market including failures/short histories remains reported.",
+        "Historical OHLC next-open fills and fee/slippage assumptions are hypothetical; tick/board/queue/funding/real fills not modeled.",
+        "Research accounts use the fixed registered 10k USDC/1%/max3/total3%/1x/JSTdaily3% simulation.",
+        "MFE/MAE use price-stop distance, net R uses fee-inclusive stop-risk, neither is portfolio ROI.",
+        "Prior KILL models, fixed pending/live/VWAP protocols and sealed holdouts remain unchanged."
+      ],
+      "full_report_sha256": "29468d305dd6e3ea3bf9d4ab986d3dd0e9664c19d2c6544788eca3b0b55514d5",
+      "exclusions": {
+        "NO_NET_2R_AT_CONFIRMATION": 152,
+        "INVALID_OR_WIDER_LOCAL_STRUCTURE": 146,
+        "INCOMPLETE_INDICATOR_WINDOW": 13812,
+        "WARMUP_FIRST_CONFIRMATION": 42,
+        "UNKNOWN_SETUP_ORIGIN": 1
+      },
+      "selection_sample_status": "INSUFFICIENT SAMPLE",
+      "selection_minimum_resolved_each_period": 50
+    }
+  ],
+  "unused_validation_status": "NOT_RUN_DEVELOPMENT_KILL",
+  "forward_collection_enabled": false,
+  "changes_live_rules": false,
+  "qualified_replacement": false,
+  "verification": [
+    {
+      "role": "development",
+      "source_files_verified": 182,
+      "independent_filled_records": 40,
+      "independent_local_stop_candidates": 25,
+      "prices_costs_outcomes_excursions_match": true,
+      "new_samples_from_recheck": 0
+    }
+  ],
+  "complete_original_control_ledger_and_economics_reproduced": true
+}

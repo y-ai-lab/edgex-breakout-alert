@@ -65,7 +65,10 @@ class ChronologyTests(unittest.TestCase):
         self.assertIsNone(result['filled_ms'])
 
     def test_costs_can_reject_gross_two_r(self):
-        r=record();r['target']=109;r['trigger']=101
+        r=record();r['target']=109.1;r['trigger']=101
+        levels=study.control.cost_levels(101,r['stop'],r['target'],r['side'])
+        self.assertGreaterEqual((r['target']-levels['entry'])/(levels['entry']-r['stop']),2)
+        self.assertLess(levels['net_rr'],2)
         result=study.evaluate(r,[candle(START,open=101)],end_ms=START+STEP)
         self.assertEqual(result['status'],'REJECTED_AT_FILL')
 
