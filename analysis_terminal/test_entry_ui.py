@@ -7,6 +7,17 @@ ROOT = Path(__file__).resolve().parent
 
 
 class EntryFreshnessTests(unittest.TestCase):
+    def test_market_auto_refresh(self):
+        for case in ('default_poll', 'hidden_and_resume', 'restored_page',
+                     'old_cache_refresh', 'manual_force_once', 'single_flight_and_latest_filters',
+                     'timeout_and_next_poll_recover', 'toggle_and_candidate_reason'):
+            with self.subTest(case=case):
+                result = subprocess.run(
+                    ['node', str(ROOT / 'test_market_refresh.js'), str(ROOT / 'index.html'), case],
+                    capture_output=True, text=True, timeout=20,
+                )
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_storage_failures_do_not_disable_full_terminal_or_enable_trading(self):
         for case in ('corrupt', 'shape', 'nested', 'read_denied', 'write_denied', 'remove_denied'):
             with self.subTest(case=case):

@@ -137,7 +137,7 @@ button{-webkit-tap-highlight-color:transparent}
 
 <section id="dashboard" class="panel active">
 <div class="dashboardHero">
-  <div><div class="eyebrow">ENTRY NOW</div><h2>いまのエントリー候補</h2><div class="sub">エントリー可能と、まだ待つ候補を確認できます。</div></div>
+  <div><div class="eyebrow">ENTRY NOW</div><h2>いまのエントリー候補</h2><div class="sub" id="marketRefreshStatus">表示中は30秒ごとに自動更新。画面に戻ると再確認します。</div></div>
   <div class="heroActions"><button class="primary" id="dashScan">最新に更新</button><span id="dashUpdated" class="pill">未更新</span></div>
 </div>
 <div id="entryNowZone" class="entryNowZone">
@@ -153,6 +153,7 @@ button{-webkit-tap-highlight-color:transparent}
 <div class="focusSection">
   <div class="sectionHeading"><div><div class="eyebrow">WATCH NEXT</div><h3>次に監視する候補</h3></div><div class="sub">条件成立前です。カードをタップして分析。</div></div>
 <div id="nearCandidates" class="entryReadyGrid"><span class="muted">最新データを取得しています。</span></div>
+<div id="nearCandidatesStatus" class="sub" role="status"></div>
 </div>
 <details id="entryHistoryDetails" class="dashboardDrawer">
 <summary>ENTRY・あと一歩の履歴</summary>
@@ -188,7 +189,7 @@ button{-webkit-tap-highlight-color:transparent}
 <div class="field small"><label>最低スコア</label><input id="minScore" type="number" min="0" max="100" value="0"></div>
 <div class="field small"><label>最低RR</label><input id="minRR" type="number" min="0" step="0.1" placeholder="指定なし"></div>
 </div></details>
-<div class="row" style="margin-top:10px"><button class="primary" id="scan">スキャン</button><button class="ghost" id="force">強制更新</button><button class="ghost" id="autoScan">自動更新 OFF</button><button class="ghost" id="presetNear">直前候補</button><button class="ghost" id="presetReady">エントリー可能</button><button class="ghost" id="presetReset">リセット</button><button class="ghost" id="watchOnly">★のみ</button><span id="lastScan" class="pill">未更新</span></div>
+<div class="row" style="margin-top:10px"><button class="primary" id="scan">スキャン</button><button class="ghost" id="force">強制更新</button><button class="ghost" id="autoScan">自動更新 ON (30秒)</button><button class="ghost" id="presetNear">直前候補</button><button class="ghost" id="presetReady">エントリー可能</button><button class="ghost" id="presetReset">リセット</button><button class="ghost" id="watchOnly">★のみ</button><span id="lastScan" class="pill">未更新</span></div>
 <div id="summary" class="summary"></div>
 <div id="screenStatus" class="status">4H→15Mで全取引可能銘柄を確認します。</div>
 <div class="scroll"><table><thead><tr><th>★</th><th>銘柄</th><th>状態</th><th>方向</th><th>スコア</th><th>価格</th><th>24h</th><th>出来高比</th><th>RR</th><th>次の行動</th><th>データ鮮度</th><th>状態</th></tr></thead><tbody id="screenBody"></tbody></table></div>
@@ -314,7 +315,7 @@ function browserCandidateState(x){return x===null||browserRecord(x)&&x.initializ
 function browserVisitState(x){return x===null||browserRecord(x)&&Number.isFinite(x.time_ms)&&browserRecord(x.rows)&&Object.values(x.rows).every(function(v){return browserRecord(v)&&typeof v.stage==='string'&&Number.isFinite(v.score)})}
 function browserStorageJSON(key,fallback,valid){var raw=browserStorageRead(key);if(raw===null)return fallback;try{var value=JSON.parse(raw);if(!valid(value))throw new Error('INVALID_BROWSER_PREFERENCE');return value}catch(e){browserStorageInvalidKeys.add(key);browserStorageNotice();return fallback}}
 // End optional browser storage.
-var rows=[], watch=new Set(browserStorageJSON('edgexWatch',[],browserStrings)), showWatch=false, lastAnalysis=null, journal=browserStorageJSON('edgexJournal',[],browserRecords), marketHistory=browserStorageJSON('edgexMarketHistory',[],browserRecords), autoScanTimer=null, lastMarketPayload=null, autoJournalReady=browserStorageRead('edgexAutoJournalReady')!=="false", serverSync={history:0,paper:0,ok:false}, deferredInstallPrompt=null, recentTickers=browserStorageJSON('edgexRecentTickers',[],browserStrings), candidateState=browserStorageJSON('edgexCandidateState',null,browserCandidateState), candidateAlerts=browserStorageJSON('edgexCandidateAlerts',[],browserRecords), candidateNotifyEnabled=browserStorageRead('edgexCandidateNotify')==="true", visitBaseline=browserStorageJSON('edgexVisitBaseline',null,browserVisitState), currentVisitSnapshot=null, pushPreferenceState={}, watchSyncKey=browserStorageRead('edgexWatchSyncKey')||"", customAlerts=[], lastReadySignature=browserStorageRead('edgexLastReadySignature')||"", globalEntrySnapshot=null, entryHeartbeatBusy=false;
+var rows=[], watch=new Set(browserStorageJSON('edgexWatch',[],browserStrings)), showWatch=false, lastAnalysis=null, journal=browserStorageJSON('edgexJournal',[],browserRecords), marketHistory=browserStorageJSON('edgexMarketHistory',[],browserRecords), autoScanTimer=null, marketScanQueued=null, lastMarketPayload=null, autoJournalReady=browserStorageRead('edgexAutoJournalReady')!=="false", serverSync={history:0,paper:0,ok:false}, deferredInstallPrompt=null, recentTickers=browserStorageJSON('edgexRecentTickers',[],browserStrings), candidateState=browserStorageJSON('edgexCandidateState',null,browserCandidateState), candidateAlerts=browserStorageJSON('edgexCandidateAlerts',[],browserRecords), candidateNotifyEnabled=browserStorageRead('edgexCandidateNotify')==="true", visitBaseline=browserStorageJSON('edgexVisitBaseline',null,browserVisitState), currentVisitSnapshot=null, pushPreferenceState={}, watchSyncKey=browserStorageRead('edgexWatchSyncKey')||"", customAlerts=[], lastReadySignature=browserStorageRead('edgexLastReadySignature')||"", globalEntrySnapshot=null, entryHeartbeatBusy=false;
 function fmt(x,d){return x==null?"—":Number(x).toLocaleString("ja-JP",{maximumFractionDigits:d==null?4:d})}
 function pct(x){return x==null?"—":(x>=0?"+":"")+Number(x).toFixed(2)+"%"}
 function card(k,v){return '<div class="card"><div class="k">'+k+'</div><div class="v">'+v+'</div></div>'}
@@ -840,7 +841,7 @@ async function toggleBackgroundPush(){
   loadNotificationCenter();
  }catch(e){s.innerHTML='<span class="error">有効化できません: '+lifecycleEscape(e.message)+'</span>'}
 }
-async function toggleCandidateNotify(){if(!("Notification" in window)){alert("このブラウザは通知に対応していません。");return}if(!candidateNotifyEnabled){var p=Notification.permission;if(p!=="granted")p=await Notification.requestPermission();if(p!=="granted"){alert("通知が許可されていません。ブラウザ設定から許可できます。");return}candidateNotifyEnabled=true;browserStorageWrite("edgexCandidateNotify","true");if(!autoScanTimer){autoScanTimer=setInterval(function(){scan(false)},240000);document.getElementById("autoScan").textContent="自動更新 ON (4分)"}}else{candidateNotifyEnabled=false;browserStorageWrite("edgexCandidateNotify","false")}syncCandidateNotifyButton()}
+async function toggleCandidateNotify(){if(!("Notification" in window)){alert("このブラウザは通知に対応していません。");return}if(!candidateNotifyEnabled){var p=Notification.permission;if(p!=="granted")p=await Notification.requestPermission();if(p!=="granted"){alert("通知が許可されていません。ブラウザ設定から許可できます。");return}candidateNotifyEnabled=true;browserStorageWrite("edgexCandidateNotify","true");if(!autoScanTimer){startAutoScan()}}else{candidateNotifyEnabled=false;browserStorageWrite("edgexCandidateNotify","false")}syncCandidateNotifyButton()}
 function renderWatchStatus(items){var el=document.getElementById("dashWatch");if(!el)return;var m={};(items||[]).forEach(x=>m[x.ticker]=x);var names=Array.from(watch);if(!names.length){el.innerHTML='<span class="muted">まだありません</span>';return}el.innerHTML=names.map(function(t){var x=m[t];return '<div class="watchState"><button class="ghost quickTicker" data-ticker="'+lifecycleEscape(t)+'">'+lifecycleEscape(t)+'</button>'+(x?'<span class="badge '+x.stage+'">'+stageJa(x.stage)+'</span><span class="pill">'+directionJa(x.direction)+'</span><span class="pill">'+fmt(x.score,1)+'点</span>':'<span class="muted">次回スキャンで更新</span>')+'</div>'}).join("");el.querySelectorAll(".quickTicker").forEach(function(b){b.onclick=function(){document.getElementById("ticker").value=this.dataset.ticker;tab("analysis");analyze()}})}
 function addRecentTicker(ticker){if(!ticker)return;recentTickers=[ticker].concat(recentTickers.filter(x=>x!==ticker)).slice(0,8);browserStorageWrite("edgexRecentTickers",JSON.stringify(recentTickers));renderQuickAccess()}
 function quickButtons(items){return items&&items.length?items.map(t=>'<button class="ghost quickTicker" data-ticker="'+lifecycleEscape(t)+'">'+lifecycleEscape(t)+'</button>').join(" "):'<span class="muted">まだありません</span>'}
@@ -925,12 +926,24 @@ function refreshGlobalEntryAge(){
  renderGlobalEntryBar(globalEntrySnapshot);if(entryFreshness(globalEntrySnapshot).stale)renderEntryNow(globalEntrySnapshot);if(typeof renderNearCandidates==="function")renderNearCandidates(globalEntrySnapshot);if(typeof renderDashboard==="function")renderDashboard()
 }
 async function refreshEntryHeartbeat(){
+ if(typeof autoScanTimer!=="undefined"&&autoScanTimer)return scan(false,true);
  if(entryHeartbeatBusy||document.visibilityState==="hidden")return;entryHeartbeatBusy=true;
  try{
-  var j=await jf("/api/screener?limit=3");j._client_rendered_ms=Date.now();globalEntrySnapshot=j;renderGlobalEntryBar(j);renderEntryNow(j);if(typeof renderNearCandidates==="function")renderNearCandidates(j);if(typeof renderDashboard==="function")renderDashboard()
+  var j=await freshScreenerRequest("/api/screener?limit=3");j._client_rendered_ms=Date.now();globalEntrySnapshot=j;renderGlobalEntryBar(j);renderEntryNow(j);if(typeof renderNearCandidates==="function")renderNearCandidates(j);if(typeof renderDashboard==="function")renderDashboard()
  }catch(e){
   refreshGlobalEntryAge()
- }finally{entryHeartbeatBusy=false}
+ }finally{entryHeartbeatBusy=false;if(typeof flushMarketScanQueue==="function")flushMarketScanQueue()}
+}
+async function freshScreenerRequest(url){
+ var controller=new AbortController(),timer=setTimeout(function(){controller.abort()},20000);
+ try{
+  var j=await jf(url,{signal:controller.signal,cache:"no-store"});
+  if(typeof j.snapshot_age_seconds==="number"&&j.snapshot_age_seconds>=90&&!/[?&]force=true(?:&|$)/.test(url)){
+   var freshUrl=/[?&]force=false(?:&|$)/.test(url)?url.replace('force=false','force=true'):url+'&force=true';
+   j=await jf(freshUrl,{signal:controller.signal,cache:"no-store"});
+  }
+  return j;
+ }finally{clearTimeout(timer)}
 }
 function scenarioRiskParams(r){
  var p={risk_pct:Number(document.getElementById('riskPct').value),entry:r.entry_reference,stop:r.stop_loss};
@@ -969,6 +982,8 @@ async function renderEntryNow(j){
 function renderDailyConvenience(j){renderEntryNow(j);renderNearCandidates(j);renderDashboard()}
 function renderNearCandidates(j){
  var el=document.getElementById("nearCandidates");if(!el)return;
+ var note=document.getElementById("nearCandidatesStatus"),s=j&&j.summary;
+ if(note)note.textContent=entryFreshness(j).stale?"最新データを確認中です。":s&&Number.isFinite(s.near_signal_count)&&Number.isFinite(s.qualified_near_count)?'確認・リテスト待ち '+s.near_signal_count+'件 / RR条件を満たす候補 '+s.qualified_near_count+'件。':'条件成立前の候補です。';
  if(entryFreshness(j).stale){el.innerHTML='<span class="warn">データ鮮度を確認 — 更新後に候補を表示します。</span>';return}
  var near=(j.qualified_near_candidates||[]).filter(function(r){return r.stage!=="READY"}).slice(0,6);
  if(!near.length){el.innerHTML='<span class="muted">有力な直前候補はありません。</span>';return}
@@ -1040,8 +1055,23 @@ function autoJournalReadyCandidates(items){
  });
  if(added)saveJournalStore();return added;
 }
-async function scan(force){var s=document.getElementById("screenStatus");s.textContent="EdgeX全銘柄を取得中…";try{var u="/api/screener?limit=200&force="+force+"&stage="+encodeURIComponent(document.getElementById("stage").value)+"&direction="+encodeURIComponent(document.getElementById("direction").value)+"&min_score="+(+document.getElementById("minScore").value||0);var rr=document.getElementById("minRR").value,q=document.getElementById("q").value.trim();if(rr)u+="&min_rr="+encodeURIComponent(rr);if(q)u+="&q="+encodeURIComponent(q);if(watch.size)u+="&watch="+encodeURIComponent(Array.from(watch).join(","));var j=await jf(u);j._client_rendered_ms=Date.now();lastMarketPayload=j;rows=j.results;summaryView(j.summary);renderGlobalEntryBar(j);renderDailyConvenience(j);processCandidateTransitions(j);s.textContent=j.matched+"件表示 / "+j.scanned+"/"+j.universe+"銘柄評価 / 取得率 "+fmt(j.coverage_pct,1)+"% / データ "+(j.snapshot_age_seconds||0)+"秒前";document.getElementById("lastScan").textContent="更新 "+new Date().toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit",second:"2-digit"});renderRows()}catch(e){s.innerHTML='<span class="error">'+lifecycleEscape(e.message)+'</span>'}}
-document.getElementById("scan").onclick=()=>scan(false);document.getElementById("force").onclick=()=>scan(true);document.getElementById("autoScan").onclick=function(){var b=this;if(autoScanTimer){clearInterval(autoScanTimer);autoScanTimer=null;b.textContent="自動更新 OFF"}else{autoScanTimer=setInterval(function(){scan(false)},240000);b.textContent="自動更新 ON (4分)";scan(false)}};
+function screenerQuery(force){var u="/api/screener?limit=200&force="+force+"&stage="+encodeURIComponent(document.getElementById("stage").value)+"&direction="+encodeURIComponent(document.getElementById("direction").value)+"&min_score="+(+document.getElementById("minScore").value||0);var rr=document.getElementById("minRR").value,q=document.getElementById("q").value.trim();if(rr)u+="&min_rr="+encodeURIComponent(rr);if(q)u+="&q="+encodeURIComponent(q);if(watch.size)u+="&watch="+encodeURIComponent(Array.from(watch).join(","));return u}
+function flushMarketScanQueue(){if(marketScanQueued!==null){var force=marketScanQueued;marketScanQueued=null;scan(force)}}
+function startAutoScan(){if(autoScanTimer)return;autoScanTimer=setInterval(function(){if(document.visibilityState==="visible")scan(false,true)},30000);document.getElementById("autoScan").textContent="自動更新 ON (30秒)";var note=document.getElementById('marketRefreshStatus');if(note)note.textContent='表示中は30秒ごとに自動更新。画面に戻ると再確認します。'}
+async function scan(force,background){
+ if(background&&document.visibilityState==="hidden")return;
+ if(entryHeartbeatBusy){if(!background)marketScanQueued=marketScanQueued===true||!!force;return}
+ entryHeartbeatBusy=true;var s=document.getElementById("screenStatus"),u=screenerQuery(force);if(!background)s.textContent="EdgeX全銘柄を取得中…";
+ try{
+  var j=await freshScreenerRequest(u);j._client_rendered_ms=Date.now();renderGlobalEntryBar(j);renderDailyConvenience(j);summaryView(j.summary);
+  if(u!==screenerQuery(force)){marketScanQueued=marketScanQueued===true||!!force;return}
+  lastMarketPayload=j;rows=j.results;processCandidateTransitions(j);
+  s.textContent=j.matched+"件表示 / "+j.scanned+"/"+j.universe+"銘柄評価 / 取得率 "+fmt(j.coverage_pct,1)+"% / データ "+(j.snapshot_age_seconds||0)+"秒前";
+  document.getElementById("lastScan").textContent="更新 "+new Date().toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit",second:"2-digit"});renderRows();
+ }catch(e){s.textContent='更新できませんでした。自動で再確認します。';refreshGlobalEntryAge()}
+ finally{entryHeartbeatBusy=false;flushMarketScanQueue()}
+}
+document.getElementById("scan").onclick=()=>scan(false);document.getElementById("force").onclick=()=>scan(true);document.getElementById("autoScan").onclick=function(){if(autoScanTimer){clearInterval(autoScanTimer);autoScanTimer=null;this.textContent="自動更新 OFF";var note=document.getElementById('marketRefreshStatus');if(note)note.textContent='一覧の自動更新はOFFです。ENTRYの鮮度は引き続き確認します。'}else{startAutoScan();scan(false)}};
 document.getElementById("presetNear").onclick=function(){document.getElementById("stage").value="NEAR";document.getElementById("minScore").value=0;document.getElementById("minRR").value="";scan(false)};
 document.getElementById("presetReady").onclick=function(){document.getElementById("stage").value="READY";document.getElementById("minScore").value=0;document.getElementById("minRR").value="";scan(false)};
 document.getElementById("presetReset").onclick=function(){document.getElementById("q").value="";document.getElementById("stage").value="ALL";document.getElementById("direction").value="ALL";document.getElementById("minScore").value=0;document.getElementById("minRR").value="";scan(false)};
@@ -1257,6 +1287,7 @@ setInterval(function(){if(apiCapitalMode()&&analysisCapitalObserved!==null&&!usa
 function applyDeepLink(){var u=new URL(location.href),tabName=u.searchParams.get("tab"),ticker=u.searchParams.get("ticker");if(ticker)document.getElementById("ticker").value=ticker.toUpperCase();if(tabName)tab(tabName);if((tabName==="analysis"||ticker)&&ticker)analyze()}
 loadRiskProfile();document.getElementById("globalEntryAction").onclick=function(){tab("dashboard")};renderQuickAccess();initWatchSync();syncCandidateNotifyButton();renderPushGuide();syncBackgroundPushButton();loadNotificationCenter();updateCandleCountdown();setInterval(updateCandleCountdown,1000);setInterval(refreshGlobalEntryAge,10000);setInterval(refreshEntryHeartbeat,60000);document.addEventListener("visibilitychange",function(){if(document.visibilityState==="visible"){refreshGlobalEntryAge();refreshEntryHeartbeat()}});
 document.addEventListener("visibilitychange",function(){if(document.visibilityState==="visible"){renderLiveExecution(liveExecutionSnapshot);loadLiveExecution()}});
+window.addEventListener('pageshow',function(e){if(e.persisted){refreshGlobalEntryAge();refreshEntryHeartbeat()}});
 renderDashboard();loadLiveExecution();setInterval(function(){renderLiveExecution(liveExecutionSnapshot);if(document.visibilityState==="visible")loadLiveExecution()},15000);
 window.addEventListener("beforeinstallprompt",function(e){e.preventDefault();deferredInstallPrompt=e;document.getElementById("installApp").classList.add("good")});
 document.getElementById("copyWatchSync").onclick=async function(){var key=document.getElementById("watchSyncKey").value.trim();try{await navigator.clipboard.writeText(key);showWatchSyncStatus("同期コードをコピーしました","good")}catch(e){alert(key)}};
@@ -1274,7 +1305,7 @@ document.getElementById("backgroundPush").onclick=toggleBackgroundPush;
 document.getElementById("candidateNotify").onclick=toggleCandidateNotify;
 document.getElementById("installApp").onclick=async function(){if(deferredInstallPrompt){deferredInstallPrompt.prompt();await deferredInstallPrompt.userChoice;deferredInstallPrompt=null;this.textContent="ホーム画面追加済み/確認"}else{var ios=/iphone|ipad|ipod/i.test(navigator.userAgent);alert(ios?"Safariで開く → 共有 →「ホーム画面に追加」→「ウェブアプリとして開く」をON → 追加。ホーム画面のEdgeX分析アイコンから起動してください。":"ブラウザのメニューから「アプリをインストール」または「ホーム画面に追加」を選んでください。")}};
 if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("/sw.js").then(function(){syncBackgroundPushButton()}).catch(function(){syncBackgroundPushButton()})})}else{syncBackgroundPushButton()}
-applyDeepLink();setTimeout(function(){scan(false)},80);
+applyDeepLink();startAutoScan();setTimeout(function(){scan(false)},80);
 
 document.getElementById('calc').onclick=async function(){
  function v(id){return document.getElementById(id).value}var version=++manualCalcVersion,p={risk_pct:+v('riskPct'),entry:+v('entry'),stop:+v('stop')};
