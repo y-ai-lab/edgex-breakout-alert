@@ -13,6 +13,7 @@ from analysis_terminal import pending_entry_replay as study, pending_followup as
 import capital_admission_audit
 import entry_price_audit
 import reservation_time_audit
+import cost_headroom_audit
 
 DAY=86400000
 
@@ -79,6 +80,9 @@ def summarize(directory, *, now_ms):
     reservations={model:reservation_time_audit.summarize(
         [r for r in report['records'] if r['model']==model],report['portfolios'][model],
         start_ms=start,end_ms=end) for model in study.MODELS}
+    headroom={model:cost_headroom_audit.summarize(
+        [r for r in report['records'] if r['model']==model],
+        report['metrics'][model],report['portfolios'][model]) for model in study.MODELS}
     quality_blocked=bool(failures) or coverage['valid_points']==0
     out.update(collection_status='DATA_QUALITY_BLOCKED' if quality_blocked else 'RESULTS_VERIFIED',
                current_cohort_rule_decision=raw,
@@ -89,6 +93,8 @@ def summarize(directory, *, now_ms):
                capital_admission_audit_sha256=hashlib.sha256(Path(capital_admission_audit.__file__).read_bytes()).hexdigest(),
                reservation_time_audit=reservations,
                reservation_time_audit_sha256=hashlib.sha256(Path(reservation_time_audit.__file__).read_bytes()).hexdigest(),
+               cost_headroom_audit=headroom,
+               cost_headroom_audit_sha256=hashlib.sha256(Path(cost_headroom_audit.__file__).read_bytes()).hexdigest(),
                entry_execution_funnel={model:dict(
                    candidates=values['uncapped']['candidates'],
                    filled=values['uncapped']['filled'],
@@ -128,6 +134,17 @@ def markdown(result):
         lines.append(f"| {model} | {p['filled']} | {p['resolved']} | {show(p['realized_net_pnl_usdc'])} | {show(p['closed_portfolio_roi_pct'])} | {p['active']}/{p['uncertain']} |")
     lines += ['', '口座ROIは資金制限後の既存取引が全て終了した場合の値。保有・不確定が残れば不明。',
               '途中週で数値が出ても、その週の最終ROIではない。研究口座は実運用口座と異なる。']
+    if result.get('cost_headroom_audit') is not None:
+        lines += ['', '| モデル | 決着済みR集計の追加費用ゼロ損益bps | 資金制限後の決着済み現金集計bps |',
+                  '|---|---:|---:|']
+        for model, audit in result['cost_headroom_audit'].items():
+            values=[show(audit[group]['additional_uniform_charge_break_even_bps'])
+                    for group in ('resolved_r_basket','capped_resolved_cash_basket')]
+            lines.append(f"| {model} | {' | '.join(values)} |")
+        lines += ['', '既存の決着済み取引に同じ追加総費用をentry建玉金額のbpsで課した場合のゼロ損益点。',
+                  'R集計と元数量の現金集計は別。利益余地なし・決着なしは不明で、費用0ではない。',
+                  '実際のFundingや将来の費用耐性・口座ROIではない。未決済・不確定は補完しない。',
+                  '元の費用・net stop-risk・損益・判定・本番条件を変更しない。']
     lines += ['', '| モデル | 制約で失われた仮約定 | 除外理由 | 約定あり/なしの除外候補 |',
               '|---|---:|---|---:|']
     for model,audit in result['capital_admission_audit'].items():
