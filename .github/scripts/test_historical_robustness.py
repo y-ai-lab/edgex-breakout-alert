@@ -94,6 +94,21 @@ class ArchiveTests(unittest.TestCase):
             with self.assertRaises(FileNotFoundError):
                 self.run_archive()
 
+    def test_exact_upstream_eof_equivalence_only_no_general_hash_bypass(self):
+        for name in self.p['frozen_dependencies_sha256']:
+            target=self.root/name;target.parent.mkdir(parents=True,exist_ok=True)
+            target.write_bytes((audit.ROOT/name).read_bytes())
+        target=self.root/'app.py';raw=target.read_bytes()
+        upstream=raw[:-1] if audit.digest(raw)==audit.REGISTERED_APP_SHA256 else raw
+        self.assertEqual(audit.digest(upstream),audit.UPSTREAM_APP_SHA256)
+        self.assertEqual(audit.digest(upstream+b'\n'),audit.REGISTERED_APP_SHA256)
+        target.write_bytes(upstream)
+        with patch.object(audit,'ROOT',self.root):
+            self.assertEqual(self.run_archive()['source_files_verified'],1)
+            target.write_bytes(upstream+b'# not the frozen module\n')
+            with self.assertRaisesRegex(ValueError,'Frozen dependency changed'):
+                self.run_archive()
+
     def test_contract_payload_changed_even_with_valid_checksum_stops(self):
         x=json.loads(self.candles.read_bytes());x['contract']['contract_name']='CHANGEDUSDC'
         self.candles.write_bytes(audit.canonical(x))

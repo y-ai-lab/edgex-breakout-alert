@@ -242,7 +242,9 @@
       },
       "audit_decision": "CONTINUE_INSUFFICIENT_SAMPLE",
       "review_report_sha256": "8db668d6ba282632a7178d671d347b3019955ad1ef819f873642dc0a8ac6d4ad",
-      "source_manifest_sha256": "9126b6bff4789f57bb07f4a3a5872e72529baccaff6c510afeba087746f248cb"
+      "source_manifest_sha256": "9126b6bff4789f57bb07f4a3a5872e72529baccaff6c510afeba087746f248cb",
+      "selection_sample_status": "INSUFFICIENT SAMPLE",
+      "selection_required_resolved": 50
     },
     {
       "protocol": "fixed_pending_historical_robustness_v1",
@@ -487,7 +489,9 @@
       },
       "audit_decision": "REJECTED_HISTORICAL_ROBUSTNESS_NO_LIVE_CHANGE",
       "review_report_sha256": "381dfd3b5b29a1ad8f668fba1f2317abb240c81b94ccd50835a2f94eb542173f",
-      "source_manifest_sha256": "be10605ac8b05874178a31424976c14f648bdb0a645a680f872f4c4adc1549fc"
+      "source_manifest_sha256": "be10605ac8b05874178a31424976c14f648bdb0a645a680f872f4c4adc1549fc",
+      "selection_sample_status": "INSUFFICIENT SAMPLE",
+      "selection_required_resolved": 50
     }
   ],
   "verification": {
@@ -514,7 +518,14 @@
     "independent_audit_script_sha256": "b3e137c2fe04051c7dda150c5c0b51e69b985f90b2a0358fb528d375d4571cee",
     "first_report_recomputed_identically_after_summary_key_fix": true,
     "sources_and_full_ledgers_retained_in_work_environment": true,
-    "production_exports_included": false
+    "production_exports_included": false,
+    "upstream_main_byte_verification": {
+      "app_upstream_sha256": "b1f4d4d15dc1ce4665f0f9f776de050059b60fb18faa4cf1583b04bf02a6c4af",
+      "difference": "exactly one trailing LF in reconstructed workspace only",
+      "complete_ast_including_locations_identical": true,
+      "both_complete_reports_exact_match": true,
+      "original_sources_ledgers_protocol_preserved": true
+    }
   },
   "interpretation": [
     "The proposal increased uncapped fills but failed net profitability in the second complete period with 30 resolved.",
