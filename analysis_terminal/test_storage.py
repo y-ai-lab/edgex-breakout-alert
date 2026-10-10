@@ -1,5 +1,6 @@
 """Storage/API smoke tests; market and external push transport are mocked."""
 import base64
+from dataclasses import replace
 import json
 import sqlite3
 from cryptography.hazmat.primitives.asymmetric import ec
@@ -72,6 +73,29 @@ class StorageTests(unittest.IsolatedAsyncioTestCase):
                 self.assertIn(f'class="versionBadge">v{version}</span>', page.text)
                 self.assertNotIn("__APP_VERSION__", page.text)
                 self.assertIn("no-store", page.headers["cache-control"])
+
+    async def test_entry_rule_guide_uses_current_settings_without_private_or_market_access(self):
+        settings = replace(server.SETTINGS, monitor_interval="HOUR_2", entry_interval="MINUTE_5",
+                           trend_fast_ema=12, trend_slow_ema=35, roll_lookback=18,
+                           roll_max_age=7, retest_lookback=5, atr_period=10,
+                           atr_stop_buffer=0.6, atr_target_buffer=0.3,
+                           retest_atr_tolerance=0.4, min_rr=3.5)
+        with patch.object(server, "SETTINGS", settings), \
+                patch.object(server, "_db_connect", side_effect=AssertionError("unexpected DB access")), \
+                patch.object(server, "fetch_snapshots", AsyncMock(side_effect=AssertionError("unexpected market request"))):
+            async with AsyncClient(transport=ASGITransport(app=server.app), base_url="http://test") as client:
+                page = await client.get("/")
+        self.assertEqual(page.status_code, 200)
+        self.assertNotIn("__RULE_", page.text)
+        for text in ("2時間足で方向", "5分足で確認", "EMA12とEMA35", "直前18本",
+                     "直近7本以内", "直近5本の5分足", "ATRは10期間", "ATR × 0.6",
+                     "ATR × 0.3", "のATR × 0.4", "RRが3.5以上"):
+            self.assertIn(text, page.text)
+        self.assertIn('id="entryRules"', page.text)
+        self.assertIn("手数料・スリッページ・Funding控除前", page.text)
+        self.assertIn("SL/TP設定完了を意味しません", page.text)
+        self.assertIn("no-store", page.headers["cache-control"])
+        self.assertIn("script-src", page.headers["content-security-policy"])
 
     def test_repeated_migration_preserves_snapshots_subscribers_and_shadow(self):
         snapshot = dict(time_ms=self.now_ms, ready=0)

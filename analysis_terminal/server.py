@@ -4158,7 +4158,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="EdgeX Analysis Terminal",
-    version="19.0.60",
+    version="19.0.61",
     lifespan=lifespan,
 )
 app.add_middleware(push_security.BrowserSecurityMiddleware)
@@ -5296,11 +5296,31 @@ async def app_icon():
 
 @app.get("/", response_class=HTMLResponse)
 async def index():
-    return push_security.html_response(
-        Path(__file__).with_name("index.html").read_text(encoding="utf-8").replace(
-            "__APP_VERSION__", app.version
-        ),
+    html = Path(__file__).with_name("index.html").read_text(encoding="utf-8").replace(
+        "__APP_VERSION__", app.version
     )
+    # Public strategy settings only; render the guide without acquiring account access.
+    def interval_label(interval: str) -> str:
+        minutes = scanner.INTERVAL_MS[interval] // 60_000
+        return f"{minutes // 60}時間足" if minutes % 60 == 0 else f"{minutes}分足"
+
+    rules = {
+        "MONITOR": interval_label(SETTINGS.monitor_interval),
+        "ENTRY": interval_label(SETTINGS.entry_interval),
+        "FAST": SETTINGS.trend_fast_ema,
+        "SLOW": SETTINGS.trend_slow_ema,
+        "ROLL_LOOKBACK": SETTINGS.roll_lookback,
+        "ROLL_MAX_AGE": SETTINGS.roll_max_age,
+        "RETEST_LOOKBACK": SETTINGS.retest_lookback,
+        "ATR_PERIOD": SETTINGS.atr_period,
+        "STOP_BUFFER": f"{SETTINGS.atr_stop_buffer:g}",
+        "TARGET_BUFFER": f"{SETTINGS.atr_target_buffer:g}",
+        "RETEST_TOLERANCE": f"{SETTINGS.retest_atr_tolerance:g}",
+        "MIN_RR": f"{SETTINGS.min_rr:g}",
+    }
+    for name, value in rules.items():
+        html = html.replace(f"__RULE_{name}__", str(value))
+    return push_security.html_response(html)
 
 
 if __name__ == "__main__":

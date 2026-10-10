@@ -155,6 +155,36 @@ button{-webkit-tap-highlight-color:transparent}
 <div id="nearCandidates" class="entryReadyGrid"><span class="muted">最新データを取得しています。</span></div>
 <div id="nearCandidatesStatus" class="sub" role="status"></div>
 </div>
+<details id="entryRules" class="dashboardDrawer">
+<summary>エントリールール<span class="drawerHint">現行READYの成立条件</span></summary>
+<div class="drawerBody">
+<p class="sub">__RULE_MONITOR__で方向・価格構造を決め、__RULE_ENTRY__で確認します。以下の6条件がすべて成立した候補をREADYと表示します。判定には確定足を使います。</p>
+<ol>
+<li><b>トレンドが同じ方向</b><p class="sub">__RULE_MONITOR__のEMA__RULE_FAST__とEMA__RULE_SLOW__、終値の位置がロングまたはショート方向に揃う。</p></li>
+<li><b>直近のブレイクがある</b><p class="sub">__RULE_MONITOR__の直前__RULE_ROLL_LOOKBACK__本の高値・安値を、終値で抜けた足が直近__RULE_ROLL_MAX_AGE__本以内にある。</p></li>
+<li><b>ブレイク水準への戻りを確認</b><p class="sub">直近__RULE_RETEST_LOOKBACK__本の__RULE_ENTRY__に、水準付近へ届いた安値（ロング）または高値（ショート）がある。</p></li>
+<li><b>最新の確認足が成立</b><p class="sub">ロングは陽線かつ終値がブレイク水準より上。ショートは陰線かつ終値が水準より下。両方が必要です。</p></li>
+<li><b>SL・Entry・TPの位置が有効</b><p class="sub">SL・TPは__RULE_MONITOR__の構造から計算。ロングはSL &lt; Entry &lt; TP、ショートはTP &lt; Entry &lt; SL。Entry目安は最新の__RULE_ENTRY__の終値です。</p></li>
+<li><b>RRが__RULE_MIN_RR__以上</b><p class="sub">RR = EntryからTPまでの値幅 ÷ EntryからSLまでの値幅。手数料・スリッページ・Funding控除前の価格比率で、口座の収益率ではありません。</p></li>
+</ol>
+<div class="grid">
+<div class="card"><b>ロングの確認</b><p class="sub">トレンド：EMA__RULE_FAST__ &gt; EMA__RULE_SLOW__、__RULE_MONITOR__終値 &gt; EMA__RULE_FAST__。<br>確認足：終値 &gt; 始値、終値 &gt; ブレイク水準。</p></div>
+<div class="card"><b>ショートの確認</b><p class="sub">トレンド：EMA__RULE_FAST__ &lt; EMA__RULE_SLOW__、__RULE_MONITOR__終値 &lt; EMA__RULE_FAST__。<br>確認足：終値 &lt; 始値、終値 &lt; ブレイク水準。</p></div>
+</div>
+<h3>「あと一歩」とREADYの違い</h3>
+<p class="sub">「リテスト待ち」は戻りの条件が未成立。「確認待ち」は戻りを確認済みでも、最新の確認足が未成立です。この2状態のうちRRが__RULE_MIN_RR__以上のものを「次に監視する候補」に表示します。まだエントリー条件成立ではありません。</p>
+<p class="sub">確認足が成立しても、SL・TPの位置が無効なら「価格構造待ち」、RRが足りなければ「RR不足」です。待ち候補が多くても、監視候補やREADYが0件になることがあります。</p>
+<details class="dashboardDrawer"><summary>SL・TPとリテストの計算</summary><div class="drawerBody">
+<p class="sub">ATRは__RULE_ATR_PERIOD__期間。SL・TPのバッファーには__RULE_MONITOR__のATRを使います。TPは構造上の目標で、固定2Rに置き換えていません。</p>
+<p class="sub"><b>ロング：</b>SLは「ブレイク水準と、ブレイク足以降の最安値の低い方」− ATR × __RULE_STOP_BUFFER__。TPは「ブレイク足以降の最高値」− ATR × __RULE_TARGET_BUFFER__。</p>
+<p class="sub"><b>ショート：</b>SLは「ブレイク水準と、ブレイク足以降の最高値の高い方」＋ ATR × __RULE_STOP_BUFFER__。TPは「ブレイク足以降の最安値」＋ ATR × __RULE_TARGET_BUFFER__。</p>
+<p class="sub">リテストの許容幅は「__RULE_ENTRY__のATR × __RULE_RETEST_TOLERANCE__」と「ブレイク水準 × 0.1%」の大きい方。ロングは安値 ≤ 水準＋許容幅、ショートは高値 ≥ 水準−許容幅で判定します。直近の足に確認足自身も含まれ、ブレイク後の別の足だけに限定する条件ではありません。</p>
+<p class="sub">出来高比やスコアは参考情報で、現行READYの追加の合否条件には使っていません。Shadowの別ルールは現行READY・本番通知へ自動採用しません。</p>
+</div></details>
+<p class="warn">市場スキャンが120秒以上古いとREADY表示を止め、「データ鮮度を確認」に切り替えます。表示中は自動更新します。</p>
+<p class="sub">READYは分析条件の成立です。実際の発注は自動取引のON状態・口座・数量などの別チェックを通過した場合のみ。Entry・SL・TPの表示は、約定や取引所でのSL/TP設定完了を意味しません。API欄で現在の状態を確認してください。</p>
+</div>
+</details>
 <details id="entryHistoryDetails" class="dashboardDrawer">
 <summary>ENTRY・あと一歩の履歴</summary>
 <div class="drawerBody">
