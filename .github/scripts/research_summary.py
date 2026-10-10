@@ -12,6 +12,7 @@ sys.path.insert(0,str(ROOT))
 from analysis_terminal import pending_entry_replay as study, pending_followup as follow, execution_funnel as funnel
 import capital_admission_audit
 import entry_price_audit
+import reservation_time_audit
 
 DAY=86400000
 
@@ -75,6 +76,9 @@ def summarize(directory, *, now_ms):
     admissions={model:capital_admission_audit.summarize(
         [r for r in report['records'] if r['model']==model],report['portfolios'][model])
         for model in study.MODELS}
+    reservations={model:reservation_time_audit.summarize(
+        [r for r in report['records'] if r['model']==model],report['portfolios'][model],
+        start_ms=start,end_ms=end) for model in study.MODELS}
     quality_blocked=bool(failures) or coverage['valid_points']==0
     out.update(collection_status='DATA_QUALITY_BLOCKED' if quality_blocked else 'RESULTS_VERIFIED',
                current_cohort_rule_decision=raw,
@@ -83,6 +87,8 @@ def summarize(directory, *, now_ms):
                comparison=checked['proposal_vs_current'],
                capital_admission_audit=admissions,
                capital_admission_audit_sha256=hashlib.sha256(Path(capital_admission_audit.__file__).read_bytes()).hexdigest(),
+               reservation_time_audit=reservations,
+               reservation_time_audit_sha256=hashlib.sha256(Path(reservation_time_audit.__file__).read_bytes()).hexdigest(),
                entry_execution_funnel={model:dict(
                    candidates=values['uncapped']['candidates'],
                    filled=values['uncapped']['filled'],
@@ -138,6 +144,17 @@ def markdown(result):
             if counts['excluded_with_uncapped_fill']:
                 lines.append(f"| {model} | {reason} | {counts['excluded_with_uncapped_fill']} | {counts['lost_filled_minimum_notional_above_remaining']} | {counts['lost_filled_minimum_risk_above_remaining']} | {counts['lost_filled_with_unfilled_reservations']} |")
     lines += ['', '除外時の診断は同じ仮約定に重複し得るため合算しない。予約がなければ約定したという因果効果は未検証。']
+    if result.get('reservation_time_audit') is not None:
+        lines += ['', '| モデル | 未約定の平均予約USDC | 約定済みの平均予約USDC | 不確定の平均予約USDC | 未約定の予約金額時間比率% |',
+                  '|---|---:|---:|---:|---:|']
+        for model, audit in result['reservation_time_audit'].items():
+            groups=audit['groups']
+            values=[show(groups[group]['time_weighted_average_notional_usdc'])
+                    for group in reservation_time_audit.GROUPS]
+            lines.append(f"| {model} | {' | '.join(values)} | {show(audit['pending_share_of_reserved_notional_time_pct'])} |")
+        lines += ['', '観測期間全体で時間加重した予約金額。約定は元の足終値時刻に計上し、足内順序を推測しない。',
+                  '予約時間は記述分析。未約定資金を解放すれば利益や約定が増えるという因果効果は未検証。',
+                  '不確定資金・元口座・候補・損益・判定を変更しない。同じ週の更新は合算しない。']
     lines += ['', '| モデル | 候補 | 仮約定 | 未約定 | 約定率% | 未約定状態 | 資金制限後約定 |',
               '|---|---:|---:|---:|---:|---|---:|']
     for model,values in result['entry_execution_funnel'].items():
