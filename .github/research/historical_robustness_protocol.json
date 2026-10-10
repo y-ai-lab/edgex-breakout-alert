@@ -1,0 +1,110 @@
+{
+  "protocol": "fixed_pending_historical_robustness_v1",
+  "registered_utc": "2026-10-10T11:07:05.090237+00:00",
+  "registration_base_sha": "ec5b568d175c38ba7f9bde7a59dca5515ba4366e",
+  "purpose": "Additional complete-period robustness of existing frozen specifications, no new strategy or parameter search.",
+  "dataset": "RETROSPECTIVE_ADDITIONAL_ROBUSTNESS",
+  "periods": [
+    {
+      "id": "earlier_week_1",
+      "start_ms": 1789182000000,
+      "end_ms": 1789786800000
+    },
+    {
+      "id": "earlier_week_2",
+      "start_ms": 1789786800000,
+      "end_ms": 1790391600000
+    }
+  ],
+  "source_universe_sha256": "1ee2f543d56f61b4adf0560f2ccf12bb29b755358ab686b9c107c778978681cd",
+  "production_rule_fingerprint": "9b2df54f9d908d4b653fc270992ad3e1ada2e812f2d38133581f476516e55afd",
+  "production_parameters": {
+    "monitor_interval": "HOUR_4",
+    "entry_interval": "MINUTE_15",
+    "trend_fast_ema": 20,
+    "trend_slow_ema": 50,
+    "atr_period": 14,
+    "roll_lookback": 20,
+    "roll_max_age": 6,
+    "retest_lookback": 4,
+    "atr_stop_buffer": 0.5,
+    "atr_target_buffer": 0.25,
+    "retest_atr_tolerance": 0.35,
+    "min_rr": 2.0
+  },
+  "models": [
+    "current_next_open",
+    "shadow_v2_next_open",
+    "confirmed_pullback_cost_2r"
+  ],
+  "indicator_windows": {
+    "HOUR_4": 180,
+    "MINUTE_15": 180
+  },
+  "costs": {
+    "fee_bps_each_side": 5,
+    "slippage_bps_each_side": 2
+  },
+  "stress_costs": {
+    "fee_bps_each_side": 10,
+    "slippage_bps_each_side": 5
+  },
+  "portfolio": {
+    "initial_cash_usdc": 10000,
+    "risk_pct": 1,
+    "max_positions": 3,
+    "max_total_risk_pct": 3,
+    "max_notional_multiple": 1,
+    "daily_loss_pct": 3,
+    "daily_loss_timezone": "Asia/Tokyo"
+  },
+  "chronology": "Frozen pending_entry_replay; signal close+1ms; four 15M bars; confirming/prior bars excluded; unknown fill/exit order AMBIGUOUS, missing bar DATA_GAP, uncertain capital retained.",
+  "sealed_periods": [
+    {
+      "start_ms": 1788566400000,
+      "end_ms": 1789171200000,
+      "scope": "No entry/outcome evaluation; warmup prices are indicator inputs only."
+    },
+    {
+      "start_ms": 1791504000000,
+      "end_ms": 1792713600000,
+      "scope": "No early fetch/evaluation of registered VWAP validation."
+    }
+  ],
+  "selection": {
+    "minimum_resolved_each_period": 50,
+    "minimum_net_win_rate_pct": 40,
+    "minimum_base_pf": 1.2,
+    "base_avg_net_r_positive": true,
+    "stress_avg_net_r_positive": true,
+    "stress_pf_greater_than": 1,
+    "proposal_pure_fill_increase_each_period_positive": true,
+    "proposal_capped_pure_fill_increase_each_period_positive": true,
+    "capped_minimum_resolved_each_period": 20,
+    "known_closed_portfolio_roi_each_period_positive": true,
+    "no_open_or_uncertain_capital": true
+  },
+  "negative_diagnostic_minimum_resolved": 20,
+  "negative_diagnostic": "Any base AvgR<=0 or PF<=1 with >=20 resolved is historical rejection evidence. No retuning, live capture stop, original-protocol or weekly-decision rewrite.",
+  "scope": "Outcomes for these exact intervals under this audit have not been calculated/fetched at registration. Historical market context may have been seen: not a pristine holdout. Do not pool other periods/daily repeats to meet per-period thresholds.",
+  "frozen_dependencies_sha256": {
+    "app.py": "2e24f61e47ee40fdb3ae5f18152129f6632e83d508b73d27bf33fda0919ac9ab",
+    "analysis_terminal/history.py": "c29829d3872c58cfcfdf644e004f50bc59c99a0331895d609288d10e61f8eb89",
+    "analysis_terminal/run_replay.py": "4bc1bcc08e0f2bb94c6b42e252858f8dcc0a67bfba18b8c85d7a9df3159050f1",
+    "analysis_terminal/replay.py": "67417c93cdbab1640945c55f3f2c5d99552af711b40006f2db204e2ac55bdd5e",
+    "analysis_terminal/pending_entry_replay.py": "111686641afe5e61c64311fa730716b5198d3a74e34440e06f48d99da3c53df8",
+    "analysis_terminal/pending_entry_protocol.json": "1ed8af4b9bb0dd7281e80a21956677bb6d9e315f47fb0c00689992662a29ee0f",
+    "analysis_terminal/vwap_reclaim_replay.py": "228347266f5e17956c9110475d037c0be52a0a3d57ffd2da27eeadbe277f5ba5",
+    "analysis_terminal/execution_funnel.py": "8159e9ae6362d6f71227c944580e4ad0d954e56033b98b926ca688b1b17d19da"
+  },
+  "real_orders_enabled": false,
+  "automatic_promotion": false,
+  "changes_live_rules": false,
+  "limitations": [
+    "Historical OHLC reconstruction and archived 182-market universe have revision/listing/survivorship bias.",
+    "Next-open/touch fills and costs are hypothetical; depth, tick, queue and Funding not modeled.",
+    "No global optimum or profits are proved by retrospective ranking; correlated markets and multiple tested hypotheses matter.",
+    "Original research portfolio is not actual 3%-per-trade/no-count-cap/no-daily-stop policy.",
+    "Do not alter confirmation, min_rr, SL/TP, expiry, original weekly/capture protocols or old KILL results."
+  ]
+}
