@@ -107,6 +107,13 @@ class SourceTests(unittest.TestCase):
         r=self.run_archive();self.assertEqual(study.decision([r]),'BLOCKED_DATA_QUALITY')
         self.assertFalse(r['eligible_for_live_promotion']);self.assertTrue(r['original_future_weeks_and_live_capture_unchanged'])
 
+    def test_dataset_label_matches_registered_interval_without_changing_old_reports(self):
+        self.assertEqual(self.run_archive()['dataset'],'RETROSPECTIVE_28DAY_DIAGNOSTIC')
+        self.p['period_days']=20;period=self.p['periods'][0];period['end_ms']=period['start_ms']+20*study.DAY
+        self.source['end_ms']=period['end_ms'];self.source['coverage']['expected_points_all_markets']=20*96;self.write_source()
+        self.control.return_value=dict(valid_points=0,records=[]);self.vwap.return_value=dict(valid_points=0,records=[])
+        self.assertEqual(self.run_archive()['dataset'],'RETROSPECTIVE_20DAY_DIAGNOSTIC')
+
     def test_changed_raw_seal_or_candle_stops_before_evaluation(self):
         (self.source_dir/'1.json').write_bytes(b'changed')
         with self.assertRaisesRegex(ValueError,'checksum'):self.run_archive()
@@ -128,6 +135,14 @@ class SourceTests(unittest.TestCase):
         self.write_source()
         with self.assertRaisesRegex(ValueError,'first-entry mismatch'):self.run_archive()
 
+    def test_nonpositive_shadow_target_is_not_repaired_or_counted_as_zero_trade(self):
+        row=dict(ticker='X',direction='SHORT',breakout_time_ms=1000,breakout_level=.7,
+                 shadow_v2_ready=True,entry_reference=.52,shadow_stop_loss=.7934,shadow_v2_target=-.0268)
+        self.assertIsNone(study.control.candidate(row,study.control.MODELS[1],candle_ms=0))
+        self.source['signals']['shadow']=[dict(setup_id='x',created_ms=1,entry=.52,stop=.7934,target=-.0268)]
+        self.write_source()
+        with self.assertRaisesRegex(ValueError,'first-entry mismatch'):self.run_archive()
+
     def test_sealed_period_and_source_traversal_are_rejected(self):
         self.p['sealed_periods'].append(self.p['periods'][0])
         with self.assertRaisesRegex(ValueError,'Reserved'):self.run_archive()
@@ -137,6 +152,24 @@ class SourceTests(unittest.TestCase):
 
 
 class RegistrationTests(unittest.TestCase):
+    def test_failed_audit_is_unknown_not_zero_performance(self):
+        r=study.blocked_review(0,protocol_path=study.AUGUST_PROTOCOL)
+        self.assertEqual(r['status'],'BLOCKED_DATA_QUALITY');self.assertIsNone(r['metrics']);self.assertIsNone(r['portfolios'])
+        self.assertFalse(r['qualified_replacement']);self.assertFalse(r['real_orders_enabled'])
+
+    def test_cli_failure_preserves_evidence_and_returns_nonzero(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);source=root/'source';source.mkdir();raw=source/'replay-report.json';raw.write_bytes(b'original')
+            out=root/'output'
+            argv=['audit','--source',str(source),'--period-index','0','--protocol',str(study.AUGUST_PROTOCOL),'--output',str(out)]
+            with patch('sys.argv',argv),patch.object(study,'run',side_effect=ValueError('Independent control mismatch')):
+                with self.assertRaisesRegex(ValueError,'control mismatch'):study.main()
+            r=json.loads((out/'blocked.json').read_text());self.assertIsNone(r['metrics']);self.assertEqual(raw.read_bytes(),b'original')
+            self.assertFalse((out/'report.json').exists())
+
+    def test_unknown_blocked_interval_is_not_turned_into_valid_audit(self):
+        with self.assertRaises(ValueError):study.blocked_review(1,protocol_path=study.AUGUST_PROTOCOL)
+
     def august_report(self, resolved=50):
         p=study.protocol(study.AUGUST_PROTOCOL);period=p['periods'][0];r=report(resolved=resolved)
         r.update(role=period['id'],start_ms=period['start_ms'],end_ms=period['end_ms'],protocol_sha256=study.AUGUST_PROTOCOL_SHA256)

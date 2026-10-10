@@ -140,7 +140,7 @@ def run(source_dir, period_index, analyze, settings, *, now_ms=None, protocol_pa
     if digest((source_dir / 'replay-report.json').read_bytes()) != digest(raw) or any(digest(path.read_bytes()) != h for path, h in hashes):
         raise ValueError('Source mutated during evaluation')
     return dict(protocol=p['protocol'], protocol_sha256=registered_sha,
-                dataset='RETROSPECTIVE_28DAY_DIAGNOSTIC', role=period['id'], start_ms=start, end_ms=end,
+                dataset=f'RETROSPECTIVE_{p["period_days"]}DAY_DIAGNOSTIC', role=period['id'], start_ms=start, end_ms=end,
                 period_complete=True, pristine_holdout=False, eligible_for_live_promotion=False,
                 automatic_promotion=False, real_orders_enabled=False, changes_live_rules=False,
                 source_report_sha256=digest(raw), source_files_verified=len(markets), coverage=coverage,
@@ -187,6 +187,18 @@ def next_period_gate(previous_report, previous_source, analyze, settings):
         raise ValueError('Previous rejection or quality block: next period stays sealed')
 
 
+def blocked_review(period_index, *, protocol_path=None):
+    """A failed audit has unknown performance, never a valid zero-trade result."""
+    p = protocol(protocol_path)
+    if type(period_index) is not int or not 0 <= period_index < len(p['periods']):
+        raise ValueError('Unregistered blocked period')
+    return dict(protocol=p['protocol'], status='BLOCKED_DATA_QUALITY',
+                period=p['periods'][period_index], metrics=None, portfolios=None,
+                qualified_replacement=False, eligible_for_live_promotion=False,
+                real_orders_enabled=False, changes_live_rules=False,
+                note='Validation failed; preserve initial sources and inspect mismatch without replacing ledger or imputing results.')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source', type=Path, required=True)
@@ -198,13 +210,20 @@ def main():
     args = parser.parse_args()
     p = protocol(args.protocol)
     from analysis_terminal import server
-    if args.period_index:
-        if len(p['periods']) < 2:
-            raise ValueError('Unregistered next period')
-        if not args.previous_report or not args.previous_source:
-            raise ValueError('Previous report and source required before opening period 2')
-        next_period_gate(args.previous_report, args.previous_source, server.analyze_contract, server.SETTINGS)
-    report = run(args.source, args.period_index, server.analyze_contract, server.SETTINGS, protocol_path=args.protocol)
+    try:
+        if args.period_index:
+            if len(p['periods']) < 2:
+                raise ValueError('Unregistered next period')
+            if not args.previous_report or not args.previous_source:
+                raise ValueError('Previous report and source required before opening period 2')
+            next_period_gate(args.previous_report, args.previous_source, server.analyze_contract, server.SETTINGS)
+        report = run(args.source, args.period_index, server.analyze_contract, server.SETTINGS, protocol_path=args.protocol)
+    except ValueError:
+        blocked = blocked_review(args.period_index, protocol_path=args.protocol)
+        args.output.mkdir(parents=True, exist_ok=False)
+        with (args.output / 'blocked.json').open('x') as f:
+            json.dump(blocked, f, ensure_ascii=False, indent=2, allow_nan=False)
+        raise
     args.output.mkdir(parents=True, exist_ok=False)
     summary = {k: v for k, v in report.items() if k not in {'records', 'markets'}}
     summary['decision'] = decision([report], protocol_path=args.protocol)
