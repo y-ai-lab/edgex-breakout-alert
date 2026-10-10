@@ -137,6 +137,30 @@ class SourceTests(unittest.TestCase):
 
 
 class RegistrationTests(unittest.TestCase):
+    def august_report(self, resolved=50):
+        p=study.protocol(study.AUGUST_PROTOCOL);period=p['periods'][0];r=report(resolved=resolved)
+        r.update(role=period['id'],start_ms=period['start_ms'],end_ms=period['end_ms'],protocol_sha256=study.AUGUST_PROTOCOL_SHA256)
+        return r
+
+    def test_august_alone_cannot_satisfy_original_two_period_selection(self):
+        r=self.august_report(resolved=100)
+        self.assertEqual(study.decision([r],protocol_path=study.AUGUST_PROTOCOL),'CONTINUE_INSUFFICIENT_SAMPLE')
+        with self.assertRaisesRegex(ValueError,'duplicate'):study.decision([r,r],protocol_path=study.AUGUST_PROTOCOL)
+
+    def test_august_and_long_samples_cannot_be_mixed_to_qualify(self):
+        with self.assertRaises(ValueError):study.decision([report(),self.august_report()])
+        with self.assertRaises(ValueError):study.decision([self.august_report(),report()],protocol_path=study.AUGUST_PROTOCOL)
+
+    def test_august_negative_rule_keeps_same_twenty_threshold(self):
+        r=self.august_report(resolved=20);r['metrics'][study.vwap.MODEL].update(avg_net_r=-.1,profit_factor=.8)
+        self.assertEqual(study.decision([r],protocol_path=study.AUGUST_PROTOCOL),'REJECTED_HISTORICAL_SPECIFICATION_NO_LIVE_CHANGE')
+
+    def test_only_registered_protocol_paths_are_accepted(self):
+        with self.assertRaisesRegex(ValueError,'path'):study.protocol('/tmp/unregistered-protocol.json')
+        with tempfile.TemporaryDirectory() as d:
+            f=Path(d)/'protocol.json';f.write_bytes(study.AUGUST_PROTOCOL.read_bytes()+b' ')
+            with patch.object(study,'AUGUST_PROTOCOL',f),self.assertRaisesRegex(ValueError,'audit changed'):study.protocol(f)
+
     def test_protocol_tamper_rejected(self):
         with tempfile.TemporaryDirectory() as d:
             f=Path(d)/'protocol.json';f.write_bytes(study.PROTOCOL.read_bytes()+b' ')

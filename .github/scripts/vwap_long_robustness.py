@@ -14,6 +14,8 @@ from analysis_terminal.replay import rule_fingerprint, strategy_parameters
 ROOT = Path(__file__).resolve().parents[2]
 PROTOCOL = ROOT / '.github/research/vwap_long_protocol.json'
 PINNED_PROTOCOL_SHA256 = '2a19d43228ed6b999aae532548892f569fb05196d4d1690d8700cba5141488b9'
+AUGUST_PROTOCOL = ROOT / '.github/research/vwap_august_protocol.json'
+AUGUST_PROTOCOL_SHA256 = 'b975c2439b94d8e3a4334f7798eb589c879bd9f2fb0be962b850aa3885cded75'
 DAY = 86400000
 
 
@@ -25,9 +27,13 @@ def canonical(value):
     return json.dumps(value, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()
 
 
-def protocol():
-    raw = PROTOCOL.read_bytes()
-    if digest(raw) != PINNED_PROTOCOL_SHA256:
+def protocol(path=None):
+    path = PROTOCOL if path is None else Path(path).resolve()
+    if path not in (PROTOCOL, AUGUST_PROTOCOL):
+        raise ValueError('Unregistered audit protocol path')
+    raw = path.read_bytes()
+    expected = PINNED_PROTOCOL_SHA256 if path == PROTOCOL else AUGUST_PROTOCOL_SHA256
+    if digest(raw) != expected:
         raise ValueError('Registered long audit changed')
     p = json.loads(raw)
     for name, expected in p['frozen_dependencies_sha256'].items():
@@ -55,8 +61,9 @@ def comparison(groups, accounts):
                     - accounts[control.MODELS[0]]['filled'], capped_shared_setup_count=None)
 
 
-def run(source_dir, period_index, analyze, settings, *, now_ms=None):
-    p = protocol()
+def run(source_dir, period_index, analyze, settings, *, now_ms=None, protocol_path=None):
+    p = protocol(protocol_path)
+    registered_sha = digest((PROTOCOL if protocol_path is None else Path(protocol_path)).read_bytes())
     if type(period_index) is not int or not 0 <= period_index < len(p['periods']):
         raise ValueError('Unregistered long period')
     period = p['periods'][period_index]
@@ -132,7 +139,7 @@ def run(source_dir, period_index, analyze, settings, *, now_ms=None):
     accounts = {m: control.portfolio(rows) for m, rows in groups.items()}
     if digest((source_dir / 'replay-report.json').read_bytes()) != digest(raw) or any(digest(path.read_bytes()) != h for path, h in hashes):
         raise ValueError('Source mutated during evaluation')
-    return dict(protocol=p['protocol'], protocol_sha256=PINNED_PROTOCOL_SHA256,
+    return dict(protocol=p['protocol'], protocol_sha256=registered_sha,
                 dataset='RETROSPECTIVE_28DAY_DIAGNOSTIC', role=period['id'], start_ms=start, end_ms=end,
                 period_complete=True, pristine_holdout=False, eligible_for_live_promotion=False,
                 automatic_promotion=False, real_orders_enabled=False, changes_live_rules=False,
@@ -143,12 +150,13 @@ def run(source_dir, period_index, analyze, settings, *, now_ms=None):
                 original_future_weeks_and_live_capture_unchanged=True, limitations=p['limitations'])
 
 
-def decision(reports):
-    p = protocol()
+def decision(reports, *, protocol_path=None):
+    p = protocol(protocol_path)
+    registered_sha = digest((PROTOCOL if protocol_path is None else Path(protocol_path)).read_bytes())
     expected = {x['id']: (x['start_ms'], x['end_ms']) for x in p['periods']}
     seen = set()
     for r in reports:
-        if r['role'] not in expected or r['role'] in seen or (r['start_ms'], r['end_ms']) != expected[r['role']] or r['protocol_sha256'] != PINNED_PROTOCOL_SHA256:
+        if r['role'] not in expected or r['role'] in seen or (r['start_ms'], r['end_ms']) != expected[r['role']] or r['protocol_sha256'] != registered_sha:
             raise ValueError('Unregistered or duplicate long report')
         seen.add(r['role'])
     if any(not r['period_complete'] or r['coverage']['failed_markets'] or not r['coverage']['valid_points'] for r in reports):
@@ -157,7 +165,8 @@ def decision(reports):
         m = r['metrics'][vwap.MODEL]
         if m['resolved'] >= 20 and (m['avg_net_r'] <= 1e-12 or m['profit_factor'] != 'INF' and m['profit_factor'] <= 1 + 1e-12):
             return 'REJECTED_HISTORICAL_SPECIFICATION_NO_LIVE_CHANGE'
-    if set(expected) != seen or any(r['metrics'][vwap.MODEL]['resolved'] < 50 for r in reports):
+    if (set(expected) != seen or len(seen) < p.get('minimum_distinct_selection_periods', 2)
+            or any(r['metrics'][vwap.MODEL]['resolved'] < 50 for r in reports)):
         return 'CONTINUE_INSUFFICIENT_SAMPLE'
     for r in reports:
         m, s, a, c = r['metrics'][vwap.MODEL], r['stress_metrics'][vwap.MODEL], r['portfolios'][vwap.MODEL], r['comparison']
@@ -181,20 +190,24 @@ def next_period_gate(previous_report, previous_source, analyze, settings):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source', type=Path, required=True)
+    parser.add_argument('--protocol', type=Path, help='One of the two hash-pinned audit protocols only')
     parser.add_argument('--period-index', type=int, choices=(0, 1), required=True)
     parser.add_argument('--previous-report', type=Path)
     parser.add_argument('--previous-source', type=Path)
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
+    p = protocol(args.protocol)
     from analysis_terminal import server
     if args.period_index:
+        if len(p['periods']) < 2:
+            raise ValueError('Unregistered next period')
         if not args.previous_report or not args.previous_source:
             raise ValueError('Previous report and source required before opening period 2')
         next_period_gate(args.previous_report, args.previous_source, server.analyze_contract, server.SETTINGS)
-    report = run(args.source, args.period_index, server.analyze_contract, server.SETTINGS)
+    report = run(args.source, args.period_index, server.analyze_contract, server.SETTINGS, protocol_path=args.protocol)
     args.output.mkdir(parents=True, exist_ok=False)
     summary = {k: v for k, v in report.items() if k not in {'records', 'markets'}}
-    summary['decision'] = decision([report])
+    summary['decision'] = decision([report], protocol_path=args.protocol)
     for name, value in [('report.json', report), ('summary.json', summary)]:
         with (args.output / name).open('x') as f:
             json.dump(value, f, ensure_ascii=False, indent=2, allow_nan=False)
