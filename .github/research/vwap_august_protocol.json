@@ -1,0 +1,114 @@
+{
+  "model": "trend_session_vwap_reclaim_net2r",
+  "selection": {
+    "minimum_resolved_each_period": 50,
+    "minimum_net_win_rate_pct": 40,
+    "minimum_base_pf": 1.2,
+    "base_avg_net_r_positive": true,
+    "stress_avg_net_r_positive": true,
+    "stress_pf_greater_than": 1,
+    "proposal_pure_fill_increase_each_period_positive": true,
+    "proposal_capped_pure_fill_increase_each_period_positive": true,
+    "capped_minimum_resolved_each_period": 20,
+    "known_closed_portfolio_roi_each_period_positive": true,
+    "no_open_or_uncertain_capital": true
+  },
+  "costs": {
+    "fee_bps_each_side": 5,
+    "slippage_bps_each_side": 2
+  },
+  "stress_costs": {
+    "fee_bps_each_side": 10,
+    "slippage_bps_each_side": 5
+  },
+  "portfolio": {
+    "initial_cash_usdc": 10000,
+    "risk_pct": 1,
+    "max_positions": 3,
+    "max_total_risk_pct": 3,
+    "max_notional_multiple": 1,
+    "daily_loss_pct": 3,
+    "daily_loss_timezone": "Asia/Tokyo"
+  },
+  "rules": "Exact original VWAP RULES/candidate/replay_market/pending_state/evaluate. No modification to volume2x, first strict session reclaim, local stop, structural room, net2R, 4-bar expiry or fees. Original controls must reproduce as full reports.",
+  "original_vwap_future_weeks_unchanged": true,
+  "real_orders_enabled": false,
+  "automatic_promotion": false,
+  "changes_live_rules": false,
+  "new_live_collection_enabled": false,
+  "protocol": "frozen_vwap_august20day_historical_robustness_v1",
+  "registered_utc": "2026-10-10T12:16:54.778089+00:00",
+  "registration_base_sha": "3209af776cb6ef203b495f3851ac78bf0b104390",
+  "purpose": "One additional fixed20-day diagnostic of unchanged VWAP. Continue after separate1/11-resolved earlier audits; no pooling or revised dates. Cannot alone satisfy original two-period practical criteria.",
+  "period_days": 20,
+  "periods": [
+    {
+      "id": "historical_august20d",
+      "start_ms": 1785542400000,
+      "end_ms": 1787270400000
+    }
+  ],
+  "source_universe_sha256": "1ee2f543d56f61b4adf0560f2ccf12bb29b755358ab686b9c107c778978681cd",
+  "production_rule_fingerprint": "9b2df54f9d908d4b653fc270992ad3e1ada2e812f2d38133581f476516e55afd",
+  "production_parameters": {
+    "monitor_interval": "HOUR_4",
+    "entry_interval": "MINUTE_15",
+    "trend_fast_ema": 20,
+    "trend_slow_ema": 50,
+    "atr_period": 14,
+    "roll_lookback": 20,
+    "roll_max_age": 6,
+    "retest_lookback": 4,
+    "atr_stop_buffer": 0.5,
+    "atr_target_buffer": 0.25,
+    "retest_atr_tolerance": 0.35,
+    "min_rr": 2.0
+  },
+  "indicator_windows": {
+    "HOUR_4": 180,
+    "MINUTE_15": 180
+  },
+  "sealed_periods": [
+    {
+      "start_ms": 1788566400000,
+      "end_ms": 1789171200000,
+      "scope": "No entry/outcome evaluation; warmup prices are indicator inputs only."
+    },
+    {
+      "start_ms": 1791504000000,
+      "end_ms": 1792713600000,
+      "scope": "No early fetch/evaluation of registered VWAP validation."
+    },
+    {
+      "start_ms": 1787281200000,
+      "end_ms": 1788490800000,
+      "scope": "Preserve unopened local15 validation prices; no access in this audit."
+    }
+  ],
+  "decision": "This standalone20-day audit is INSUFFICIENT SAMPLE for practical qualification; never combine prior periods to pass original per-period criteria. Adequately observed >=20 resolved AvgR<=0 or PF<=1 (tolerance1e-12) rejects the historical specification; source errors or zero valid indicators block. No retuning or live changes, no opening Aug21/Sep or future sealed periods.",
+  "collection": "Only public LAST_PRICE getKline, frozen archived182-market universe, exactly180 closed4H/15M indicator windows. Full 28-day source collection cutoff, no later exit extension. Pre-launch short histories, unavailable markets, candle gaps and funding/queue limitations disclosed. All source files and first manifests frozen before model evaluation; sources are never regenerated to improve results.",
+  "frozen_dependencies_sha256": {
+    "analysis_terminal/history.py": "c29829d3872c58cfcfdf644e004f50bc59c99a0331895d609288d10e61f8eb89",
+    "analysis_terminal/run_replay.py": "4bc1bcc08e0f2bb94c6b42e252858f8dcc0a67bfba18b8c85d7a9df3159050f1",
+    "analysis_terminal/replay.py": "67417c93cdbab1640945c55f3f2c5d99552af711b40006f2db204e2ac55bdd5e",
+    "analysis_terminal/pending_entry_replay.py": "111686641afe5e61c64311fa730716b5198d3a74e34440e06f48d99da3c53df8",
+    "analysis_terminal/pending_entry_protocol.json": "1ed8af4b9bb0dd7281e80a21956677bb6d9e315f47fb0c00689992662a29ee0f",
+    "analysis_terminal/vwap_reclaim_replay.py": "228347266f5e17956c9110475d037c0be52a0a3d57ffd2da27eeadbe277f5ba5",
+    "analysis_terminal/execution_funnel.py": "8159e9ae6362d6f71227c944580e4ad0d954e56033b98b926ca688b1b17d19da",
+    "analysis_terminal/vwap_reclaim_protocol.json": "98ac4bc347f00769b4d5e5c2647c2a9c4dc0717224c3792cd8e8d520c0fc1dd5",
+    "analysis_terminal/confirmation_zone_replay.py": "fa62fd6571a5a153ef8b1b5a4a8f95551159edece717549d8b4816df696e7602",
+    "analysis_terminal/sweep_reclaim_replay.py": "0c435d928b6827957dd73ec67bafb7565a5cd5673d73194eb991a1b8fb9f8796"
+  },
+  "app_sha256": "2e24f61e47ee40fdb3ae5f18152129f6632e83d508b73d27bf33fda0919ac9ab",
+  "upstream_app_sha256": "b1f4d4d15dc1ce4665f0f9f776de050059b60fb18faa4cf1583b04bf02a6c4af",
+  "limitations": [
+    "Retrospective publicly reconstructed OHLC; no pristine holdout or captured-live promotion samples.",
+    "Archived current market universe has survivorship/listing bias; all182 including unavailable/short histories remain in denominator.",
+    "4H warmup may start before interval, but no entries or outcomes before period start.",
+    "Funding, bid/ask, queue, price tick, real fills and live account ROI are not modeled.",
+    "No pooling daily/cohort repeats or previous studies to meet per-period50 decisions.",
+    "Original fixed research portfolio is separate from any live account settings."
+  ],
+  "minimum_distinct_selection_periods": 2,
+  "continuation_reason": "No parameter change after negative11-resolved July result. This20-day interval is the remaining contiguous August interval before the sealed Aug21 03UTC local15 holdout; dates not selected by strategy outcomes. Any insufficiency or negative result is retained. End at00UTC rather than03UTC so no4H fetched candle crosses the sealed03UTC boundary."
+}
