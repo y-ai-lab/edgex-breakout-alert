@@ -300,6 +300,16 @@ class PushSecurityTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(r.json()["safety"]["daily_loss_stop_enabled"])
         self.assertFalse(r.json()["account_details_exposed"])
         self.assertNotIn("equity", r.json())
+        self.assertEqual(r.json()["safety"]["max_managed_positions"], 1)
+        config.account_policy = "COEXISTING_CONTRACTS"
+        with patch.object(server, "_live_execution_config", config):
+            r = await self.client.get("/api/live-execution")
+        self.assertEqual(r.status_code, 200)
+        self.assertIsNone(r.json()["safety"]["max_managed_positions"])
+        self.assertEqual(r.json()["safety"]["position_count_policy"], "AVAILABLE_COLLATERAL")
+        self.assertEqual(r.json()["safety"]["max_in_flight_entries"], 1)
+        self.assertFalse(r.json()["account_details_exposed"])
+        self.assertNotIn("equity", r.json())
         r = await self.client.post("/api/live-execution", json={"action": "arm"})
         self.assertEqual(r.status_code, 405)
 

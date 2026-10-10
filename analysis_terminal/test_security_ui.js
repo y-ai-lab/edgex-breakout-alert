@@ -20,6 +20,14 @@ const push=script.slice(script.indexOf('var pushManagementTokens='),script.index
  assert(nodes.liveExecutionWarnings.textContent.includes('保証上限ではありません'));
  assert(nodes.liveExecutionWarnings.textContent.includes('連敗'));
  assert(nodes.liveExecutionWarnings.textContent.includes('未完了'));
+ context.renderLiveExecution({...live,safety:{...live.safety,position_count_policy:'AVAILABLE_COLLATERAL',max_managed_positions:null}});
+ assert(nodes.liveExecutionPolicy.innerHTML.includes('件数上限なし'));
+ assert(nodes.liveExecutionPolicy.innerHTML.includes('利用可能証拠金'));
+ assert(nodes.liveExecutionWarnings.textContent.includes('合計リスクは3%を超え'));
+ context.renderLiveExecution({...live,safety:{...live.safety,max_managed_positions:1}});
+ assert(nodes.liveExecutionPolicy.innerHTML.includes('最大1件'));
+ context.renderLiveExecution({...live,safety:{...live.safety,max_managed_positions:null}});
+ assert(!nodes.liveExecutionPolicy.innerHTML.includes('件数上限なし'));
  now+=30000;context.renderLiveExecution(live);
  assert.equal(nodes.liveExecutionBadge.textContent,'接続を確認');
  assert.equal(nodes.liveExecutionPolicy.innerHTML,'');

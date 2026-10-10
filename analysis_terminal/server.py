@@ -4158,7 +4158,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="EdgeX Analysis Terminal",
-    version="19.0.61",
+    version="19.0.62",
     lifespan=lifespan,
 )
 app.add_middleware(push_security.BrowserSecurityMiddleware)
@@ -4619,7 +4619,9 @@ async def live_execution_api():
             "capital_source": "EDGEX_USDC_EQUITY", "risk_budget_pct": risk,
             "risk_budget_includes_assumed_costs": True, "loss_cap_guaranteed": False,
             "daily_loss_stop_enabled": bool(config.daily_loss_usdc and config.daily_loss_usdc != "DISABLED"),
-            "max_managed_positions": 1, "same_contract_manual_trading_safe": False,
+            "max_managed_positions": None if config.account_policy == "COEXISTING_CONTRACTS" else 1,
+            "position_count_policy": "AVAILABLE_COLLATERAL" if config.account_policy == "COEXISTING_CONTRACTS" else "SINGLE_DEDICATED_POSITION",
+            "max_in_flight_entries": 1, "same_contract_manual_trading_safe": False,
             "protection_installation_atomic": False, "funding_included_in_risk_budget": False,
             "shadow_orders_enabled": False,
         }

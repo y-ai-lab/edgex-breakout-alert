@@ -347,6 +347,25 @@ def arm_blockers(config, account, active, ledger):
     return blockers
 
 
+def additional_entry_blocked(config, ledger, verified_setups):
+    """Only contract-isolated protection verified in this cycle frees the lane.
+
+    No position count ceiling in coexistence mode. An old PROTECTED label is
+    insufficient: every existing live record must have passed reconciliation.
+    Uncertain sends/ownership/protection continue to block all new entries.
+    """
+    return any(
+        r["status"] not in TERMINAL and not (
+            config.account_policy == "COEXISTING_CONTRACTS"
+            and r["status"] == "PROTECTED"
+            and r.get("isolated_contract") is True
+            and not r.get("ownership_quarantined")
+            and r["setup_id"] in verified_setups
+        )
+        for r in ledger
+    )
+
+
 def parse_control(request):
     try:
         action, token = request.split(":")
@@ -975,6 +994,7 @@ class Engine:
             return
         self.update(r, "PROTECTED", protection_check_error=None,
                     protection_check_ms=self.clock(), active_protection_verified_ms=self.clock())
+        return True  # Explicit evidence for additional entries in this cycle only.
 
     async def preflight(self):
         # A failed fresh check must not leave a previous flat-account result
@@ -1081,11 +1101,13 @@ class Engine:
                 items = orders(conn)
             if s["bound_fingerprint"] not in (None, self.config.fingerprint()):
                 raise ExecutionError("ACCOUNT_OR_POLICY_CHANGED")
+            verified_setups = set()
             if self.config.mode == "LIVE":
                 for r in items:
                     if r["status"] not in TERMINAL:
                         try:
-                            await self.reconcile(r)
+                            if await self.reconcile(r) is True:
+                                verified_setups.add(r["setup_id"])
                         except ExecutionError:
                             # Known fill with unreadable protection/account:
                             # try a single reduce-only close, never a new entry.
@@ -1117,7 +1139,7 @@ class Engine:
             if (
                 self.config.mode != "LIVE"
                 or not s["armed"]
-                or any(r["status"] not in TERMINAL for r in items)
+                or additional_entry_blocked(self.config, items, verified_setups)
             ):
                 return
             if self.config.account_policy == "DEDICATED" and (
@@ -1127,6 +1149,7 @@ class Engine:
                 return
             occupied = (occupied_contracts(a, active)
                         if self.config.account_policy == "COEXISTING_CONTRACTS" else set())
+            occupied.update(str(r["contract_id"]) for r in items if r["status"] not in TERMINAL)
             self.metadata = await self.adapter.metadata()
             metas = {str(m["contractId"]): m for m in self.metadata["contractList"]}
             seen = {r["setup_id"] for r in items}
@@ -1164,6 +1187,13 @@ class Engine:
                     continue
                 with self.db_connect() as conn:
                     conn.execute("BEGIN IMMEDIATE")
+                    # Another cycle must not reserve a second intent while the
+                    # first is in flight, even for a different setup/contract.
+                    current = orders(conn)
+                    if (additional_entry_blocked(self.config, current, verified_setups)
+                            or any(x["status"] not in TERMINAL
+                                   and x.get("contract_id") == r["contract_id"] for x in current)):
+                        return
                     if conn.execute(
                         "SELECT 1 FROM live_execution_orders WHERE setup_id=?",
                         (identity,),
@@ -1177,7 +1207,7 @@ class Engine:
                     if r.get("filled_size") and not r.get("close_attempted"):
                         await self.emergency_close(r, reason="RECONCILIATION_FAILED")
                     raise
-                break
+                break  # One entry in flight; no ceiling on protected contracts.
         except Exception as exc:
             code = (
                 str(exc) if isinstance(exc, ExecutionError) else "EXECUTION_CYCLE_ERROR"
