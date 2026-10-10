@@ -1,0 +1,136 @@
+{
+  "protocol": "confirmed_4h_setup_local15_stop_structural4h_target_v1",
+  "registered_utc": "2026-10-10T11:36:54.950466+00:00",
+  "registration_base_sha": "fa87144c32cc21f084f782ec21ef35ae6eb55d7e",
+  "hypothesis": "After the unchanged first strict 4H breakout/retest + 15M confirmation, an independent 15M retest invalidation stop with unchanged 4H structural TP may permit profitable next-open entries that do not require returning through the roll level. No production stop is changed.",
+  "model": "confirmed_local15_stop_4h_target_next_open",
+  "dataset": "RETROSPECTIVE_PARAMETER_PREREGISTRATION_NOT_LIVE",
+  "production_parameters": {
+    "monitor_interval": "HOUR_4",
+    "entry_interval": "MINUTE_15",
+    "trend_fast_ema": 20,
+    "trend_slow_ema": 50,
+    "atr_period": 14,
+    "roll_lookback": 20,
+    "roll_max_age": 6,
+    "retest_lookback": 4,
+    "atr_stop_buffer": 0.5,
+    "atr_target_buffer": 0.25,
+    "retest_atr_tolerance": 0.35,
+    "min_rr": 2.0
+  },
+  "production_rule_fingerprint": "9b2df54f9d908d4b653fc270992ad3e1ada2e812f2d38133581f476516e55afd",
+  "source_universe_sha256": "1ee2f543d56f61b4adf0560f2ccf12bb29b755358ab686b9c107c778978681cd",
+  "indicator_windows": {
+    "HOUR_4": 180,
+    "MINUTE_15": 180
+  },
+  "development": {
+    "start_ms": 1790391600000,
+    "end_ms": 1790996400000,
+    "market_already_viewed": true,
+    "source_report_sha256": "f7395ff494b4c34c44f1f8c7f1c66c39fe1204dc4897a22d386631d5926043a0"
+  },
+  "validation_periods": [
+    {
+      "id": "unused_historical_week_1",
+      "start_ms": 1787281200000,
+      "end_ms": 1787886000000
+    },
+    {
+      "id": "unused_historical_week_2",
+      "start_ms": 1787886000000,
+      "end_ms": 1788490800000
+    }
+  ],
+  "validation_access": "Not fetched/evaluated for this study at registration. Inspect only sequentially if development and preceding validation are not KILL. Older historical markets may be contextually familiar; not prospective captured-live samples.",
+  "rules": {
+    "stop_bars": 4,
+    "atr_period": 14,
+    "atr_stop_buffer": 0.5,
+    "min_net_rr": 2.0,
+    "next_open_bars": 1,
+    "confirmation": "Exact existing analyze_contract trend, 4H breakout, retest_touched, confirmation_color_ok + confirmation_level_ok AND confirmed. No relaxed alternative.",
+    "first_only": "First retest + strict confirmation per unchanged setup_id, consume even if local structure or RR fails. No later stronger candle or rearming; observe 25-hour setup warmup and suppress any origin predating the latest missing indicator observation.",
+    "stop": "At first confirmation close: minimum low of last four fully closed 15M bars minus 0.5 ATR14(15M) for LONG, maximum high plus buffer for SHORT. These bars include the confirming bar for stop definition only. No parameter fitting, no later narrowing/widening. Must lie strictly inside original 4H structural SL and strictly beyond entry on loss side.",
+    "target": "Freeze original entry_band.structural_target (4H), require strict profitable side of confirmation close and breakout roll. Never measured move, fixed reward extension, shorter target or later target changes.",
+    "entry": "Confirmation close reference; both-side fee/slippage net RR>=2 required now and at immediately following 15M OPEN. First new-bar OPEN only, no intrabar limit wait or later retry. Invalid/low RR OPEN rejected. No new parameters from outcomes.",
+    "chronology": "created_ms=confirm close+1ms; first execution bar starts at confirm close, excludes confirm and earlier high/low. Next-open price is known before this bar high/low; only subsequent unstarted bar outcomes. If both TP/SL touched in a bar, AMBIGUOUS; missing first/following bar DATA_GAP and halt; adverse gap stop uses worse OPEN; no terminal guesses.",
+    "comparator": "Unchanged current_next_open, shadow_v2_next_open, confirmed_pullback_cost_2r recomputed with same original engine/source, all original candidates, prices and outcomes required. No interpretation of proposal-only fills as net increase."
+  },
+  "costs": {
+    "fee_bps_each_side": 5,
+    "slippage_bps_each_side": 2
+  },
+  "stress_costs": {
+    "fee_bps_each_side": 10,
+    "slippage_bps_each_side": 5
+  },
+  "portfolio": {
+    "initial_cash_usdc": 10000,
+    "risk_pct": 1,
+    "max_positions": 3,
+    "max_total_risk_pct": 3,
+    "max_notional_multiple": 1,
+    "daily_loss_pct": 3,
+    "daily_loss_timezone": "Asia/Tokyo"
+  },
+  "decision": {
+    "early_kill_minimum_resolved": 20,
+    "early_kill": "Any complete evaluated period with >=20 resolved and base avg_net_r<=0 or PF<=1: KILL; do not open next unused period or activate new live capture. No parameter adjustment.",
+    "selection": {
+      "minimum_resolved_each_period": 50,
+      "minimum_net_win_rate_pct": 40,
+      "minimum_base_pf": 1.2,
+      "base_avg_net_r_positive": true,
+      "stress_avg_net_r_positive": true,
+      "stress_pf_greater_than": 1,
+      "proposal_pure_fill_increase_each_period_positive": true,
+      "proposal_capped_pure_fill_increase_each_period_positive": true,
+      "capped_minimum_resolved_each_period": 20,
+      "known_closed_portfolio_roi_each_period_positive": true,
+      "no_open_or_uncertain_capital": true
+    },
+    "incomplete_or_insufficient": "INSUFFICIENT SAMPLE below 50 resolved in either fixed complete validation week; never pool repeats, development, overlapping live or different weeks to meet per-period floor.",
+    "positive": "Only both registered unused weeks meeting all selection gates: RETROSPECTIVE_CRITERIA_MET_SEPARATE_LIVE_SHADOW_AND_EXECUTION_VALIDATION_REQUIRED. No automatic promotion or orders.",
+    "uncertain": "OPEN/AMBIGUOUS/DATA_GAP omitted from resolved metrics, capital retained and closed ROI null; no forced settlement."
+  },
+  "sealed_periods": [
+    {
+      "start_ms": 1788566400000,
+      "end_ms": 1789171200000,
+      "scope": "No entry/outcome evaluation; warmup prices are indicator inputs only."
+    },
+    {
+      "start_ms": 1791504000000,
+      "end_ms": 1792713600000,
+      "scope": "No early fetch/evaluation of registered VWAP validation."
+    }
+  ],
+  "frozen_dependencies_sha256": {
+    "analysis_terminal/server.py": "a3d5de24681200106bab6d50d24c4bcd26c9ff9969fe2de60e1159583e110858",
+    "analysis_terminal/replay.py": "67417c93cdbab1640945c55f3f2c5d99552af711b40006f2db204e2ac55bdd5e",
+    "analysis_terminal/pending_entry_replay.py": "111686641afe5e61c64311fa730716b5198d3a74e34440e06f48d99da3c53df8",
+    "analysis_terminal/pending_entry_protocol.json": "1ed8af4b9bb0dd7281e80a21956677bb6d9e315f47fb0c00689992662a29ee0f",
+    "analysis_terminal/history.py": "c29829d3872c58cfcfdf644e004f50bc59c99a0331895d609288d10e61f8eb89",
+    "analysis_terminal/run_replay.py": "4bc1bcc08e0f2bb94c6b42e252858f8dcc0a67bfba18b8c85d7a9df3159050f1",
+    "analysis_terminal/vwap_reclaim_replay.py": "228347266f5e17956c9110475d037c0be52a0a3d57ffd2da27eeadbe277f5ba5"
+  },
+  "scanner_sha256": {
+    "published": "b1f4d4d15dc1ce4665f0f9f776de050059b60fb18faa4cf1583b04bf02a6c4af",
+    "local_with_one_extra_eof_newline": "2e24f61e47ee40fdb3ae5f18152129f6632e83d508b73d27bf33fda0919ac9ab",
+    "equivalence": "Only exact published bytes plus one LF equal exact local bytes; no general whitespace normalization."
+  },
+  "real_orders_enabled": false,
+  "automatic_promotion": false,
+  "changes_live_rules": false,
+  "forward_collection_enabled": false,
+  "limitations": [
+    "Multiple failed hypotheses exist; selecting best from many historical studies has selection bias. No optimality or profit guarantee.",
+    "Archived 182-market universe has survivorship/listing bias; every market including failures/short histories remains reported.",
+    "Historical OHLC next-open fills and fee/slippage assumptions are hypothetical; tick/board/queue/funding/real fills not modeled.",
+    "Research accounts are fixed separate 10k USDC/1%/max3/total3%/1x/JSTdaily3%; actual per-position3% no-count-cap no-daily-cap unchanged.",
+    "MFE/MAE use price-stop distance, net R uses fee-inclusive stop-risk, neither is portfolio ROI.",
+    "Prior KILL models, fixed pending/live/VWAP protocols and sealed holdouts remain unchanged."
+  ]
+}
