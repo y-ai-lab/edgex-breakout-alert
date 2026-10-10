@@ -114,6 +114,17 @@ class RsiTests(unittest.TestCase):
         m,e=market();e[-1]=replace(e[-1],contract_id='other')
         with self.assertRaises(ValueError):study.replay_market(CONTRACT,m,e,start_ms=SIGNAL+STEP,end_ms=SIGNAL+2*STEP)
 
+    def test_future_extremes_cannot_change_recorded_confirmation_prices(self):
+        for side in ('LONG','SHORT'):
+            m,e=market(side);original=record(side);f=fill(original)
+            e.extend([f,replace(f,time_ms=f.time_ms+STEP,low=1,high=1000)])
+            replay=study.replay_market(CONTRACT,m,e,start_ms=SIGNAL+STEP,end_ms=SIGNAL+4*STEP)
+            frozen=[r for r in replay['records'] if r['setup_id']==original['setup_id']]
+            self.assertEqual(len(frozen),1)
+            for key in ('created_ms','expires_ms','trigger','stop','target','roll_level','previous_rsi','signal_rsi'):
+                self.assertEqual(frozen[0][key],original[key])
+            self.assertEqual(frozen[0]['status'],'AMBIGUOUS')
+
     def test_signal_high_cannot_create_target_room(self):
         m,e=market();e=[replace(c,high=100.5) if c.time_ms<SIGNAL and c.high>100.5 else c for c in e]
         e[-1]=replace(e[-1],high=1000)
