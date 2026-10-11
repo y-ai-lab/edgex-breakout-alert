@@ -109,6 +109,20 @@ button{-webkit-tap-highlight-color:transparent}
 .dashboardHero .primary{flex-shrink:0;white-space:nowrap}
 .dashboardDrawer{scroll-margin-top:90px}
 @media(max-width:680px){.appHeader{flex-direction:column;gap:8px}.headerChips{display:flex;justify-content:flex-start}.headerChips .statusChip:not(a){display:none}}
+/* Reading and operating the terminal without losing context. */
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+button:disabled{opacity:.5;cursor:not-allowed}
+#openQuickStart{display:inline-flex;align-items:center;cursor:pointer;color:var(--text)}
+.guideSteps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.guideSteps p{line-height:1.65;margin:8px 0}.guideSteps b{color:var(--text)}
+.marketContext{padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--panel2);margin:10px 0}
+.marketContext p{margin:7px 0;line-height:1.6}.marketContextCounts{display:flex;flex-wrap:wrap;gap:8px;font-size:12px;color:var(--muted)}
+.nearCandidateCard.watchOnly{background:var(--panel2);border-color:var(--line)}
+.nearCandidateCard.watchOnly .entryNumbers{display:none}
+.nearCandidateCard.watchOnly .pickReason{margin-top:6px}
+#screenEmpty{padding:18px;border:1px dashed var(--line);border-radius:12px;line-height:1.6}
+@media(max-width:720px){.guideSteps{grid-template-columns:1fr}.headerChips .statusChip{min-height:36px;display:inline-flex;align-items:center}.nearCandidateCard.watchOnly{padding:11px}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 </style>
 </head>
 <body><main>
@@ -119,7 +133,7 @@ button{-webkit-tap-highlight-color:transparent}
     <h1>分析ターミナル <span class="versionBadge">v__APP_VERSION__</span></h1>
     <div class="sub">エントリー候補とAPI自動取引の稼働状態を確認できます。</div>
   </div>
-  <div class="headerChips"><a class="statusChip" href="/btc">BTC 波分析 ↗</a><span class="statusChip">4H + 15M</span><span class="statusChip">15分更新</span></div>
+  <div class="headerChips"><a class="statusChip" href="/btc">BTC 波分析 ↗</a><button id="openQuickStart" type="button" class="statusChip">使い方</button><span class="statusChip">4H + 15M</span><span class="statusChip">15分更新</span></div>
 </div>
 <div id="globalEntryBar" class="globalEntryBar waiting" role="status" aria-live="polite">
   <div class="globalEntryMain">
@@ -129,10 +143,10 @@ button{-webkit-tap-highlight-color:transparent}
   <button id="globalEntryAction" class="globalEntryAction" type="button">今日を見る</button>
 </div>
 <div class="tabs" aria-label="主要ナビゲーション">
-<button class="tab active" data-tab="dashboard"><span class="navIcon">⌂</span><span>エントリー</span></button>
-<button class="tab" data-tab="screen"><span class="navIcon">⌕</span><span>銘柄一覧</span></button>
-<button class="tab" data-tab="analysis"><span class="navIcon">◎</span><span>分析</span></button>
-<button class="tab" data-tab="api"><span class="navIcon">⌁</span><span>API</span></button>
+<button class="tab active" aria-pressed="true" data-tab="dashboard"><span class="navIcon">⌂</span><span>エントリー</span></button>
+<button class="tab" aria-pressed="false" data-tab="screen"><span class="navIcon">⌕</span><span>銘柄一覧</span></button>
+<button class="tab" aria-pressed="false" data-tab="analysis"><span class="navIcon">◎</span><span>分析</span></button>
+<button class="tab" aria-pressed="false" data-tab="api"><span class="navIcon">⌁</span><span>API</span></button>
 </div>
 
 <section id="dashboard" class="panel active">
@@ -141,10 +155,22 @@ button{-webkit-tap-highlight-color:transparent}
   <div class="heroActions"><button class="primary" id="dashScan">最新に更新</button><span id="dashUpdated" class="pill">未更新</span></div>
 </div>
 <div id="entryNowZone" class="entryNowZone">
-  <div class="entryNowHead"><div><div class="eyebrow">ENTRY NOW</div><h3>エントリー可能</h3></div><div id="entryNowBadge" class="entryNowBadge">確認中</div></div>
+  <div class="entryNowHead"><div><div class="eyebrow">ENTRY NOW</div><h3>条件の成立状況</h3></div><div id="entryNowBadge" class="entryNowBadge">確認中</div></div>
   <div id="entryNowContent" class="entryNowContent"><span class="muted">最新データを取得しています。</span></div>
 </div>
 <div id="dashSummary" class="summary executiveSummary"></div>
+<div id="marketContext" class="marketContext" hidden><b>市場はいま</b><p id="marketContextMessage" class="sub"></p><div id="marketContextCounts" class="marketContextCounts"></div></div>
+<details id="quickStart" class="dashboardDrawer">
+<summary>はじめての方へ・表示の読み方</summary>
+<div class="drawerBody">
+<div class="guideSteps">
+<div class="card"><b>1. ENTRY NOWを見る</b><p class="sub">緑のREADYは現行6条件が成立した候補です。WAITは成立なし。灰色・黄色の監視候補はエントリー不可です。</p><button id="helpRules" class="ghost" type="button">成立条件を見る</button></div>
+<div class="card"><b>2. 候補をタップして分析</b><p class="sub">Entryは参考価格、SLは損切り、TPは利確目標。RRは価格の比率で、費用控除後の利益や口座ROIではありません。資金・数量欄で概算できます。</p><button id="helpAnalysis" class="ghost" type="button">銘柄を分析する</button></div>
+<div class="card"><b>3. 通知と履歴を使う</b><p class="sub">通知は現行READYのみ。過去ENTRY・あと一歩は履歴に保存します。TP/SLの仮想追跡と実際の口座取引は別です。</p><div class="row"><button id="helpNotifications" class="ghost" type="button">通知を設定</button><button id="helpHistory" class="ghost" type="button">履歴を見る</button></div></div>
+</div>
+<p class="sub">アプリを開いている間は自動更新します。120秒以上古いスキャンや個別分析はエントリー可否の表示を止めます。データ不足は0件や0円に置き換えません。</p>
+<p class="sub">API欄の口座閲覧・自動取引操作は登録済みの所有端末限定です。API接続なしでも市場分析を利用でき、数量計算では「手動の仮定資金」を選べます。分析・コピー・資金計算の操作では実注文を送信しません。</p>
+</div></details>
 <details id="marketDataDetails" class="dashboardDrawer" hidden>
 <summary>データの確認状況<span id="marketDataSummary" class="drawerHint"></span></summary>
 <div class="drawerBody"><div id="marketDataStatus" class="sub" role="status"></div><div id="marketDataMissing" class="sub"></div></div>
@@ -216,24 +242,26 @@ button{-webkit-tap-highlight-color:transparent}
 <section id="screen" class="panel">
 <h2>銘柄スキャン</h2>
 <div class="filters">
-<div class="field small"><label>銘柄検索</label><input id="q" placeholder="BTC / HYPE"></div>
-<div class="field small"><label>状態</label><select id="stage"><option value="ALL">すべて</option><option value="READY">エントリー可能</option><option value="NEAR">直前候補</option><option value="CONFIRMATION_WAIT">15分足確認待ち</option><option value="RETEST_WAIT">リテスト待ち</option><option value="RR_WAIT">RR不足</option><option value="BREAKOUT_WAIT">ブレイク待ち</option><option value="TREND_WAIT">方向感待ち</option></select></div>
-<div class="field small"><label>方向</label><select id="direction"><option value="ALL">すべて</option><option value="LONG">ロング</option><option value="SHORT">ショート</option><option value="NEUTRAL">中立</option></select></div>
+<div class="field small"><label for="q">銘柄検索</label><input id="q" placeholder="BTC / HYPE"></div>
+<div class="field small"><label for="stage">状態</label><select id="stage"><option value="ALL">すべて</option><option value="READY">エントリー可能</option><option value="NEAR">直前候補</option><option value="CONFIRMATION_WAIT">15分足確認待ち</option><option value="RETEST_WAIT">リテスト待ち</option><option value="RR_WAIT">RR不足</option><option value="BREAKOUT_WAIT">ブレイク待ち</option><option value="TREND_WAIT">方向感待ち</option></select></div>
+<div class="field small"><label for="direction">方向</label><select id="direction"><option value="ALL">すべて</option><option value="LONG">ロング</option><option value="SHORT">ショート</option><option value="NEUTRAL">中立</option></select></div>
 </div>
 <details class="dashboardDrawer"><summary>絞り込み</summary><div class="drawerBody filters">
-<div class="field small"><label>最低スコア</label><input id="minScore" type="number" min="0" max="100" value="0"></div>
-<div class="field small"><label>最低RR</label><input id="minRR" type="number" min="0" step="0.1" placeholder="指定なし"></div>
+<div class="field small"><label for="minScore">最低スコア</label><input id="minScore" type="number" min="0" max="100" value="0"></div>
+<div class="field small"><label for="minRR">最低RR</label><input id="minRR" type="number" min="0" step="0.1" placeholder="指定なし"></div>
 </div></details>
 <div class="row" style="margin-top:10px"><button class="primary" id="scan">スキャン</button><button class="ghost" id="force">強制更新</button><button class="ghost" id="autoScan">自動更新 ON (30秒)</button><button class="ghost" id="presetNear">直前候補</button><button class="ghost" id="presetReady">エントリー可能</button><button class="ghost" id="presetReset">リセット</button><button class="ghost" id="watchOnly">★のみ</button><span id="lastScan" class="pill">未更新</span></div>
 <div id="summary" class="summary"></div>
-<div id="screenStatus" class="status">4H→15Mで全取引可能銘柄を確認します。</div>
+<div id="screenStatus" class="status" role="status">4H→15Mで全取引可能銘柄を確認します。</div>
+<div id="screenEmpty" class="sub" hidden></div>
+<div class="tableHint">横にスクロールするとRR・待ち理由を確認できます。銘柄をタップして分析。</div>
 <div class="scroll"><table><thead><tr><th>★</th><th>銘柄</th><th>状態</th><th>方向</th><th>スコア</th><th>価格</th><th>24h</th><th>出来高比</th><th>RR</th><th>次の行動</th><th>データ鮮度</th><th>状態</th></tr></thead><tbody id="screenBody"></tbody></table></div>
 </section>
 
 <section id="analysis" class="panel">
 <h2>銘柄分析</h2>
-<div class="row"><div class="field"><label>銘柄</label><input id="ticker" value="BTCUSDC"></div><button class="primary" id="analyze">分析</button><button class="ghost" id="toRisk">資金・数量</button><button class="ghost" id="copyPlan">プランをコピー</button><button class="ghost" id="sharePlan">共有</button></div>
-<div id="analysisStatus" class="status">BTC のような短縮入力でも検索します。</div>
+<div class="row"><div class="field"><label for="ticker">銘柄</label><input id="ticker" value="BTCUSDC"></div><button class="primary" id="analyze">分析</button><button class="ghost" id="toRisk">資金・数量</button><button class="ghost" id="copyPlan" disabled>プランをコピー</button><button class="ghost" id="sharePlan" disabled>共有</button></div>
+<div id="analysisStatus" class="status" role="status" aria-live="polite">BTC のような短縮入力でも検索します。</div>
 <div id="actionOut"></div>
 <div id="readyActionCard"></div>
 <div id="quickRiskOut"></div>
@@ -242,12 +270,12 @@ button{-webkit-tap-highlight-color:transparent}
 <details id="risk" class="dashboardDrawer">
 <summary>資金・数量の計算</summary><div class="drawerBody">
 <div class="row">
-<div class="field"><label>資金の取得元</label><select id="capitalSource"><option value="API">APIの口座評価額</option><option value="MANUAL">手動の仮定資金</option></select></div>
-<div class="field"><label>計算用資金 USDC</label><input id="equity" type="number" step="any" readonly placeholder="API資金を取得してください"></div><div class="field"><label>1回の想定損失予算 %</label><input id="riskPct" type="number" value="3" min="0" max="3" step="any"></div><button class="ghost" id="capitalRefresh">API資金を取得・更新</button>
-<div class="field"><label>エントリー価格</label><input id="entry" type="number" step="any"></div><div class="field"><label>損切り価格</label><input id="stop" type="number" step="any"></div>
-<div class="field"><label>利確価格</label><input id="target" type="number" step="any"></div><div class="field"><label>注文刻み</label><input id="step" type="number" step="any"></div>
-<div class="field"><label>最小注文量</label><input id="minOrder" type="number" step="any"></div><div class="field"><label>最大注文量</label><input id="maxOrder" type="number" step="any"></div>
-<div class="field"><label>レバレッジ</label><input id="lev" type="number" step="any"></div><button class="primary" id="calc">計算</button>
+<div class="field"><label for="capitalSource">資金の取得元</label><select id="capitalSource"><option value="API">APIの口座評価額</option><option value="MANUAL">手動の仮定資金</option></select></div>
+<div class="field"><label for="equity">計算用資金 USDC</label><input id="equity" type="number" step="any" readonly placeholder="API資金を取得してください"></div><div class="field"><label for="riskPct">1回の想定損失予算 %</label><input id="riskPct" type="number" value="3" min="0" max="3" step="any"></div><button class="ghost" id="capitalRefresh">API資金を取得・更新</button>
+<div class="field"><label for="entry">エントリー価格</label><input id="entry" type="number" step="any"></div><div class="field"><label for="stop">損切り価格</label><input id="stop" type="number" step="any"></div>
+<div class="field"><label for="target">利確価格</label><input id="target" type="number" step="any"></div><div class="field"><label for="step">注文刻み</label><input id="step" type="number" step="any"></div>
+<div class="field"><label for="minOrder">最小注文量</label><input id="minOrder" type="number" step="any"></div><div class="field"><label for="maxOrder">最大注文量</label><input id="maxOrder" type="number" step="any"></div>
+<div class="field"><label for="lev">レバレッジ</label><input id="lev" type="number" step="any"></div><button class="primary" id="calc">計算</button>
 </div>
 <div id="capitalStatus" class="status" role="status">登録済み端末からAPI資金を取得してください。口座評価額と利用可能額を使います。</div><div id="riskStatus" class="status">参考数量です。API資金では設定済みの費用を含め、利用可能額で制限します。Funding・板・実際の約定は未確認です。急変時の実損失は予算を超える場合があります。</div><div id="riskOut" class="grid"></div><details class="help"><summary>資金管理の考え方</summary><div>API資金はUSDC評価額を基準に、設定済みのリスク予算と利用可能USDCで数量を制限します。レバレッジで口座の建玉上限は増やしません。手動モードは費用未計上の仮定計算です。表示する損失額はSL価格で決済できた場合の概算で、損失の保証上限ではありません。</div></details>
 </div></details>
@@ -321,7 +349,7 @@ button{-webkit-tap-highlight-color:transparent}
         </div>
         <div class="row compactRow"><button class="ghost" id="pushTest">テスト通知</button><button class="ghost" id="refreshPushEvents">履歴更新</button></div>
         <div class="miniSection"><b>一時停止</b><div class="row compactRow"><button class="ghost" id="snooze30">30分</button><button class="ghost" id="snooze60">1時間</button><button class="ghost" id="snoozeMorning">朝8時まで</button><button class="ghost" id="clearSnooze">解除</button></div><div id="snoozeStatus" class="sub"></div></div>
-        <div class="miniSection"><b>毎日の静音時間</b><div class="row compactRow"><div class="field small"><label>開始</label><input id="quietStart" type="time" value="23:00"></div><div class="field small"><label>終了</label><input id="quietEnd" type="time" value="07:00"></div><button class="ghost" id="saveQuiet">保存</button></div></div>
+        <div class="miniSection"><b>毎日の静音時間</b><div class="row compactRow"><div class="field small"><label for="quietStart">開始</label><input id="quietStart" type="time" value="23:00"></div><div class="field small"><label for="quietEnd">終了</label><input id="quietEnd" type="time" value="07:00"></div><button class="ghost" id="saveQuiet">保存</button></div></div>
         <div id="pushPrefStatus" class="sub"></div>
         <div id="pushEvents" class="alertList"><span class="muted">配信履歴を読み込みます</span></div>
       </div>
@@ -499,6 +527,12 @@ async function checkApiConnections(){
 function openRiskCalculator(){tab('analysis');var el=document.getElementById('risk');if(el){el.open=true;el.scrollIntoView({behavior:'smooth',block:'start'})}}
 document.getElementById('checkApi').onclick=function(){checkApiConnections();loadPaperExecution();loadLiveExecution()};
 document.getElementById('openLiveStatus').onclick=function(){tab('api');var el=document.getElementById('liveExecutionDetails');el.open=true;el.scrollIntoView({behavior:'smooth',block:'start'});loadLiveExecution()};
+function openDashboardSection(id){tab('dashboard');var el=document.getElementById(id);el.open=true;el.scrollIntoView({behavior:'smooth',block:'start'})}
+document.getElementById('openQuickStart').onclick=function(){openDashboardSection('quickStart')};
+document.getElementById('helpRules').onclick=function(){openDashboardSection('entryRules')};
+document.getElementById('helpHistory').onclick=function(){openDashboardSection('entryHistoryDetails')};
+document.getElementById('helpAnalysis').onclick=function(){tab('analysis');analyze()};
+document.getElementById('helpNotifications').onclick=function(){document.getElementById('openNotifications').click()};
 document.getElementById('openNotifications').onclick=function(){tab('api');var el=document.getElementById('notificationSettings');el.open=true;el.scrollIntoView({behavior:'smooth',block:'start'})};
 document.getElementById('entryHistoryDetails').ontoggle=function(){if(this.open&&!entryHistoryLoaded)loadEntryHistory(false)};
 document.getElementById('entryHistoryRefresh').onclick=function(){loadEntryHistory(false)};
@@ -516,7 +550,7 @@ async function loadWatchFromServer(key,replaceLocal){
 async function initWatchSync(){if(!watchSyncKey){watchSyncKey=newSyncKey();browserStorageWrite("edgexWatchSyncKey",watchSyncKey)}document.getElementById("watchSyncKey").value=watchSyncKey;await loadWatchFromServer(watchSyncKey,false)}
 function tab(name){if(name==="risk"){openRiskCalculator();return}if(name==="compare"||name==="journal")name="dashboard";var b=document.querySelector('[data-tab="'+name+'"]');if(b)b.click()}
 function updateUrl(tabName,ticker){var u=new URL(location.href);u.searchParams.set("tab",tabName);if(tabName==="analysis"&&ticker)u.searchParams.set("ticker",ticker);else u.searchParams.delete("ticker");history.replaceState(null,"",u)}
-document.querySelectorAll("[data-tab]").forEach(function(b){b.onclick=function(){document.querySelectorAll("[data-tab]").forEach(x=>x.classList.remove("active"));document.querySelectorAll(".panel").forEach(x=>x.classList.remove("active"));b.classList.add("active");document.getElementById(b.dataset.tab).classList.add("active");updateUrl(b.dataset.tab,b.dataset.tab==="analysis"?document.getElementById("ticker").value.trim():"");if(b.dataset.tab==="api"){checkApiConnections();loadPaperExecution()}}});
+document.querySelectorAll("[data-tab]").forEach(function(b){b.onclick=function(){document.querySelectorAll("[data-tab]").forEach(function(x){x.classList.remove("active");x.setAttribute("aria-pressed","false")});document.querySelectorAll(".panel").forEach(x=>x.classList.remove("active"));b.classList.add("active");b.setAttribute("aria-pressed","true");document.getElementById(b.dataset.tab).classList.add("active");updateUrl(b.dataset.tab,b.dataset.tab==="analysis"?document.getElementById("ticker").value.trim():"");if(b.dataset.tab==="api"){checkApiConnections();loadPaperExecution()}}});
 
 function candidateLike(x){if(!x)return false;var rr=Number(x.rr||0);return x.stage==="READY"||((x.stage==="CONFIRMATION_WAIT"||x.stage==="RETEST_WAIT")&&rr>=2)}
 function makeVisitSnapshot(j){var map={};(j.results||[]).forEach(function(r){map[r.ticker]={stage:r.stage,score:Number(r.score||0),rr:r.rr,direction:r.direction}});return {time_ms:Date.now(),rows:map}}
@@ -1026,7 +1060,7 @@ function renderNearCandidates(j){
  var near=(j.qualified_near_candidates||[]).filter(function(r){return r.stage!=="READY"}).slice(0,6),seen=new Set(near.map(function(r){return r.setup_id||r.ticker}));
  var blocked=(j.blocked_setup_candidates||[]).filter(function(r){return r.stage!=="READY"&&!seen.has(r.setup_id||r.ticker)}).slice(0,Math.max(0,6-near.length));
  if(!near.length&&!blocked.length){el.innerHTML='<span class="muted">現在、表示できるブレイク後のセットアップはありません。</span>';return}
- function candidateCard(r,watchOnly){var e=lifecycleEscape,why=watchOnly?(r.entry_band&&r.entry_band.status==='NO_OVERLAP'?'現在の構造では確認水準とRR条件を両立できません。構造の更新を監視します。':r.rr==null?'SL/TPの価格構造が未成立です。':'RRが最低条件に届いていません。'):reasonJa(r.reason);return '<button class="nearCandidateCard" data-ticker="'+e(r.ticker)+'"><div class="entryReadyTop"><b class="entryTicker">'+e(r.ticker)+'</b><span class="entryDirection">'+e(directionJa(r.direction))+'</span><span class="badge warn">'+(watchOnly?'監視のみ・条件不足':'まだ待つ')+'</span></div><div class="pickMeta"><span class="warn">'+e(planStage(r))+'</span><span class="pill">RR '+fmt(r.rr,2)+'</span></div><div class="entryNumbers">'+entryMetric("Entry目安",fmt(r.entry_reference,8))+entryMetric("SL",fmt(r.stop_loss,8))+entryMetric("TP",fmt(r.take_profit,8))+'</div><div class="pickReason">'+e(why)+'</div></button>'}
+ function candidateCard(r,watchOnly){var e=lifecycleEscape,why=watchOnly?(r.entry_band&&r.entry_band.status==='NO_OVERLAP'?'現在の構造では確認水準とRR条件を両立できません。構造の更新を監視します。':r.rr==null?'SL/TPの価格構造が未成立です。':'RRが最低条件に届いていません。'):reasonJa(r.reason);return '<button class="nearCandidateCard'+(watchOnly?' watchOnly':'')+'" data-ticker="'+e(r.ticker)+'"><div class="entryReadyTop"><b class="entryTicker">'+e(r.ticker)+'</b><span class="entryDirection">'+e(directionJa(r.direction))+'</span><span class="badge warn">'+(watchOnly?'監視のみ・条件不足':'まだ待つ')+'</span></div><div class="pickMeta"><span class="warn">'+e(planStage(r))+'</span><span class="pill">RR '+fmt(r.rr,2)+'</span></div><div class="entryNumbers">'+entryMetric("Entry目安",fmt(r.entry_reference,8))+entryMetric("SL",fmt(r.stop_loss,8))+entryMetric("TP",fmt(r.take_profit,8))+'</div><div class="pickReason">'+e(why)+'</div></button>'}
  el.innerHTML=near.map(function(r){return candidateCard(r,false)}).join('')+(blocked.length?'<div class="sub">条件不足のセットアップ — エントリー不可</div>'+blocked.map(function(r){return candidateCard(r,true)}).join(''):'');
  el.querySelectorAll(".nearCandidateCard").forEach(function(b){b.onclick=function(){if(entryFreshness(j).stale){renderNearCandidates(j);return}document.getElementById("ticker").value=this.dataset.ticker;tab("analysis");analyze()}});
 }
@@ -1052,7 +1086,7 @@ function directionJa(v){return ({LONG:"ロング",SHORT:"ショート",NEUTRAL:"
 function actionJa(v){return ({ENTER:"エントリー候補","WAIT FOR 15M CLOSE":"15分足確定を待つ","WAIT FOR RETEST":"リテストを待つ","WAIT FOR BREAKOUT":"ブレイクを待つ","WAIT FOR STRUCTURE":"価格構造の更新を待つ","WAIT FOR RR":"RR価格帯を待つ",SKIP:"見送り","AUTO ENTER":"自動検証"}[v]||v||"見送り")}
 function resultJa(v){return ({TP:"利確",SL:"損切り",TP1:"第1利確到達",OPEN:"継続中",AMBIGUOUS:"同一足で判定不能",NO_DATA:"データ不足",ERROR:"判定エラー"}[v]||v||"未更新")}
 function trendJa(v){return ({UP:"上昇",DOWN:"下降",NEUTRAL:"中立"}[v]||v||"—")}
-function reasonJa(v){if(!v)return "";var map=[["retest seen; waiting for 15M confirmation","リテスト済み。15分足の確定待ち"],["waiting for retest","ブレイク後のリテスト待ち"],["waiting for breakout","ブレイク待ち"],["trend not aligned","4時間足の方向感が条件未達"],["reward/risk below minimum","RRが最低条件未満"],["structure target unavailable","利確目標に使える価格構造が不足"]];for(var i=0;i<map.length;i++)if(v.indexOf(map[i][0])>=0)return map[i][1];return v}
+function reasonJa(v){if(!v)return "";var map=[["waiting for recent 4H breakout","直近の4時間足ブレイクが未成立"],["retest seen; waiting for 15M confirmation","リテスト済み。15分足の確定待ち"],["waiting for retest","ブレイク後のリテスト待ち"],["waiting for breakout","ブレイク待ち"],["trend not aligned","4時間足の方向感が条件未達"],["reward/risk below minimum","RRが最低条件未満"],["structure target unavailable","利確目標に使える価格構造が不足"]];for(var i=0;i<map.length;i++)if(v.indexOf(map[i][0])>=0)return map[i][1];return v}
 function stageAction(stage){return stage==="READY"?"エントリー候補":stage==="CONFIRMATION_WAIT"?"15分足待ち":stage==="RETEST_WAIT"?"リテスト待ち":stage==="BREAKOUT_WAIT"?"ブレイク待ち":"見送り"}
 async function hydrateServerState(){
  try{
@@ -1092,11 +1126,19 @@ function buildHypotheses(){
 }
 function renderDashboard(){
  var sum=document.getElementById("dashSummary"),upd=document.getElementById("dashUpdated"),j=globalEntrySnapshot||lastMarketPayload;if(!sum||!upd)return;
- renderMarketDataStatus(j);
+ renderMarketDataStatus(j);renderMarketContext(j);
  if(!j||entryFreshness(j).stale){sum.innerHTML=card("データ","鮮度を確認");upd.textContent="更新待ち";return}
  var h=j.scan_health;
  sum.innerHTML=card("エントリー可能",(j.ready_candidates||[]).length)+card("RR条件済みの直前候補",(j.qualified_near_candidates||[]).length)+card(h?"確認済み":"評価済み",h?h.checked+' / '+h.universe:j.scanned||0)+card("指標評価率",fmt(j.coverage_pct,1)+"%");
  upd.textContent="更新 "+new Date(j._client_rendered_ms).toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit"});
+}
+function renderMarketContext(j){
+ var box=document.getElementById('marketContext'),text=document.getElementById('marketContextMessage'),counts=document.getElementById('marketContextCounts');if(!box||!text||!counts)return;
+ var stages=j&&j.summary&&j.summary.stage_counts;box.hidden=!stages||entryFreshness(j).stale;if(box.hidden){text.textContent='';counts.innerHTML='';return}
+ var valid=function(n){return Number.isInteger(n)&&n>=0},ready=j.summary.ready_count,near=j.summary.qualified_near_count;
+ if(!valid(ready)||!valid(near)){box.hidden=true;return}
+ text.textContent=ready?'現行のエントリー条件が成立しています。候補の価格・鮮度・資金計算を確認してください。':near?'RR条件を満たす直前候補があります。確認足またはリテストが成立するまで待ちます。':'現行条件を満たすREADY・直前候補はありません。下の件数は最新スキャンの判定段階です。確認・リテスト待ちにもRR・価格構造が未達の銘柄を含みます。';
+ counts.innerHTML=Object.keys(stages).filter(function(k){return valid(stages[k])&&stages[k]>0}).map(function(k){return '<span>'+lifecycleEscape(stageJa(k))+' <b>'+stages[k]+'銘柄</b></span>'}).join('');
 }
 function renderMarketDataStatus(j){
  var box=document.getElementById('marketDataDetails'),status=document.getElementById('marketDataStatus'),summary=document.getElementById('marketDataSummary'),list=document.getElementById('marketDataMissing');if(!box||!status||!summary||!list)return;
@@ -1108,7 +1150,7 @@ function renderMarketDataStatus(j){
 }
 function summaryView(s){var el=document.getElementById("summary");if(!s){el.innerHTML="";return}el.innerHTML=card("エントリー可能",s.ready_count)+card("有力な直前候補",s.qualified_near_count||0)+card("直前候補 合計",s.near_signal_count)+card("ロング",s.direction_counts.LONG||0)+card("ショート",s.direction_counts.SHORT||0)+card("平均スコア",fmt(s.average_score,1))+card("有力候補",(s.top_qualified_near||[]).join(", ")||"—")}
 function renderRows(){var body=document.getElementById("screenBody");body.innerHTML="";var filtered=showWatch?rows.filter(r=>watch.has(r.ticker)):rows;filtered.forEach(function(r){var tr=document.createElement("tr");tr.innerHTML='<td class="star">'+(watch.has(r.ticker)?"★":"☆")+'</td><td><b>'+r.ticker+'</b></td><td><span class="badge '+r.stage+'">'+planStage(r)+'</span></td><td>'+directionJa(r.direction)+'</td><td>'+fmt(r.score,1)+'</td><td>'+fmt(r.current_price,8)+'</td><td>'+pct(r.change_24h_pct)+'</td><td>'+fmt(r.volume_ratio,2)+'x</td><td>'+fmt(r.rr,2)+'</td><td>'+actionJa(planAction(r))+'</td><td>'+fmt(r.data_age_seconds,0)+'s</td><td>'+planReason(r)+'</td>';
- var tds=tr.children;tds[0].onclick=function(e){e.stopPropagation();watch.has(r.ticker)?watch.delete(r.ticker):watch.add(r.ticker);saveWatch();renderRows()};tds[1].onclick=function(){document.getElementById("ticker").value=r.ticker;tab("analysis");analyze()};body.appendChild(tr)})}
+ var tds=tr.children;tds[0].onclick=function(e){e.stopPropagation();watch.has(r.ticker)?watch.delete(r.ticker):watch.add(r.ticker);saveWatch();renderRows()};tds[1].onclick=function(){document.getElementById("ticker").value=r.ticker;tab("analysis");analyze()};body.appendChild(tr)});var empty=document.getElementById('screenEmpty');if(empty){empty.hidden=filtered.length>0;empty.textContent=showWatch?'現在の絞り込みに一致するお気に入りはありません。★を追加するか「全件表示」で戻してください。':'現在の絞り込みに一致する銘柄はありません。「リセット」で全市場に戻せます。';}}
 function syncAutoJournalButton(){var b=document.getElementById("autoJournalReady");if(b)b.textContent="READY自動記録 "+(autoJournalReady?"ON":"OFF")}
 function autoJournalReadyCandidates(items){
  if(!autoJournalReady||!Array.isArray(items)||!items.length)return 0;var added=0;
@@ -1133,7 +1175,7 @@ async function scan(force,background){
   var j=await freshScreenerRequest(u);j._client_rendered_ms=Date.now();renderGlobalEntryBar(j);renderDailyConvenience(j);summaryView(j.summary);
   if(u!==screenerQuery(force)){marketScanQueued=marketScanQueued===true||!!force;return}
   lastMarketPayload=j;rows=j.results;processCandidateTransitions(j);
-  s.textContent=j.matched+"件表示 / "+j.scanned+"/"+j.universe+"銘柄評価 / 取得率 "+fmt(j.coverage_pct,1)+"% / データ "+(j.snapshot_age_seconds||0)+"秒前";
+  s.textContent=j.matched+"件表示 / "+j.scanned+"/"+j.universe+"銘柄評価 / 指標評価率 "+fmt(j.coverage_pct,1)+"% / スキャン "+(j.snapshot_age_seconds||0)+"秒前";
   document.getElementById("lastScan").textContent="更新 "+new Date().toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit",second:"2-digit"});renderRows();
  }catch(e){s.textContent='更新できませんでした。自動で再確認します。';refreshGlobalEntryAge()}
  finally{entryHeartbeatBusy=false;flushMarketScanQueue()}
@@ -1168,18 +1210,18 @@ function drawChart(id,series,levels,title){
 }
 async function copyTextValue(value,button){try{await navigator.clipboard.writeText(String(value));var old=button.textContent;button.textContent="コピー済み";setTimeout(function(){button.textContent=old},900)}catch(e){alert(String(value))}}
 function renderReadyActionCard(r,risk){
- var el=document.getElementById("readyActionCard");if(!el)return;if(!r||r.stage!=="READY"){el.innerHTML="";return}
+ var el=document.getElementById("readyActionCard");if(!el)return;if(!r||r.stage!=="READY"||(r._client_received_ms!==undefined&&!analysisFresh(r))){el.innerHTML="";return}
  var qty=risk&&risk.size!=null?fmt(risk.size,8):"資金設定後に計算",loss=risk&&risk.max_loss!=null?fmt(risk.max_loss,2)+" USDC":"—",profit=risk&&risk.target_profit!=null?fmt(risk.target_profit,2)+" USDC":"—";
  el.innerHTML='<div class="readyActionCard"><h2>エントリー候補 — '+r.ticker+'</h2><div class="sub">現在の戦略条件をすべて満たしています。この画面の操作では注文を送信しません。自動取引の状態はAPIタブで確認してください。</div><div class="grid">'+card("方向",directionJa(r.direction))+card("RR",fmt(r.rr,2))+card("参考数量",qty)+card("SL時の想定損失",loss)+card("目標利益",profit)+'</div><div class="copyGrid"><button class="copyTile readyCopy" data-value="'+r.entry_reference+'"><div class="k">Entry</div><div class="v">'+fmt(r.entry_reference,8)+'</div></button><button class="copyTile readyCopy" data-value="'+r.stop_loss+'"><div class="k">SL</div><div class="v">'+fmt(r.stop_loss,8)+'</div></button><button class="copyTile readyCopy" data-value="'+r.take_profit+'"><div class="k">TP</div><div class="v">'+fmt(r.take_profit,8)+'</div></button></div><div class="row" style="margin-top:10px"><button class="primary" id="copyReadyPlan">プラン全体をコピー</button><button class="ghost" id="readyRiskTab">資金管理を開く</button></div></div>';
- el.querySelectorAll(".readyCopy").forEach(function(b){b.onclick=function(){copyTextValue(this.dataset.value,this)}});
- var all=document.getElementById("copyReadyPlan");if(all)all.onclick=function(){copyTextValue(planText(r),this)};
+ el.querySelectorAll(".readyCopy").forEach(function(b){b.onclick=function(){refreshAnalysisAge();if(lastAnalysis===r&&analysisFresh(r))copyTextValue(this.dataset.value,this)}});
+ var all=document.getElementById("copyReadyPlan");if(all)all.onclick=function(){refreshAnalysisAge();if(lastAnalysis===r&&analysisFresh(r))copyTextValue(planText(r),this)};
  var rt=document.getElementById("readyRiskTab");if(rt)rt.onclick=function(){openRiskCalculator()};
 }
 var quickRiskVersion=0;
 async function renderQuickRisk(r){
  var out=document.getElementById('quickRiskOut');if(!out)return;var version=++quickRiskVersion;out.innerHTML='';
  if(!r||!r.entry_reference||!r.stop_loss)return;
- try{var x=await analysisRiskPlan(scenarioRiskParams(r));if(version!==quickRiskVersion)return;renderReadyActionCard(r,x);out.innerHTML='<div class="section"><h2>このシナリオの資金計算</h2><div class="sub">'+riskEstimateNote(x)+'</div><div class="grid">'+card('計算用資金',fmt(x.equity_usdc,2)+' USDC')+riskSizingCards(x)+card('目標利益',x.target_profit==null?'—':fmt(x.target_profit,2)+' USDC')+card('構造RR',fmt(x.rr,2))+(x.cost_adjusted_rr!=null?card('費用込みRR',fmt(x.cost_adjusted_rr,2)):'')+'</div></div>'}catch(e){if(version===quickRiskVersion){renderReadyActionCard(r,null);out.innerHTML='<div class="status">'+lifecycleEscape(e.message)+'</div>'}}
+ try{var x=await analysisRiskPlan(scenarioRiskParams(r));if(version!==quickRiskVersion||(r._client_received_ms!==undefined&&(lastAnalysis!==r||!analysisFresh(r))))return;renderReadyActionCard(r,x);out.innerHTML='<div class="section"><h2>このシナリオの資金計算</h2><div class="sub">'+riskEstimateNote(x)+'</div><div class="grid">'+card('計算用資金',fmt(x.equity_usdc,2)+' USDC')+riskSizingCards(x)+card('目標利益',x.target_profit==null?'—':fmt(x.target_profit,2)+' USDC')+card('構造RR',fmt(x.rr,2))+(x.cost_adjusted_rr!=null?card('費用込みRR',fmt(x.cost_adjusted_rr,2)):'')+'</div></div>'}catch(e){if(version===quickRiskVersion&&(r._client_received_ms===undefined||lastAnalysis===r&&analysisFresh(r))){renderReadyActionCard(r,null);out.innerHTML='<div class="status">'+lifecycleEscape(e.message)+'</div>'}}
 }
 function renderEntryBand(r){
  var b=r.entry_band;
@@ -1200,23 +1242,45 @@ function renderEntryBand(r){
  }
  return header+'<div class="'+(b.status==='NO_OVERLAP'?'warn':'muted')+'">'+title+'</div><div class="muted">'+detail+'</div><div class="muted">取得した4H構造での価格条件です。足の方向・リテスト・鮮度を含むエントリー可否は上の状態を確認してください。</div></div>';
 }
+var analysisRequestVersion=0,analysisAbortController=null,analysisExpiryTimer=null;
+function analysisFresh(r){var now=Date.now();return !!r&&Number.isFinite(r._client_received_ms)&&r._client_received_ms>0&&now>=r._client_received_ms&&now-r._client_received_ms<120000&&Number.isFinite(r.data_age_seconds)&&r.data_age_seconds>=0&&r.data_age_seconds+(now-r._client_received_ms)/1000<900}
+function clearAnalysisView(){
+ lastAnalysis=null;quickRiskVersion++;manualCalcVersion++;clearTimeout(analysisExpiryTimer);analysisExpiryTimer=null;
+ ['analysisOut','actionOut','readyActionCard','quickRiskOut','riskOut'].forEach(function(id){document.getElementById(id).innerHTML=''});
+ ['entry','stop','target','step','minOrder','maxOrder','lev'].forEach(function(id){document.getElementById(id).value=''});
+ ['copyPlan','sharePlan'].forEach(function(id){document.getElementById(id).disabled=true});
+ ['chart4h','chart15m'].forEach(function(id){var c=document.getElementById(id),ctx=c&&c.getContext&&c.getContext('2d');if(ctx)ctx.clearRect(0,0,c.width,c.height)});
+}
+function refreshAnalysisAge(){if(lastAnalysis&&!analysisFresh(lastAnalysis)){clearAnalysisView();document.getElementById('analysisStatus').textContent='データ鮮度を確認 — 個別分析が古くなりました。「分析」で最新状態を再確認してください。';}}
+function invalidateAnalysisInput(){analysisRequestVersion++;if(analysisAbortController)analysisAbortController.abort();clearAnalysisView();document.getElementById('analyze').disabled=false;document.getElementById('analyze').setAttribute('aria-busy','false');document.getElementById('analysisStatus').textContent='銘柄が変更されました。「分析」で最新状態を確認してください。';}
 async function analyze(){
  var t=document.getElementById("ticker").value.trim(),s=document.getElementById("analysisStatus"),o=document.getElementById("analysisOut"),a=document.getElementById("actionOut");
- s.textContent="分析・チャート取得中…";o.innerHTML="";a.innerHTML="";document.getElementById("readyActionCard").innerHTML="";
+ var version=++analysisRequestVersion;if(analysisAbortController)analysisAbortController.abort();var controller=new AbortController();analysisAbortController=controller;var timeout=setTimeout(function(){controller.abort()},30000);
+ clearAnalysisView();s.textContent="分析・チャート取得中…";var button=document.getElementById('analyze');button.disabled=true;button.setAttribute('aria-busy','true');
+ if(t.length<2){clearTimeout(timeout);button.disabled=false;button.setAttribute('aria-busy','false');s.textContent='BTCなどの銘柄名を入力してください。';return}
  try{
-  var pack=await jf("/api/chart?ticker="+encodeURIComponent(t));var r=pack.analysis,b=r.score_breakdown||{};lastAnalysis=r;addRecentTicker(r.ticker);
+  var pack=await jf("/api/chart?ticker="+encodeURIComponent(t),{signal:controller.signal,cache:'no-store'});if(version!==analysisRequestVersion||document.getElementById('ticker').value.trim()!==t)return;
+  if(!pack||!pack.analysis||typeof pack.analysis.ticker!=='string'||!pack.analysis.stage||!pack.series||!Array.isArray(pack.series.HOUR_4)||!Array.isArray(pack.series.MINUTE_15))throw new Error('INVALID_ANALYSIS_RESPONSE');
+  var r=Object.assign({},pack.analysis,{_client_received_ms:Date.now()}),b=r.score_breakdown||{};lastAnalysis=r;addRecentTicker(r.ticker);
+  if(!analysisFresh(r)){clearAnalysisView();s.textContent='確定足の鮮度を確認できません。「分析」で再確認してください。';return}
+  ['copyPlan','sharePlan'].forEach(function(id){document.getElementById(id).disabled=false});
+  analysisExpiryTimer=setTimeout(refreshAnalysisAge,Math.max(1,Math.min(120000,(900-r.data_age_seconds)*1000)));
   s.innerHTML='<span class="badge '+r.stage+'">'+planStage(r)+'</span> '+directionJa(r.direction)+' — '+planReason(r);
-  a.innerHTML='<div class="actionBox"><div><div class="k">いまの判断</div><div class="actionMain '+actionClass(r.action)+'">'+actionJa(r.action)+'</div></div><div class="pill">スコア '+fmt(r.score,1)+'/100</div><div class="pill">RR '+fmt(r.rr,2)+'</div><div class="pill">'+directionJa(r.direction)+'</div></div>';
+  a.innerHTML='<div class="actionBox"><div><div class="k">いまの判断</div><div class="actionMain '+actionClass(planAction(r))+'">'+actionJa(planAction(r))+'</div></div><div class="pill">スコア '+fmt(r.score,1)+'/100</div><div class="pill">RR '+fmt(r.rr,2)+'</div><div class="pill">'+directionJa(r.direction)+'</div></div>';
   renderReadyActionCard(r,null);
   o.innerHTML='<div class="section"><h2>Entry / SL / TP</h2><div class="grid">'+card("Entry目安",fmt(r.entry_reference,8))+card("損切り SL",fmt(r.stop_loss,8))+card("利確 TP",fmt(r.take_profit,8))+card("RR",fmt(r.rr,2))+'</div></div><details class="dashboardDrawer"><summary>指標・取引条件</summary><div class="drawerBody grid">'+card("現在価格",fmt(r.current_price,8))+card("24時間変化",pct(r.change_24h_pct))+card("4Hの方向",trendJa(r.trend))+card("データ鮮度",fmt(r.data_age_seconds,0)+"秒前")+card("EMA20 / EMA50",fmt(r.ema20_4h,8)+" / "+fmt(r.ema50_4h,8))+card("ATR 4H / 15M",fmt(r.atr_4h,8)+" / "+fmt(r.atr_15m,8))+card("出来高比",fmt(r.volume_ratio,2)+"倍")+card("ブレイク基準",fmt(r.breakout_level,8))+card("4Hサポート",fmt(r.support_4h,8))+card("4Hレジスタンス",fmt(r.resistance_4h,8))+card("注文刻み",fmt(r.step_size,8))+card("最小 / 最大注文量",fmt(r.min_order_size,8)+" / "+fmt(r.max_order_size,8))+card("最大ロング / ショート倍率",fmt(r.max_long_leverage,2)+" / "+fmt(r.max_short_leverage,2))+'</div></details>';
   o.innerHTML+=renderEntryBand(r);
   if(r.entry_reference&&r.stop_loss){document.getElementById("entry").value=r.entry_reference;document.getElementById("stop").value=r.stop_loss;document.getElementById("target").value=r.take_profit||"";document.getElementById("step").value=r.step_size||"";document.getElementById("minOrder").value=r.min_order_size||"";document.getElementById("maxOrder").value=r.max_order_size||"";var lev=r.direction==="LONG"?r.max_long_leverage:r.max_short_leverage;if(lev)document.getElementById("lev").value=lev}
-  renderQuickRisk(r);updateUrl("analysis",r.ticker);requestAnimationFrame(function(){drawChart("chart4h",pack.series.HOUR_4,pack.levels,"4H");drawChart("chart15m",pack.series.MINUTE_15,pack.levels,"15M")});
- }catch(e){s.innerHTML='<span class="error">'+lifecycleEscape(e.message)+'</span>'}
+  renderQuickRisk(r);updateUrl("analysis",r.ticker);requestAnimationFrame(function(){if(version!==analysisRequestVersion||lastAnalysis!==r||!analysisFresh(r))return;drawChart("chart4h",pack.series.HOUR_4,pack.levels,"4H");drawChart("chart15m",pack.series.MINUTE_15,pack.levels,"15M")});
+ }catch(e){if(version===analysisRequestVersion){clearAnalysisView();s.textContent=e.message&&/Ticker not found|HTTP 404/.test(e.message)?'銘柄が見つかりません。銘柄一覧で取引可能な名前を確認してください。':e.name==='AbortError'?'取得に時間がかかっています。「分析」で再試行してください。':'分析を取得できません。通信と銘柄名を確認し、「分析」で再試行してください。';}}
+ finally{clearTimeout(timeout);if(version===analysisRequestVersion){button.disabled=false;button.setAttribute('aria-busy','false');analysisAbortController=null}}
 }
+setInterval(refreshAnalysisAge,1000);
+document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible')refreshAnalysisAge()});
+document.getElementById('ticker').addEventListener('input',invalidateAnalysisInput);
 function planText(r){var first=validFirstTarget(r);return [r.ticker+" — "+actionJa(planAction(r)),r.stage!=="READY"?"未成立の参考値 — エントリー条件は成立していません。":null,"方向: "+directionJa(r.direction),"状態: "+planStage(r),"Entry目安: "+fmt(r.entry_reference,8),"損切り SL: "+fmt(r.stop_loss,8),first==null?null:"第1利確 TP1: "+fmt(first,8),"最終利確 TP: "+fmt(r.take_profit,8),"RR: "+fmt(r.rr,2),"理由: "+planReason(r)].filter(function(v){return v!=null}).join("\n")}
-document.getElementById("analyze").onclick=analyze;document.getElementById("ticker").addEventListener("keydown",function(e){if(e.key==="Enter")analyze()});document.getElementById("toRisk").onclick=openRiskCalculator;document.getElementById("copyPlan").onclick=async function(){if(!lastAnalysis)return;var txt=planText(lastAnalysis);try{await navigator.clipboard.writeText(txt);this.textContent="コピー済み";var b=this;setTimeout(()=>b.textContent="プランをコピー",1200)}catch(e){alert(txt)}};
-document.getElementById("sharePlan").onclick=async function(){if(!lastAnalysis)return;updateUrl("analysis",lastAnalysis.ticker);var data={title:lastAnalysis.ticker+" EdgeX分析",text:planText(lastAnalysis),url:location.href};if(navigator.share){try{await navigator.share(data);return}catch(e){if(e.name==="AbortError")return}}try{await navigator.clipboard.writeText(data.text+"\n"+data.url);this.textContent="共有内容をコピー済み";var b=this;setTimeout(()=>b.textContent="共有",1500)}catch(e){alert(data.text+"\n"+data.url)}};
+document.getElementById("analyze").onclick=analyze;document.getElementById("ticker").addEventListener("keydown",function(e){if(e.key==="Enter")analyze()});document.getElementById("toRisk").onclick=openRiskCalculator;document.getElementById("copyPlan").onclick=async function(){refreshAnalysisAge();if(!lastAnalysis||!analysisFresh(lastAnalysis))return;var txt=planText(lastAnalysis);try{await navigator.clipboard.writeText(txt);this.textContent="コピー済み";var b=this;setTimeout(()=>b.textContent="プランをコピー",1200)}catch(e){alert(txt)}};
+document.getElementById("sharePlan").onclick=async function(){refreshAnalysisAge();if(!lastAnalysis||!analysisFresh(lastAnalysis))return;updateUrl("analysis",lastAnalysis.ticker);var data={title:lastAnalysis.ticker+" EdgeX分析",text:planText(lastAnalysis),url:location.href};if(navigator.share){try{await navigator.share(data);return}catch(e){if(e.name==="AbortError")return}}try{await navigator.clipboard.writeText(data.text+"\n"+data.url);this.textContent="共有内容をコピー済み";var b=this;setTimeout(()=>b.textContent="共有",1500)}catch(e){alert(data.text+"\n"+data.url)}};
 
 
 document.getElementById("dashScan").onclick=function(){scan(true)};

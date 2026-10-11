@@ -16,7 +16,7 @@ function element(tag,attributes=''){
  let content='',children=[];
  const el={tagName:tag.toUpperCase(),dataset,value:attrs.value||'',textContent:'',disabled:false,open:false,
   classList:{add(...xs){xs.forEach(x=>classes.add(x))},remove(...xs){xs.forEach(x=>classes.delete(x))},contains:x=>classes.has(x),toggle(x,on){on?classes.add(x):classes.delete(x)}},
-  addEventListener(){},scrollIntoView(){},click(){if(this.onclick)this.onclick.call(this)},
+  setAttribute(k,v){this[k]=v},addEventListener(){},scrollIntoView(){},click(){if(this.onclick)this.onclick.call(this)},
   querySelectorAll(selector){return children.filter(x=>selector.startsWith('.')&&x.classList.contains(selector.slice(1)))},
   querySelector(selector){return this.querySelectorAll(selector)[0]||null},
   get children(){return children},get innerHTML(){return content},set innerHTML(value){
