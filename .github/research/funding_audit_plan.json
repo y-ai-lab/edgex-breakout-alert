@@ -1,0 +1,51 @@
+{
+  "id": "settlement_funding_coverage_audit_v1",
+  "scope": "RETROSPECTIVE_COST_AND_TIMING_DIAGNOSTIC_NOT_STRATEGY",
+  "base_sha": "d964ad622fed5f92c5abbaef61862baa721a7d9e",
+  "registered_utc": "2026-10-11T00:25:52.158039+00:00",
+  "start_ms": 1790391600000,
+  "end_ms": 1790996400000,
+  "sources": [
+    {
+      "id": "rsi",
+      "model": "trend_rsi_extreme_recovery_net2r",
+      "report_sha256": "35805c42500278c264722ae9f45baaecfeee401098e5dce84ac233c15c19ad04"
+    },
+    {
+      "id": "swing",
+      "model": "trend_confirmed_higher_low_lower_high_neck_break_net2r",
+      "report_sha256": "341b349b99c164e69614d2313632f48436bcd7930883c7ba3645c17dcc510484"
+    },
+    {
+      "id": "inside",
+      "model": "trend_two_nested_inside_bars_release_net2r",
+      "report_sha256": "70fe0b9ce3686bc219b1d75d5f27aef80b341c19caf7705683397ad4175d8890"
+    }
+  ],
+  "source_report_sha256": "f7395ff494b4c34c44f1f8c7f1c66c39fe1204dc4897a22d386631d5926043a0",
+  "public_endpoint": "/api/v2/public/funding/getFundingRatePage",
+  "schema_probe": {
+    "contract_id": "30000001",
+    "records": 42,
+    "settlement_interval_minutes": 240,
+    "outcomes_not_joined": true
+  },
+  "rules": [
+    "All original candidates for all3 fixed proposal models; no subgroup or ticker selection, new trade/outcome or threshold fitting. Same week/models remain correlated, KILL unchanged.",
+    "Reproduce all original model metrics/stress/portfolios and original report/source checksums before audit. Preserve all OPEN,AMBIGUOUS,DATA_GAP and unfilled records.",
+    "Only unsigned public settlement history; no account Funding, credentials, signed requests, real orders or live state changes. Funding is hypothetical, not actual cash flow.",
+    "Query original fixed week with24h prefix and endpoint at original cutoff inclusive; no later outcome interval or sealed week. Store exclusive raw pages/manifest and hashes, never overwrite or regenerate favorable results.",
+    "Pagination must exhaust without repeated cursor/duplicate timestamp; require true isSettlement, matching contractId, fundingTime==fundingTimestamp, finite rate/positive indexPrice, integer positive funding interval. IndexPrice is used per official Funding documentation; no LAST_PRICE/Oracle substitution.",
+    "Coverage requires a uniform historical interval on UTC-aligned settlements, complete expected grid spanning original period including any cutoff settlement. Variable interval,missing,pagination,error,invalid data block valuation, never zero-fill.",
+    "Original OHLC fills may occur anywhere in [filled_ms,filled_ms+15m); exits in [outcome_ms-15m,outcome_ms]. Funding inside either boundary is TIMING_AMBIGUOUS, including exit endpoints. Certain-held settlements lie in [fill+15m,exitbarstart). No boundary order assumption.",
+    "LONG charge=quantity*indexPrice*rate, SHORT negates; report per-unit/R on original frozen net stop-risk. Receipts are negative costs. Only original TP/SL records with complete coverage and no boundary settlement can have fully determined hypothetical Funding charge.",
+    "Full resolved-basket adjusted AvgR/PF/netwin only if EVERY original resolved trade has verified funding coverage and no timing ambiguity; otherwise null, not selected-subset success. Core known-held charge is a partial diagnostic, not full Funding or adjusted expectancy.",
+    "No capital ROI recomputation, risk resizing, funding-aware fill/rule changes or original metric modification. Funding can affect actual available collateral; static cost subtraction is not a capital simulation. ROI remains unknown.",
+    "No additional samples, forward promotion, notifications, UI/tabs or production deployment. No KILL revival or active protocol changes; original decisions and untouched periods remain sealed."
+  ],
+  "changes_live_rules": false,
+  "new_samples_added": 0,
+  "real_orders_enabled": false,
+  "portfolio_roi_pct": null,
+  "documentation": "https://edgex-1.gitbook.io/edgeX-documentation/trading/funding-fees"
+}
