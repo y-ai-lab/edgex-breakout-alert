@@ -1,0 +1,105 @@
+{
+  "id": "profit_origin_diagnostic_v1",
+  "scope": "RETROSPECTIVE_EXPLORATORY_DIAGNOSIS_ONLY",
+  "base_sha": "4e5c83d4d7d36eb3ebe455017cd8e8b66e755c5a",
+  "registered_utc": "2026-10-11T00:04:09.231893+00:00",
+  "sources": [
+    {
+      "id": "rsi",
+      "model": "trend_rsi_extreme_recovery_net2r",
+      "report_sha256": "35805c42500278c264722ae9f45baaecfeee401098e5dce84ac233c15c19ad04"
+    },
+    {
+      "id": "swing",
+      "model": "trend_confirmed_higher_low_lower_high_neck_break_net2r",
+      "report_sha256": "341b349b99c164e69614d2313632f48436bcd7930883c7ba3645c17dcc510484"
+    },
+    {
+      "id": "inside",
+      "model": "trend_two_nested_inside_bars_release_net2r",
+      "report_sha256": "70fe0b9ce3686bc219b1d75d5f27aef80b341c19caf7705683397ad4175d8890"
+    }
+  ],
+  "start_ms": 1790391600000,
+  "end_ms": 1790996400000,
+  "source_report_sha256": "f7395ff494b4c34c44f1f8c7f1c66c39fe1204dc4897a22d386631d5926043a0",
+  "features": {
+    "trend_separation_atr4": {
+      "edges": [
+        0.5,
+        1
+      ],
+      "definition": "direction*(EMA20-EMA50)/ATR14 of exactly180 contiguous closed4H bars as of signalclose; no future trend."
+    },
+    "entry_extension_atr4": {
+      "edges": [
+        0,
+        1,
+        2
+      ],
+      "definition": "direction*(signal close-EMA20_4H)/ATR14_4H; no fill or outcome prices."
+    },
+    "stop_width_atr15": {
+      "edges": [
+        1,
+        2,
+        3
+      ],
+      "definition": "abs(frozen trigger-frozen SL)/ATR14_15M, exactly180 closed contiguous15M bars at signalclose."
+    },
+    "relative_volume": {
+      "edges": [
+        1,
+        2
+      ],
+      "definition": "signal base volume / previous20 mean excluding signal; finite numeric nonbool>=0 entire180 window; mean0 = UNKNOWN, neverzero replacement."
+    },
+    "directional_close_location": {
+      "edges": [
+        0.5,
+        0.75
+      ],
+      "definition": "LONG (close-low)/(high-low), SHORT (high-close)/(high-low) on closed signal; zero range=UNKNOWN."
+    },
+    "friction_share_of_net_stop_risk": {
+      "edges": [
+        0.1,
+        0.2
+      ],
+      "definition": "(netStopRisk-abs(trigger-SL))/netStopRisk using fixed5bpsfee2bpsslip at original trigger, not realized fill; R notROI."
+    },
+    "direction": {
+      "categories": [
+        "LONG",
+        "SHORT"
+      ],
+      "definition": "original immutable signal direction."
+    }
+  },
+  "rules": [
+    "Exactly one-dimensional fixed bins and TP/SL winner/loser medians. Report every bin including0,OPEN,AMBIGUOUS,DATA_GAP and all unfilled statuses. No grid, interaction search, threshold/rule optimization, fitted classifier or ticker selection.",
+    "Winning/losing classification from immutable original resolved netR; TP rate separate. Features use only asofsignalclose source and frozen prices, no outcome/MFE/MAE or later market input.",
+    "Compare every original candidate within each model. Never pool same week/model repeats or treat these3models as independent validation. Show statuses and unresolved fraction; selected resolved statistics are provisional.",
+    "Reproduce original allmodel metrics/stress/portfolios from immutable ledgers and source hashes. Any mismatch stops. No new candidates/fills/outcomes, no replay/revival of KILLmodels.",
+    "A positive subgroup is exploratory, not a new deployable strategy or proof. No subgroup accountROI computed, no filtered capital release. No subgroup promotion or sample counting.",
+    "All3models alreadyKILL, preserved. Active volume protocol and sealedpending/VWAP/future intervals remain unchanged; no unread period accessed.",
+    "At most one conceptual hypothesis after diagnosis, labelled untested. Any future test must separate registration and untouched data, not these same analyzedprices. No profits or optimality guarantee."
+  ],
+  "changes_live_rules": false,
+  "real_orders_enabled": false,
+  "eligible_for_live_promotion": false,
+  "forward_collection_enabled": false,
+  "costs": {
+    "fee_bps_each_side": 5,
+    "slippage_bps_each_side": 2
+  },
+  "stress_costs": {
+    "fee_bps_each_side": 10,
+    "slippage_bps_each_side": 5
+  },
+  "limitations": [
+    "Previously observed3models/same182markets/sameweek; feature bins chosen before this diagnostic but all baseoutcomes already known. This is not pristine preregistration/holdout.",
+    "Multiple comparisons, marketcorrelation, regime and survivorship bias, OPEN/AMBIGUOUS censoring. No hypothesis significance or confidenceinterval claims.",
+    "OHLC hypothetical prices; Funding,depth,tick,queue andactualexecution unverified. Posttrade MFE/MAE are descriptive only and cannotidentify prospective entry."
+  ]
+}
