@@ -1,0 +1,175 @@
+{
+  "plan_id": "settlement_funding_coverage_audit_v1",
+  "period": [
+    1790391600000,
+    1790996400000
+  ],
+  "plan_sha256": "27160b8fc94f084c1e2dc82d093b887795df82fcabfbb1ba9bd24b0cd685860e",
+  "funding_manifest_sha256": "ad6144b6c5082cf1593b486f91e085ed97d570ac8b96494358e34e0c6beb1b5c",
+  "funding_markets": 123,
+  "coverage_statuses": {
+    "VERIFIED_GRID": 123
+  },
+  "settlement_intervals_minutes": [
+    240
+  ],
+  "sources": [
+    {
+      "id": "rsi",
+      "model": "trend_rsi_extreme_recovery_net2r",
+      "original_metrics": {
+        "candidates": 127,
+        "filled": 127,
+        "resolved": 116,
+        "tp": 33,
+        "sl": 83,
+        "statuses": {
+          "TP": 33,
+          "SL": 83,
+          "AMBIGUOUS": 6,
+          "OPEN": 5
+        },
+        "win_rate": 28.448275862068964,
+        "avg_net_r": -0.14655172413793294,
+        "expectancy_net_r": -0.14655172413793294,
+        "profit_factor": 0.7951807228915635,
+        "avg_mfe_r": 1.3567289162340508,
+        "avg_mae_r": 1.0936330276854704,
+        "max_consecutive_losses": 17,
+        "sample_status": "SUFFICIENT SAMPLE"
+      },
+      "statuses": {
+        "TIMING_AMBIGUOUS": 18,
+        "VERIFIED_HYPOTHETICAL": 98,
+        "UNRESOLVED_OR_UNFILLED": 11
+      },
+      "funding_verified_resolved": 98,
+      "timing_ambiguous_resolved": 18,
+      "blocked_funding_resolved": 0,
+      "full_resolved_basket_verified": false,
+      "known_held_settlements": 249,
+      "boundary_settlements": 18,
+      "partial_known_held_charge_r_sum": 0.15286203897160303,
+      "funding_adjusted_avg_net_r": null,
+      "funding_adjusted_profit_factor": null,
+      "funding_adjusted_net_win_rate_pct": null,
+      "portfolio_roi_pct": null,
+      "new_samples_added": 0,
+      "r_basis": "ORIGINAL_FROZEN_NET_STOP_RISK",
+      "interpretation": "PUBLIC_HISTORY_HYPOTHETICAL_NOT_ACTUAL_FUNDING_OR_ACCOUNT_ROI"
+    },
+    {
+      "id": "swing",
+      "model": "trend_confirmed_higher_low_lower_high_neck_break_net2r",
+      "original_metrics": {
+        "candidates": 154,
+        "filled": 154,
+        "resolved": 148,
+        "tp": 33,
+        "sl": 115,
+        "statuses": {
+          "TP": 33,
+          "SL": 115,
+          "OPEN": 4,
+          "AMBIGUOUS": 2
+        },
+        "win_rate": 22.2972972972973,
+        "avg_net_r": -0.3310810810810825,
+        "expectancy_net_r": -0.3310810810810825,
+        "profit_factor": 0.5739130434782591,
+        "avg_mfe_r": 1.1648431456456454,
+        "avg_mae_r": 1.1281865676548484,
+        "max_consecutive_losses": 17,
+        "sample_status": "SUFFICIENT SAMPLE"
+      },
+      "statuses": {
+        "VERIFIED_HYPOTHETICAL": 114,
+        "TIMING_AMBIGUOUS": 34,
+        "UNRESOLVED_OR_UNFILLED": 6
+      },
+      "funding_verified_resolved": 114,
+      "timing_ambiguous_resolved": 34,
+      "blocked_funding_resolved": 0,
+      "full_resolved_basket_verified": false,
+      "known_held_settlements": 285,
+      "boundary_settlements": 35,
+      "partial_known_held_charge_r_sum": -2.0978080677717355,
+      "funding_adjusted_avg_net_r": null,
+      "funding_adjusted_profit_factor": null,
+      "funding_adjusted_net_win_rate_pct": null,
+      "portfolio_roi_pct": null,
+      "new_samples_added": 0,
+      "r_basis": "ORIGINAL_FROZEN_NET_STOP_RISK",
+      "interpretation": "PUBLIC_HISTORY_HYPOTHETICAL_NOT_ACTUAL_FUNDING_OR_ACCOUNT_ROI"
+    },
+    {
+      "id": "inside",
+      "model": "trend_two_nested_inside_bars_release_net2r",
+      "original_metrics": {
+        "candidates": 45,
+        "filled": 45,
+        "resolved": 40,
+        "tp": 10,
+        "sl": 30,
+        "statuses": {
+          "TP": 10,
+          "SL": 30,
+          "OPEN": 3,
+          "AMBIGUOUS": 2
+        },
+        "win_rate": 25.0,
+        "avg_net_r": -0.25000000000000305,
+        "expectancy_net_r": -0.25000000000000305,
+        "profit_factor": 0.6666666666666626,
+        "avg_mfe_r": 1.205772261112144,
+        "avg_mae_r": 1.0829451286280678,
+        "max_consecutive_losses": 11,
+        "sample_status": "SUFFICIENT SAMPLE"
+      },
+      "statuses": {
+        "TIMING_AMBIGUOUS": 8,
+        "VERIFIED_HYPOTHETICAL": 32,
+        "UNRESOLVED_OR_UNFILLED": 5
+      },
+      "funding_verified_resolved": 32,
+      "timing_ambiguous_resolved": 8,
+      "blocked_funding_resolved": 0,
+      "full_resolved_basket_verified": false,
+      "known_held_settlements": 85,
+      "boundary_settlements": 8,
+      "partial_known_held_charge_r_sum": -1.0674916459822341,
+      "funding_adjusted_avg_net_r": null,
+      "funding_adjusted_profit_factor": null,
+      "funding_adjusted_net_win_rate_pct": null,
+      "portfolio_roi_pct": null,
+      "new_samples_added": 0,
+      "r_basis": "ORIGINAL_FROZEN_NET_STOP_RISK",
+      "interpretation": "PUBLIC_HISTORY_HYPOTHETICAL_NOT_ACTUAL_FUNDING_OR_ACCOUNT_ROI"
+    }
+  ],
+  "new_samples_added": 0,
+  "changes_live_rules": false,
+  "portfolio_roi_pct": null,
+  "registration_commit": "fc9f94530ecc182cb98f53de714b62ced1307367",
+  "retrieved_utc_date": "2026-10-11",
+  "independent_verification": {
+    "status": "MATCH",
+    "markets": 123,
+    "candidates": 326,
+    "resolved": 304,
+    "timing_ambiguous": 60,
+    "verified": 244,
+    "new_samples_added": 0,
+    "original_ledgers_modified": false
+  },
+  "decision": "BLOCKED_EXACT_FUNDING_TIMING_DIAGNOSTIC_ONLY",
+  "original_model_decisions": "KILL_UNCHANGED",
+  "limitations": [
+    "Previously viewed fixed week and overlapping models; not independent validation or additional samples.",
+    "Every model has unknown fill/exit Funding order; full adjusted metrics null, no selected subset reported as success.",
+    "Known-held charge is only partial signed exposure in original net stop-risk R; cannot interpret as total Funding, AvgR or accountROI.",
+    "OPEN/AMBIGUOUS/DATA_GAP positions and funding exposure not resolved; no capital is released.",
+    "Public historical settlements/OHLC hypothetical trades, not actual fills or account funding. Historical revisions remain possible.",
+    "No new strategy/threshold/cost filter, active protocol change or KILL revival. Sealed periods unchanged."
+  ]
+}
