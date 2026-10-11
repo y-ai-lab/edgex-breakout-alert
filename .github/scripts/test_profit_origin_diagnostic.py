@@ -77,6 +77,16 @@ class ProfitOriginTests(unittest.TestCase):
         self.assertEqual(x['resolved_outcome_medians']['NET_WIN'],dict(count=0,median=None))
         with self.assertRaisesRegex(ValueError,'Duplicate'):diagnostic.summarize(rs*2,[dict(x=0)]*2,dict(x=dict(edges=[1])))
 
+    def test_tp_touch_with_negative_net_return_is_not_classified_as_win(self):
+        r=record();f=fill(r);tp=replace(f,time_ms=f.time_ms+STEP,high=r['target']+.01)
+        row=evaluate(r,[f,tp]);row['final_net_r']=-.01
+        result=diagnostic.summarize([row],[dict(x=.8)],dict(x=dict(edges=[.5])))['x']
+        group=result['bins']['ge_0.5']
+        self.assertEqual(group['tp_rate_pct'],100)
+        self.assertEqual(group['net_win_rate_pct'],0)
+        self.assertEqual(result['resolved_outcome_medians']['NET_WIN']['count'],0)
+        self.assertEqual(result['resolved_outcome_medians']['NET_LOSS'],dict(count=1,median=.8))
+
     def test_original_evidence_and_plan_tampering_stop(self):
         self.assertEqual(len(diagnostic.plan()['sources']),3)
         with patch.object(diagnostic,'PLAN_SHA256','bad'):

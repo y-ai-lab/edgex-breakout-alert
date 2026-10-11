@@ -1,0 +1,2734 @@
+{
+  "plan": "profit_origin_diagnostic_v1",
+  "plan_sha256": "57d389a2a7e1f74f29e8da61771223797fc24a75a5961ccaaf061ca9a785c4c4",
+  "start_ms": 1790391600000,
+  "end_ms": 1790996400000,
+  "scope": "RETROSPECTIVE_EXPLORATORY_DIAGNOSIS_ONLY",
+  "pooled_metrics": null,
+  "new_resolved_samples": 0,
+  "changes_live_rules": false,
+  "eligible_for_live_promotion": false,
+  "real_orders_enabled": false,
+  "interpretation": "Exploration only; all source models remain KILL. No subgroup is validated or automatically promoted.",
+  "limitations": [
+    "Previously observed3models/same182markets/sameweek; feature bins chosen before this diagnostic but all baseoutcomes already known. This is not pristine preregistration/holdout.",
+    "Multiple comparisons, marketcorrelation, regime and survivorship bias, OPEN/AMBIGUOUS censoring. No hypothesis significance or confidenceinterval claims.",
+    "OHLC hypothetical prices; Funding,depth,tick,queue andactualexecution unverified. Posttrade MFE/MAE are descriptive only and cannotidentify prospective entry."
+  ],
+  "registration_commit": "3c053e61d4bcd365a2250cdfac08c0ec97b4cff6",
+  "engine_commit_before_slices": "94db11cc385bff2737eacea1f5b7a9170b6302c1",
+  "engine_sha256": "3e0fa010319347a29face4c816d7b2dba114c2f3e0a17fc947626439c32933ff",
+  "independent_verification": {
+    "models": 3,
+    "signal_time_feature_vectors_verified": 326,
+    "all_fixed_bins_verified": 87,
+    "all_candidate_partitions_and_original_net_stress_metrics_match": true,
+    "all_source_hashes_match": true,
+    "new_resolved_samples": 0,
+    "summary_sha256": "41b26b003c0a94ee351c56dacc71df97bf67c5edbac6d768c5d9841e56b6d719"
+  },
+  "independent_verifier_sha256": "f0ca6cc0aa1246e000eef0ca41661410b25dab6f8667847d577f798ff49e502e",
+  "bin_metric_columns": [
+    "bin",
+    "candidates",
+    "filled",
+    "resolved",
+    "tp",
+    "sl",
+    "statuses",
+    "tp_rate_pct",
+    "net_win_rate_pct",
+    "avg_net_r",
+    "profit_factor",
+    "stress_avg_net_r",
+    "stress_profit_factor",
+    "avg_mfe_price_r",
+    "avg_mae_price_r",
+    "max_consecutive_losses",
+    "cohort_complete",
+    "sample_status",
+    "portfolio_roi_pct",
+    "interpretation"
+  ],
+  "models": [
+    {
+      "id": "rsi",
+      "model": "trend_rsi_extreme_recovery_net2r",
+      "original_report_sha256": "35805c42500278c264722ae9f45baaecfeee401098e5dce84ac233c15c19ad04",
+      "source_files_verified": 182,
+      "coverage": {
+        "expected_points": 122304,
+        "valid_points": 108492,
+        "failed_markets": 0,
+        "requested_markets": 182,
+        "fetched_markets": 182,
+        "expected_points_all_markets": 122304
+      },
+      "original_metrics_portfolios_reproduced": true,
+      "baseline": {
+        "candidates": 127,
+        "filled": 127,
+        "resolved": 116,
+        "tp": 33,
+        "sl": 83,
+        "statuses": {
+          "TP": 33,
+          "SL": 83,
+          "AMBIGUOUS": 6,
+          "OPEN": 5
+        },
+        "tp_rate_pct": 28.448275862068964,
+        "net_win_rate_pct": 28.448275862068964,
+        "avg_net_r": -0.14655172413793294,
+        "profit_factor": 0.7951807228915635,
+        "stress_avg_net_r": -0.24820240784477926,
+        "stress_profit_factor": 0.6531147071085013,
+        "avg_mfe_price_r": 1.3567289162340508,
+        "avg_mae_price_r": 1.0936330276854704,
+        "max_consecutive_losses": 17,
+        "cohort_complete": false,
+        "sample_status": "SUFFICIENT SAMPLE",
+        "portfolio_roi_pct": null,
+        "interpretation": "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+      },
+      "original_portfolio": {
+        "initial_cash_usdc": 10000,
+        "known_cash_usdc": 9870.889383114936,
+        "realized_net_pnl_usdc": -124.49881430898228,
+        "admitted": 26,
+        "filled": 26,
+        "resolved": 25,
+        "active": 1,
+        "uncertain": 1,
+        "exclusions": {
+          "SIZE_OR_RISK_LIMIT": 100,
+          "CAPACITY_OR_TICKER": 1
+        },
+        "realized_roi_pct": null,
+        "closed_portfolio_roi_pct": null,
+        "equity_usdc": null,
+        "max_known_cash_drawdown_pct": 3.5820610793840157,
+        "profit_factor": 0.7754912213726796,
+        "notes": [
+          "Realized return is not total ROI when positions remain open.",
+          "Cash drawdown excludes unrealized losses; not equity drawdown.",
+          "Intrabar fills booked at bar close; reservations prevent future-profit sizing."
+        ]
+      },
+      "features": {
+        "trend_separation_atr4": {
+          "rows": [
+            [
+              "lt_0.5",
+              36,
+              36,
+              34,
+              14,
+              20,
+              {
+                "TP": 14,
+                "SL": 20,
+                "OPEN": 2
+              },
+              41.1764705882353,
+              41.1764705882353,
+              0.23529411764705777,
+              1.3999999999999981,
+              0.12951117327159087,
+              1.2201689945617045,
+              1.329524659748988,
+              0.9321188295681067,
+              7,
+              false,
+              "SUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "0.5_to_1",
+              33,
+              33,
+              30,
+              4,
+              26,
+              {
+                "SL": 26,
+                "TP": 4,
+                "OPEN": 2,
+                "AMBIGUOUS": 1
+              },
+              13.333333333333334,
+              13.333333333333334,
+              -0.6000000000000005,
+              0.30769230769230704,
+              -0.6320115071100643,
+              0.2707559533345413,
+              0.9069616020212563,
+              1.272970425741506,
+              15,
+              false,
+              "SUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "ge_1",
+              58,
+              58,
+              52,
+              15,
+              37,
+              {
+                "SL": 37,
+                "TP": 15,
+                "AMBIGUOUS": 5,
+                "OPEN": 1
+              },
+              28.846153846153847,
+              28.846153846153847,
+              -0.13461538461538786,
+              0.8108108108108062,
+              -0.2737406536139722,
+              0.6152834057317147,
+              1.633997457520127,
+              1.0957745814221878,
+              12,
+              false,
+              "SUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "UNKNOWN",
+              0,
+              0,
+              0,
+              0,
+              0,
+              {},
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              true,
+              "INSUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ]
+          ],
+          "resolved_outcome_medians": {
+            "NET_WIN": {
+              "count": 33,
+              "median": 0.6920307371389249
+            },
+            "NET_LOSS": {
+              "count": 83,
+              "median": 0.8693110552958813
+            }
+          }
+        },
+        "entry_extension_atr4": {
+          "rows": [
+            [
+              "lt_0",
+              55,
+              55,
+              47,
+              18,
+              29,
+              {
+                "SL": 29,
+                "AMBIGUOUS": 3,
+                "OPEN": 5,
+                "TP": 18
+              },
+              38.297872340425535,
+              38.297872340425535,
+              0.14893617021276384,
+              1.241379310344824,
+              0.03243966307510267,
+              1.0525746263630973,
+              1.4042684496780475,
+              1.0155627639224747,
+              8,
+              false,
+              "SUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "0_to_1",
+              61,
+              61,
+              58,
+              13,
+              45,
+              {
+                "TP": 13,
+                "SL": 45,
+                "AMBIGUOUS": 3
+              },
+              22.413793103448278,
+              22.413793103448278,
+              -0.3275862068965534,
+              0.5777777777777756,
+              -0.4209720906583202,
+              0.4574137498181651,
+              1.3416014415888795,
+              1.116835354817156,
+              20,
+              false,
+              "SUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "1_to_2",
+              8,
+              8,
+              8,
+              2,
+              6,
+              {
+                "SL": 6,
+                "TP": 2
+              },
+              25.0,
+              25.0,
+              -0.25000000000000344,
+              0.6666666666666621,
+              -0.3624702770427062,
+              0.5167062972763917,
+              1.2982051441907025,
+              1.0427747682107917,
+              4,
+              true,
+              "INSUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "ge_2",
+              3,
+              3,
+              3,
+              0,
+              3,
+              {
+                "SL": 3
+              },
+              0.0,
+              0.0,
+              -1.0,
+              0.0,
+              -1.0,
+              0.0,
+              1.060470794200343,
+              2.003777527358965,
+              3,
+              true,
+              "INSUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "UNKNOWN",
+              0,
+              0,
+              0,
+              0,
+              0,
+              {},
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              true,
+              "INSUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ]
+          ],
+          "resolved_outcome_medians": {
+            "NET_WIN": {
+              "count": 33,
+              "median": -0.16488309853643554
+            },
+            "NET_LOSS": {
+              "count": 83,
+              "median": 0.2628008288074147
+            }
+          }
+        },
+        "stop_width_atr15": {
+          "rows": [
+            [
+              "lt_1",
+              0,
+              0,
+              0,
+              0,
+              0,
+              {},
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              true,
+              "INSUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "1_to_2",
+              66,
+              66,
+              62,
+              18,
+              44,
+              {
+                "SL": 44,
+                "TP": 18,
+                "AMBIGUOUS": 2,
+                "OPEN": 2
+              },
+              29.032258064516128,
+              29.032258064516128,
+              -0.12903225806451873,
+              0.8181818181818145,
+              -0.2551327024720809,
+              0.6404948283347951,
+              1.443184927539719,
+              1.0466319737917826,
+              11,
+              false,
+              "SUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "2_to_3",
+              57,
+              57,
+              51,
+              14,
+              37,
+              {
+                "TP": 14,
+                "SL": 37,
+                "AMBIGUOUS": 4,
+                "OPEN": 2
+              },
+              27.45098039215686,
+              27.45098039215686,
+              -0.17647058823529518,
+              0.7567567567567554,
+              -0.2521977810538603,
+              0.6523760315203547,
+              1.2504605939166735,
+              1.1518994446710462,
+              14,
+              false,
+              "SUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "ge_3",
+              4,
+              4,
+              3,
+              1,
+              2,
+              {
+                "OPEN": 1,
+                "SL": 2,
+                "TP": 1
+              },
+              33.333333333333336,
+              33.333333333333336,
+              -1.7023419710919068e-15,
+              0.9999999999999974,
+              -0.03705497432616781,
+              0.9444175385107483,
+              1.3765328286456504,
+              1.0744590527335647,
+              2,
+              false,
+              "INSUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "UNKNOWN",
+              0,
+              0,
+              0,
+              0,
+              0,
+              {},
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              true,
+              "INSUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ]
+          ],
+          "resolved_outcome_medians": {
+            "NET_WIN": {
+              "count": 33,
+              "median": 1.9866003641363823
+            },
+            "NET_LOSS": {
+              "count": 83,
+              "median": 1.9605723688197985
+            }
+          }
+        },
+        "relative_volume": {
+          "rows": [
+            [
+              "lt_1",
+              81,
+              81,
+              73,
+              22,
+              51,
+              {
+                "TP": 22,
+                "SL": 51,
+                "AMBIGUOUS": 4,
+                "OPEN": 4
+              },
+              30.136986301369863,
+              30.136986301369863,
+              -0.09589041095890574,
+              0.8627450980392133,
+              -0.1958066287280916,
+              0.7197277667225356,
+              1.372625437100729,
+              1.0730570782860829,
+              13,
+              false,
+              "SUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "1_to_2",
+              44,
+              44,
+              41,
+              9,
+              32,
+              {
+                "SL": 32,
+                "TP": 9,
+                "OPEN": 1,
+                "AMBIGUOUS": 2
+              },
+              21.951219512195124,
+              21.951219512195124,
+              -0.3414634146341487,
+              0.562499999999997,
+              -0.44085737985978257,
+              0.4351514820546536,
+              1.2824341334208036,
+              1.1659995106396261,
+              7,
+              false,
+              "SUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "ge_2",
+              2,
+              2,
+              2,
+              2,
+              0,
+              {
+                "TP": 2
+              },
+              100.0,
+              100.0,
+              1.9999999999999973,
+              "INF",
+              1.788778580703689,
+              "INF",
+              2.299548952271868,
+              0.36114228020292954,
+              0,
+              true,
+              "INSUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "UNKNOWN",
+              0,
+              0,
+              0,
+              0,
+              0,
+              {},
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              true,
+              "INSUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ]
+          ],
+          "resolved_outcome_medians": {
+            "NET_WIN": {
+              "count": 33,
+              "median": 0.9857684534050479
+            },
+            "NET_LOSS": {
+              "count": 83,
+              "median": 0.9927136419155118
+            }
+          }
+        },
+        "directional_close_location": {
+          "rows": [
+            [
+              "lt_0.5",
+              5,
+              5,
+              5,
+              1,
+              4,
+              {
+                "SL": 4,
+                "TP": 1
+              },
+              20.0,
+              20.0,
+              -0.4000000000000007,
+              0.49999999999999917,
+              -0.45431835299636847,
+              0.43210205875453944,
+              0.564664308584869,
+              1.3316241957920534,
+              3,
+              true,
+              "INSUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "0.5_to_0.75",
+              33,
+              33,
+              31,
+              13,
+              18,
+              {
+                "SL": 18,
+                "TP": 13,
+                "AMBIGUOUS": 1,
+                "OPEN": 1
+              },
+              41.935483870967744,
+              41.935483870967744,
+              0.2580645161290285,
+              1.444444444444438,
+              0.08559766379304377,
+              1.1474181987546865,
+              1.8168903840184625,
+              0.8759655680114575,
+              8,
+              false,
+              "SUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "ge_0.75",
+              89,
+              89,
+              80,
+              19,
+              61,
+              {
+                "TP": 19,
+                "SL": 61,
+                "OPEN": 4,
+                "AMBIGUOUS": 5
+              },
+              23.75,
+              23.75,
+              -0.28750000000000125,
+              0.6229508196721295,
+              -0.3646676890324614,
+              0.5217472930721818,
+              1.227920385445665,
+              1.1631047203024891,
+              12,
+              false,
+              "SUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "UNKNOWN",
+              0,
+              0,
+              0,
+              0,
+              0,
+              {},
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              true,
+              "INSUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ]
+          ],
+          "resolved_outcome_medians": {
+            "NET_WIN": {
+              "count": 33,
+              "median": 0.8245614035087593
+            },
+            "NET_LOSS": {
+              "count": 83,
+              "median": 0.8623853211009121
+            }
+          }
+        },
+        "friction_share_of_net_stop_risk": {
+          "rows": [
+            [
+              "lt_0.1",
+              60,
+              60,
+              56,
+              17,
+              39,
+              {
+                "TP": 17,
+                "SL": 39,
+                "OPEN": 3,
+                "AMBIGUOUS": 1
+              },
+              30.357142857142858,
+              30.357142857142858,
+              -0.08928571428571531,
+              0.8717948717948704,
+              -0.15376143103117393,
+              0.7792143554424169,
+              1.3436740481179585,
+              1.0961675126996888,
+              15,
+              false,
+              "SUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "0.1_to_0.2",
+              51,
+              51,
+              44,
+              12,
+              32,
+              {
+                "SL": 32,
+                "TP": 12,
+                "AMBIGUOUS": 5,
+                "OPEN": 2
+              },
+              27.272727272727273,
+              27.272727272727273,
+              -0.18181818181818396,
+              0.7499999999999971,
+              -0.2939699772802883,
+              0.5957912812396036,
+              1.066422269513152,
+              1.099731065882489,
+              14,
+              false,
+              "SUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "ge_0.2",
+              16,
+              16,
+              16,
+              4,
+              12,
+              {
+                "SL": 12,
+                "TP": 4
+              },
+              25.0,
+              25.0,
+              -0.25000000000000433,
+              0.6666666666666609,
+              -0.45288501074474796,
+              0.39615331900700274,
+              2.200764233122845,
+              1.0679927250939056,
+              7,
+              true,
+              "INSUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "UNKNOWN",
+              0,
+              0,
+              0,
+              0,
+              0,
+              {},
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              true,
+              "INSUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ]
+          ],
+          "resolved_outcome_medians": {
+            "NET_WIN": {
+              "count": 33,
+              "median": 0.09549471485663806
+            },
+            "NET_LOSS": {
+              "count": 83,
+              "median": 0.10248675178850877
+            }
+          }
+        },
+        "direction": {
+          "rows": [
+            [
+              "LONG",
+              52,
+              52,
+              48,
+              14,
+              34,
+              {
+                "SL": 34,
+                "TP": 14,
+                "AMBIGUOUS": 2,
+                "OPEN": 2
+              },
+              29.166666666666668,
+              29.166666666666668,
+              -0.12500000000000158,
+              0.8235294117647037,
+              -0.22606638935793116,
+              0.6808474503182148,
+              1.3659969943308332,
+              0.9991984583251448,
+              9,
+              false,
+              "SUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "SHORT",
+              75,
+              75,
+              68,
+              19,
+              49,
+              {
+                "TP": 19,
+                "SL": 49,
+                "AMBIGUOUS": 4,
+                "OPEN": 3
+              },
+              27.941176470588236,
+              27.941176470588236,
+              -0.1617647058823551,
+              0.7755102040816297,
+              -0.263827832659025,
+              0.6338715791670674,
+              1.3501867434598513,
+              1.160292723704524,
+              23,
+              false,
+              "SUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "UNKNOWN",
+              0,
+              0,
+              0,
+              0,
+              0,
+              {},
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              true,
+              "INSUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ]
+          ],
+          "resolved_outcome_medians": {
+            "NET_WIN": {
+              "count": 33,
+              "median": null
+            },
+            "NET_LOSS": {
+              "count": 83,
+              "median": null
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "swing",
+      "model": "trend_confirmed_higher_low_lower_high_neck_break_net2r",
+      "original_report_sha256": "341b349b99c164e69614d2313632f48436bcd7930883c7ba3645c17dcc510484",
+      "source_files_verified": 182,
+      "coverage": {
+        "expected_points": 122304,
+        "valid_points": 108492,
+        "failed_markets": 0,
+        "requested_markets": 182,
+        "fetched_markets": 182,
+        "expected_points_all_markets": 122304
+      },
+      "original_metrics_portfolios_reproduced": true,
+      "baseline": {
+        "candidates": 154,
+        "filled": 154,
+        "resolved": 148,
+        "tp": 33,
+        "sl": 115,
+        "statuses": {
+          "TP": 33,
+          "SL": 115,
+          "OPEN": 4,
+          "AMBIGUOUS": 2
+        },
+        "tp_rate_pct": 22.2972972972973,
+        "net_win_rate_pct": 22.2972972972973,
+        "avg_net_r": -0.3310810810810825,
+        "profit_factor": 0.5739130434782591,
+        "stress_avg_net_r": -0.41790788145919266,
+        "stress_profit_factor": 0.4621707264699086,
+        "avg_mfe_price_r": 1.1648431456456454,
+        "avg_mae_price_r": 1.1281865676548484,
+        "max_consecutive_losses": 17,
+        "cohort_complete": false,
+        "sample_status": "SUFFICIENT SAMPLE",
+        "portfolio_roi_pct": null,
+        "interpretation": "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+      },
+      "original_portfolio": {
+        "initial_cash_usdc": 10000,
+        "known_cash_usdc": 10026.52196284516,
+        "realized_net_pnl_usdc": 29.45184913847536,
+        "admitted": 31,
+        "filled": 31,
+        "resolved": 29,
+        "active": 2,
+        "uncertain": 0,
+        "exclusions": {
+          "SIZE_OR_RISK_LIMIT": 80,
+          "CAPACITY_OR_TICKER": 43
+        },
+        "realized_roi_pct": 0.2945184913847536,
+        "closed_portfolio_roi_pct": null,
+        "equity_usdc": null,
+        "max_known_cash_drawdown_pct": 4.35149924172111,
+        "profit_factor": 1.02658437494717,
+        "notes": [
+          "Realized return is not total ROI when positions remain open.",
+          "Cash drawdown excludes unrealized losses; not equity drawdown.",
+          "Intrabar fills booked at bar close; reservations prevent future-profit sizing."
+        ]
+      },
+      "features": {
+        "trend_separation_atr4": {
+          "rows": [
+            [
+              "lt_0.5",
+              50,
+              50,
+              47,
+              8,
+              39,
+              {
+                "TP": 8,
+                "SL": 39,
+                "OPEN": 3
+              },
+              17.02127659574468,
+              17.02127659574468,
+              -0.4893617021276609,
+              0.4102564102564087,
+              -0.5621935286491061,
+              0.3224847218844107,
+              1.0157186818775439,
+              1.1966525634320824,
+              11,
+              false,
+              "SUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "0.5_to_1",
+              36,
+              36,
+              33,
+              11,
+              22,
+              {
+                "SL": 22,
+                "OPEN": 1,
+                "TP": 11,
+                "AMBIGUOUS": 2
+              },
+              33.333333333333336,
+              33.333333333333336,
+              -3.0951672201671033e-16,
+              0.9999999999999996,
+              -0.09880667919941415,
+              0.8517899812008788,
+              1.3236865888614868,
+              0.8973411773707755,
+              9,
+              false,
+              "SUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "ge_1",
+              68,
+              68,
+              68,
+              14,
+              54,
+              {
+                "SL": 54,
+                "TP": 14
+              },
+              20.58823529411765,
+              20.58823529411765,
+              -0.3823529411764725,
+              0.518518518518516,
+              -0.4730389734687038,
+              0.40432129266903966,
+              1.1908286775717924,
+              1.1928923923290309,
+              16,
+              true,
+              "SUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "UNKNOWN",
+              0,
+              0,
+              0,
+              0,
+              0,
+              {},
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              true,
+              "INSUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ]
+          ],
+          "resolved_outcome_medians": {
+            "NET_WIN": {
+              "count": 33,
+              "median": 0.9575516988587106
+            },
+            "NET_LOSS": {
+              "count": 115,
+              "median": 0.9865886488960546
+            }
+          }
+        },
+        "entry_extension_atr4": {
+          "rows": [
+            [
+              "lt_0",
+              3,
+              3,
+              3,
+              1,
+              2,
+              {
+                "TP": 1,
+                "SL": 2
+              },
+              33.333333333333336,
+              33.333333333333336,
+              5.921189464667501e-16,
+              1.0000000000000009,
+              -0.09712319797660474,
+              0.8543152030350929,
+              0.851924580487482,
+              0.8686093147166415,
+              2,
+              true,
+              "INSUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "0_to_1",
+              114,
+              114,
+              110,
+              22,
+              88,
+              {
+                "TP": 22,
+                "SL": 88,
+                "OPEN": 2,
+                "AMBIGUOUS": 2
+              },
+              20.0,
+              20.0,
+              -0.400000000000001,
+              0.4999999999999987,
+              -0.47650578719989467,
+              0.40436776600013163,
+              1.096035947651857,
+              1.1320370095730772,
+              18,
+              false,
+              "SUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "1_to_2",
+              33,
+              33,
+              31,
+              9,
+              22,
+              {
+                "SL": 22,
+                "OPEN": 2,
+                "TP": 9
+              },
+              29.032258064516128,
+              29.032258064516128,
+              -0.12903225806451873,
+              0.8181818181818145,
+              -0.2437989749893453,
+              0.6564650806968316,
+              1.4218768705638403,
+              1.143780336551286,
+              6,
+              false,
+              "SUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "ge_2",
+              4,
+              4,
+              4,
+              1,
+              3,
+              {
+                "SL": 3,
+                "TP": 1
+              },
+              25.0,
+              25.0,
+              -0.2500000000000028,
+              0.666666666666663,
+              -0.39639801134314495,
+              0.47146931820914006,
+              1.2997186462274368,
+              1.0961306456598205,
+              2,
+              true,
+              "INSUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "UNKNOWN",
+              0,
+              0,
+              0,
+              0,
+              0,
+              {},
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              true,
+              "INSUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ]
+          ],
+          "resolved_outcome_medians": {
+            "NET_WIN": {
+              "count": 33,
+              "median": 0.665295403299934
+            },
+            "NET_LOSS": {
+              "count": 115,
+              "median": 0.6331698814133108
+            }
+          }
+        },
+        "stop_width_atr15": {
+          "rows": [
+            [
+              "lt_1",
+              0,
+              0,
+              0,
+              0,
+              0,
+              {},
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              true,
+              "INSUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "1_to_2",
+              47,
+              47,
+              45,
+              9,
+              36,
+              {
+                "SL": 36,
+                "TP": 9,
+                "OPEN": 2
+              },
+              20.0,
+              20.0,
+              -0.4000000000000028,
+              0.49999999999999656,
+              -0.5117637475081989,
+              0.3602953156147515,
+              1.1417732343198683,
+              1.0939142041499048,
+              10,
+              false,
+              "SUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "2_to_3",
+              92,
+              92,
+              88,
+              20,
+              68,
+              {
+                "TP": 20,
+                "SL": 68,
+                "OPEN": 2,
+                "AMBIGUOUS": 2
+              },
+              22.727272727272727,
+              22.727272727272727,
+              -0.3181818181818188,
+              0.5882352941176462,
+              -0.39204392963386253,
+              0.4926490322385308,
+              1.1323337402355969,
+              1.1790458697734862,
+              10,
+              false,
+              "SUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "ge_3",
+              15,
+              15,
+              15,
+              4,
+              11,
+              {
+                "TP": 4,
+                "SL": 11
+              },
+              26.666666666666668,
+              26.666666666666668,
+              -0.20000000000000148,
+              0.7272727272727253,
+              -0.2880754673541108,
+              0.6071698172443943,
+              1.424774724695261,
+              0.9326290857403373,
+              6,
+              true,
+              "INSUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "UNKNOWN",
+              0,
+              0,
+              0,
+              0,
+              0,
+              {},
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              true,
+              "INSUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ]
+          ],
+          "resolved_outcome_medians": {
+            "NET_WIN": {
+              "count": 33,
+              "median": 2.205219129782746
+            },
+            "NET_LOSS": {
+              "count": 115,
+              "median": 2.187872068801454
+            }
+          }
+        },
+        "relative_volume": {
+          "rows": [
+            [
+              "lt_1",
+              90,
+              90,
+              86,
+              19,
+              67,
+              {
+                "SL": 67,
+                "TP": 19,
+                "OPEN": 3,
+                "AMBIGUOUS": 1
+              },
+              22.093023255813954,
+              22.093023255813954,
+              -0.33720930232558194,
+              0.5671641791044769,
+              -0.4178652382606586,
+              0.4636356643221397,
+              1.2096376307834722,
+              1.0976676275885022,
+              20,
+              false,
+              "SUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "1_to_2",
+              58,
+              58,
+              56,
+              13,
+              43,
+              {
+                "TP": 13,
+                "SL": 43,
+                "OPEN": 1,
+                "AMBIGUOUS": 1
+              },
+              23.214285714285715,
+              23.214285714285715,
+              -0.3035714285714313,
+              0.6046511627906941,
+              -0.4073851547618284,
+              0.4694518914729677,
+              1.0881146104704182,
+              1.1767921622248578,
+              12,
+              false,
+              "SUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "ge_2",
+              6,
+              6,
+              6,
+              1,
+              5,
+              {
+                "SL": 5,
+                "TP": 1
+              },
+              16.666666666666668,
+              16.666666666666668,
+              -0.5000000000000001,
+              0.3999999999999998,
+              -0.5167312164802472,
+              0.3799225402237033,
+              1.2389218536389128,
+              1.1119724926190542,
+              4,
+              true,
+              "INSUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "UNKNOWN",
+              0,
+              0,
+              0,
+              0,
+              0,
+              {},
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              true,
+              "INSUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ]
+          ],
+          "resolved_outcome_medians": {
+            "NET_WIN": {
+              "count": 33,
+              "median": 0.9882448730344513
+            },
+            "NET_LOSS": {
+              "count": 115,
+              "median": 0.9935304102184908
+            }
+          }
+        },
+        "directional_close_location": {
+          "rows": [
+            [
+              "lt_0.5",
+              7,
+              7,
+              6,
+              2,
+              4,
+              {
+                "OPEN": 1,
+                "TP": 2,
+                "SL": 4
+              },
+              33.333333333333336,
+              33.333333333333336,
+              -1.3174646558885191e-14,
+              0.9999999999999802,
+              -0.20599045374351632,
+              0.6910143193847256,
+              1.7738760512264098,
+              1.3112564057769647,
+              4,
+              false,
+              "INSUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "0.5_to_0.75",
+              25,
+              25,
+              25,
+              4,
+              21,
+              {
+                "SL": 21,
+                "TP": 4
+              },
+              16.0,
+              16.0,
+              -0.5200000000000005,
+              0.38095238095238043,
+              -0.5536583763378621,
+              0.3408828853120689,
+              0.7555476794917142,
+              1.1673376764418848,
+              7,
+              true,
+              "SUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "ge_0.75",
+              122,
+              122,
+              117,
+              27,
+              90,
+              {
+                "TP": 27,
+                "SL": 90,
+                "OPEN": 3,
+                "AMBIGUOUS": 2
+              },
+              23.076923076923077,
+              23.076923076923077,
+              -0.30769230769230865,
+              0.5999999999999988,
+              -0.39976892585515267,
+              0.4803003963883015,
+              1.2210669851359333,
+              1.1104327492923818,
+              18,
+              false,
+              "SUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "UNKNOWN",
+              0,
+              0,
+              0,
+              0,
+              0,
+              {},
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              true,
+              "INSUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ]
+          ],
+          "resolved_outcome_medians": {
+            "NET_WIN": {
+              "count": 33,
+              "median": 0.933333333333346
+            },
+            "NET_LOSS": {
+              "count": 115,
+              "median": 0.9142857142857096
+            }
+          }
+        },
+        "friction_share_of_net_stop_risk": {
+          "rows": [
+            [
+              "lt_0.1",
+              57,
+              57,
+              55,
+              17,
+              38,
+              {
+                "TP": 17,
+                "SL": 38,
+                "OPEN": 2
+              },
+              30.90909090909091,
+              30.90909090909091,
+              -0.07272727272727308,
+              0.8947368421052626,
+              -0.1323740425744923,
+              0.8084059910106032,
+              1.2439685489642316,
+              0.9806958284413,
+              7,
+              false,
+              "SUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "0.1_to_0.2",
+              51,
+              51,
+              50,
+              6,
+              44,
+              {
+                "SL": 44,
+                "TP": 6,
+                "AMBIGUOUS": 1
+              },
+              12.0,
+              12.0,
+              -0.6400000000000002,
+              0.27272727272727254,
+              -0.6880833406465985,
+              0.21808711290159263,
+              0.981151150865184,
+              1.3358436715147364,
+              14,
+              false,
+              "SUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "ge_0.2",
+              46,
+              46,
+              43,
+              10,
+              33,
+              {
+                "SL": 33,
+                "TP": 10,
+                "OPEN": 2,
+                "AMBIGUOUS": 1
+              },
+              23.25581395348837,
+              23.25581395348837,
+              -0.30232558139535287,
+              0.6060606060606007,
+              -0.46896807167519794,
+              0.38892039145352997,
+              1.2772315771921763,
+              1.0753757644862614,
+              14,
+              false,
+              "SUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "UNKNOWN",
+              0,
+              0,
+              0,
+              0,
+              0,
+              {},
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              true,
+              "INSUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ]
+          ],
+          "resolved_outcome_medians": {
+            "NET_WIN": {
+              "count": 33,
+              "median": 0.09334878619546955
+            },
+            "NET_LOSS": {
+              "count": 115,
+              "median": 0.15085276869346478
+            }
+          }
+        },
+        "direction": {
+          "rows": [
+            [
+              "LONG",
+              99,
+              99,
+              96,
+              29,
+              67,
+              {
+                "SL": 67,
+                "TP": 29,
+                "OPEN": 1,
+                "AMBIGUOUS": 2
+              },
+              30.208333333333332,
+              30.208333333333332,
+              -0.09375000000000193,
+              0.8656716417910421,
+              -0.213066079094028,
+              0.6947112896563181,
+              1.4024384997987516,
+              1.0529170736548137,
+              15,
+              false,
+              "SUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "SHORT",
+              55,
+              55,
+              52,
+              4,
+              48,
+              {
+                "TP": 4,
+                "SL": 48,
+                "OPEN": 3
+              },
+              7.6923076923076925,
+              7.6923076923076925,
+              -0.7692307692307696,
+              0.16666666666666632,
+              -0.7960773627487274,
+              0.13758285702221199,
+              0.726205568747603,
+              1.2671456335010665,
+              17,
+              false,
+              "SUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "UNKNOWN",
+              0,
+              0,
+              0,
+              0,
+              0,
+              {},
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              true,
+              "INSUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ]
+          ],
+          "resolved_outcome_medians": {
+            "NET_WIN": {
+              "count": 33,
+              "median": null
+            },
+            "NET_LOSS": {
+              "count": 115,
+              "median": null
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "inside",
+      "model": "trend_two_nested_inside_bars_release_net2r",
+      "original_report_sha256": "70fe0b9ce3686bc219b1d75d5f27aef80b341c19caf7705683397ad4175d8890",
+      "source_files_verified": 182,
+      "coverage": {
+        "expected_points": 122304,
+        "valid_points": 108492,
+        "failed_markets": 0,
+        "requested_markets": 182,
+        "fetched_markets": 182,
+        "expected_points_all_markets": 122304
+      },
+      "original_metrics_portfolios_reproduced": true,
+      "baseline": {
+        "candidates": 45,
+        "filled": 45,
+        "resolved": 40,
+        "tp": 10,
+        "sl": 30,
+        "statuses": {
+          "TP": 10,
+          "SL": 30,
+          "OPEN": 3,
+          "AMBIGUOUS": 2
+        },
+        "tp_rate_pct": 25.0,
+        "net_win_rate_pct": 25.0,
+        "avg_net_r": -0.25000000000000305,
+        "profit_factor": 0.6666666666666626,
+        "stress_avg_net_r": -0.356686024671068,
+        "stress_profit_factor": 0.5244186337719092,
+        "avg_mfe_price_r": 1.205772261112144,
+        "avg_mae_price_r": 1.0829451286280678,
+        "max_consecutive_losses": 11,
+        "cohort_complete": false,
+        "sample_status": "SUFFICIENT SAMPLE",
+        "portfolio_roi_pct": null,
+        "interpretation": "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+      },
+      "original_portfolio": {
+        "initial_cash_usdc": 10000,
+        "known_cash_usdc": 9963.170220554588,
+        "realized_net_pnl_usdc": -31.84778022901512,
+        "admitted": 23,
+        "filled": 23,
+        "resolved": 21,
+        "active": 2,
+        "uncertain": 1,
+        "exclusions": {
+          "SIZE_OR_RISK_LIMIT": 18,
+          "CAPACITY_OR_TICKER": 4
+        },
+        "realized_roi_pct": null,
+        "closed_portfolio_roi_pct": null,
+        "equity_usdc": null,
+        "max_known_cash_drawdown_pct": 4.568196450330209,
+        "profit_factor": 0.9578698619458694,
+        "notes": [
+          "Realized return is not total ROI when positions remain open.",
+          "Cash drawdown excludes unrealized losses; not equity drawdown.",
+          "Intrabar fills booked at bar close; reservations prevent future-profit sizing."
+        ]
+      },
+      "features": {
+        "trend_separation_atr4": {
+          "rows": [
+            [
+              "lt_0.5",
+              7,
+              7,
+              7,
+              2,
+              5,
+              {
+                "TP": 2,
+                "SL": 5
+              },
+              28.571428571428573,
+              28.571428571428573,
+              -0.14285714285714338,
+              0.7999999999999993,
+              -0.2090809656931251,
+              0.7072866480296248,
+              0.75737514217133,
+              0.9758569241819263,
+              2,
+              true,
+              "INSUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "0.5_to_1",
+              16,
+              16,
+              13,
+              4,
+              9,
+              {
+                "SL": 9,
+                "OPEN": 1,
+                "TP": 4,
+                "AMBIGUOUS": 2
+              },
+              30.76923076923077,
+              30.76923076923077,
+              -0.07692307692307918,
+              0.8888888888888856,
+              -0.215772647695857,
+              0.6883283977726511,
+              1.527257081828754,
+              1.1061700464284938,
+              5,
+              false,
+              "INSUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "ge_1",
+              22,
+              22,
+              20,
+              4,
+              16,
+              {
+                "SL": 16,
+                "TP": 4,
+                "OPEN": 2
+              },
+              20.0,
+              20.0,
+              -0.40000000000000446,
+              0.49999999999999445,
+              -0.4999414903472353,
+              0.3750731370659559,
+              1.1537461192756324,
+              1.1053298036139403,
+              9,
+              false,
+              "SUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "UNKNOWN",
+              0,
+              0,
+              0,
+              0,
+              0,
+              {},
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              true,
+              "INSUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ]
+          ],
+          "resolved_outcome_medians": {
+            "NET_WIN": {
+              "count": 10,
+              "median": 0.8409118903001072
+            },
+            "NET_LOSS": {
+              "count": 30,
+              "median": 1.0447791764085788
+            }
+          }
+        },
+        "entry_extension_atr4": {
+          "rows": [
+            [
+              "lt_0",
+              1,
+              1,
+              1,
+              0,
+              1,
+              {
+                "SL": 1
+              },
+              0.0,
+              0.0,
+              -1.0,
+              0.0,
+              -1.0,
+              0.0,
+              0.5642133005888983,
+              1.0368210458835105,
+              1,
+              true,
+              "INSUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "0_to_1",
+              28,
+              28,
+              26,
+              8,
+              18,
+              {
+                "TP": 8,
+                "SL": 18,
+                "OPEN": 2
+              },
+              30.76923076923077,
+              30.76923076923077,
+              -0.07692307692308066,
+              0.8888888888888835,
+              -0.1991628448428849,
+              0.712320335226944,
+              1.3579452773711809,
+              0.9552031461768761,
+              6,
+              false,
+              "SUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "1_to_2",
+              14,
+              14,
+              12,
+              2,
+              10,
+              {
+                "SL": 10,
+                "TP": 2,
+                "AMBIGUOUS": 2
+              },
+              16.666666666666668,
+              16.666666666666668,
+              -0.5000000000000021,
+              0.3999999999999975,
+              -0.5907672517439762,
+              0.29107929790722853,
+              0.9727446454230038,
+              1.3611352358938371,
+              7,
+              false,
+              "INSUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "ge_2",
+              2,
+              2,
+              1,
+              0,
+              1,
+              {
+                "SL": 1,
+                "OPEN": 1
+              },
+              0.0,
+              0.0,
+              -1.0,
+              0.0,
+              -1.0,
+              0.0,
+              0.6871641871701145,
+              1.1120794679143728,
+              1,
+              false,
+              "INSUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "UNKNOWN",
+              0,
+              0,
+              0,
+              0,
+              0,
+              {},
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              true,
+              "INSUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ]
+          ],
+          "resolved_outcome_medians": {
+            "NET_WIN": {
+              "count": 10,
+              "median": 0.8116837273727113
+            },
+            "NET_LOSS": {
+              "count": 30,
+              "median": 0.735787174493691
+            }
+          }
+        },
+        "stop_width_atr15": {
+          "rows": [
+            [
+              "lt_1",
+              2,
+              2,
+              1,
+              0,
+              1,
+              {
+                "OPEN": 1,
+                "SL": 1
+              },
+              0.0,
+              0.0,
+              -1.0,
+              0.0,
+              -1.0,
+              0.0,
+              0.0,
+              1.315344622426126,
+              1,
+              false,
+              "INSUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "1_to_2",
+              29,
+              29,
+              25,
+              7,
+              18,
+              {
+                "TP": 7,
+                "SL": 18,
+                "AMBIGUOUS": 2,
+                "OPEN": 2
+              },
+              28.0,
+              28.0,
+              -0.16000000000000172,
+              0.7777777777777755,
+              -0.27616917825057774,
+              0.6164316968741976,
+              1.150435824142614,
+              1.081354678693113,
+              6,
+              false,
+              "SUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "2_to_3",
+              12,
+              12,
+              12,
+              3,
+              9,
+              {
+                "SL": 9,
+                "TP": 3
+              },
+              25.0,
+              25.0,
+              -0.2500000000000066,
+              0.6666666666666579,
+              -0.36360096088152327,
+              0.5151987188246356,
+              1.6224995700767009,
+              1.0801986518562758,
+              5,
+              true,
+              "INSUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "ge_3",
+              2,
+              2,
+              2,
+              0,
+              2,
+              {
+                "SL": 2
+              },
+              0.0,
+              0.0,
+              -1.0,
+              0.0,
+              -1.0,
+              0.0,
+              0.0,
+              1.0031048665467233,
+              2,
+              true,
+              "INSUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "UNKNOWN",
+              0,
+              0,
+              0,
+              0,
+              0,
+              {},
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              true,
+              "INSUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ]
+          ],
+          "resolved_outcome_medians": {
+            "NET_WIN": {
+              "count": 10,
+              "median": 1.8644563677385273
+            },
+            "NET_LOSS": {
+              "count": 30,
+              "median": 1.915591242437445
+            }
+          }
+        },
+        "relative_volume": {
+          "rows": [
+            [
+              "lt_1",
+              27,
+              27,
+              25,
+              7,
+              18,
+              {
+                "SL": 18,
+                "TP": 7,
+                "AMBIGUOUS": 1,
+                "OPEN": 1
+              },
+              28.0,
+              28.0,
+              -0.16000000000000433,
+              0.7777777777777718,
+              -0.28172775876607553,
+              0.6087114461582285,
+              1.3663365127861111,
+              1.0749200090858901,
+              8,
+              false,
+              "SUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "1_to_2",
+              18,
+              18,
+              15,
+              3,
+              12,
+              {
+                "TP": 3,
+                "SL": 12,
+                "OPEN": 2,
+                "AMBIGUOUS": 1
+              },
+              20.0,
+              20.0,
+              -0.4000000000000009,
+              0.49999999999999883,
+              -0.4816164678460556,
+              0.3979794151924305,
+              0.9381651749888655,
+              1.0963203278650304,
+              5,
+              false,
+              "INSUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "ge_2",
+              0,
+              0,
+              0,
+              0,
+              0,
+              {},
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              true,
+              "INSUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "UNKNOWN",
+              0,
+              0,
+              0,
+              0,
+              0,
+              {},
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              true,
+              "INSUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ]
+          ],
+          "resolved_outcome_medians": {
+            "NET_WIN": {
+              "count": 10,
+              "median": 0.984901662570298
+            },
+            "NET_LOSS": {
+              "count": 30,
+              "median": 0.9809931926756006
+            }
+          }
+        },
+        "directional_close_location": {
+          "rows": [
+            [
+              "lt_0.5",
+              2,
+              2,
+              1,
+              0,
+              1,
+              {
+                "SL": 1,
+                "OPEN": 1
+              },
+              0.0,
+              0.0,
+              -1.0,
+              0.0,
+              -1.0,
+              0.0,
+              2.077144870189559,
+              1.5007390449193763,
+              1,
+              false,
+              "INSUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "0.5_to_0.75",
+              12,
+              12,
+              10,
+              1,
+              9,
+              {
+                "SL": 9,
+                "TP": 1,
+                "AMBIGUOUS": 1,
+                "OPEN": 1
+              },
+              10.0,
+              10.0,
+              -0.7000000000000005,
+              0.22222222222222163,
+              -0.7254176056078807,
+              0.1939804382134659,
+              1.0123927930110566,
+              1.0985728804280797,
+              7,
+              false,
+              "INSUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "ge_0.75",
+              31,
+              31,
+              29,
+              9,
+              20,
+              {
+                "TP": 9,
+                "SL": 20,
+                "AMBIGUOUS": 1,
+                "OPEN": 1
+              },
+              31.03448275862069,
+              31.03448275862069,
+              -0.06896551724138333,
+              0.8999999999999941,
+              -0.20735396312979018,
+              0.6993367534618042,
+              1.2424075049719185,
+              1.0631495619283633,
+              9,
+              false,
+              "SUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "UNKNOWN",
+              0,
+              0,
+              0,
+              0,
+              0,
+              {},
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              true,
+              "INSUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ]
+          ],
+          "resolved_outcome_medians": {
+            "NET_WIN": {
+              "count": 10,
+              "median": 0.9807692307692251
+            },
+            "NET_LOSS": {
+              "count": 30,
+              "median": 0.9650880388585164
+            }
+          }
+        },
+        "friction_share_of_net_stop_risk": {
+          "rows": [
+            [
+              "lt_0.1",
+              9,
+              9,
+              8,
+              3,
+              5,
+              {
+                "TP": 3,
+                "SL": 5,
+                "OPEN": 1
+              },
+              37.5,
+              37.5,
+              0.12499999999999889,
+              1.1999999999999982,
+              0.035282148008664665,
+              1.0564514368138636,
+              1.2442725084180073,
+              0.9027190219178868,
+              4,
+              false,
+              "INSUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "0.1_to_0.2",
+              19,
+              19,
+              18,
+              5,
+              13,
+              {
+                "SL": 13,
+                "TP": 5,
+                "AMBIGUOUS": 1
+              },
+              27.77777777777778,
+              27.77777777777778,
+              -0.16666666666666913,
+              0.7692307692307658,
+              -0.28519839906304983,
+              0.6051099089896232,
+              1.480718833704108,
+              1.2042235658661617,
+              6,
+              false,
+              "INSUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "ge_0.2",
+              17,
+              17,
+              14,
+              2,
+              12,
+              {
+                "OPEN": 2,
+                "SL": 12,
+                "TP": 2,
+                "AMBIGUOUS": 1
+              },
+              14.285714285714286,
+              14.285714285714286,
+              -0.5714285714285764,
+              0.33333333333332754,
+              -0.6725804991269387,
+              0.21532275101857148,
+              0.8302693836048399,
+              1.0300020560134786,
+              5,
+              false,
+              "INSUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "UNKNOWN",
+              0,
+              0,
+              0,
+              0,
+              0,
+              {},
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              true,
+              "INSUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ]
+          ],
+          "resolved_outcome_medians": {
+            "NET_WIN": {
+              "count": 10,
+              "median": 0.14562353263884437
+            },
+            "NET_LOSS": {
+              "count": 30,
+              "median": 0.17331261270828158
+            }
+          }
+        },
+        "direction": {
+          "rows": [
+            [
+              "LONG",
+              19,
+              19,
+              18,
+              5,
+              13,
+              {
+                "SL": 13,
+                "TP": 5,
+                "AMBIGUOUS": 1
+              },
+              27.77777777777778,
+              27.77777777777778,
+              -0.1666666666666724,
+              0.7692307692307613,
+              -0.31379061836815014,
+              0.5655206822594845,
+              1.5461930813617664,
+              0.9788362056194988,
+              5,
+              false,
+              "INSUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "SHORT",
+              26,
+              26,
+              22,
+              5,
+              17,
+              {
+                "TP": 5,
+                "SL": 17,
+                "OPEN": 3,
+                "AMBIGUOUS": 1
+              },
+              22.727272727272727,
+              22.727272727272727,
+              -0.31818181818181906,
+              0.5882352941176459,
+              -0.39178226619163725,
+              0.4929876555167047,
+              0.927246135453362,
+              1.1681251565441695,
+              9,
+              false,
+              "SUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ],
+            [
+              "UNKNOWN",
+              0,
+              0,
+              0,
+              0,
+              0,
+              {},
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              true,
+              "INSUFFICIENT SAMPLE",
+              null,
+              "EXPLORATORY_SUBGROUP_NOT_VALIDATED_STRATEGY"
+            ]
+          ],
+          "resolved_outcome_medians": {
+            "NET_WIN": {
+              "count": 10,
+              "median": null
+            },
+            "NET_LOSS": {
+              "count": 30,
+              "median": null
+            }
+          }
+        }
+      }
+    }
+  ],
+  "design_proposal": {
+    "name": "NET_PROFIT_ROOM_FIRST_ENTRY",
+    "same_as_existing_frozen_pending_principle": true,
+    "new_strategy_registered": false,
+    "description": "Fix valid structural SL/TP and strict 4H+15M confirmation first; inverse-price a fee/slippage-inclusive2R limit, wait only4bars, reject impossible prices. Investigate cost/entry-location rather than retune killed shapes. No10%fee filter implemented.",
+    "practical_margin_demonstrated": false,
+    "entry_count_increase_demonstrated": false,
+    "subset_roi_verified": false
+  },
+  "decision": "EXPLORATORY_PROFIT_ORIGIN_DIAGNOSIS_NO_PROMOTION",
+  "all_original_kill_decisions_preserved": true
+}
