@@ -195,6 +195,10 @@ class ArchiveTests(unittest.TestCase):
         self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup)
         self.root=Path(self.temp.name);p=study.protocol()
         p['source_universe_sha256']=study.digest(study.canonical([asdict(CONTRACT)]))
+        # This is a synthetic protocol, just like its synthetic universe/source.
+        # Pin the test checkout; do not rewrite the real registered server hash.
+        p['frozen_dependencies_sha256']['analysis_terminal/server.py']=study.digest(
+            (study.ROOT/'analysis_terminal/server.py').read_bytes())
         source=dict(dataset='RETROSPECTIVE',eligible_for_live_promotion=False,
             start_ms=p['development']['start_ms'],end_ms=p['development']['end_ms'],
             manifest=dict(parameters=p['production_parameters'],rule_fingerprint=p['production_rule_fingerprint'],
@@ -230,6 +234,21 @@ class ArchiveTests(unittest.TestCase):
     def test_registered_protocol_and_changed_analyzer_stop(self):
         self.proto.write_bytes(self.proto.read_bytes()+b' ')
         with self.assertRaisesRegex(ValueError,'protocol changed'):self.run_archive()
+
+    def test_synthetic_fixture_still_rejects_changed_analyzer(self):
+        def changed_analyzer(*args,**kwargs):return {}
+        with self.assertRaisesRegex(ValueError,'Frozen analysis changed'):
+            study.frozen(changed_analyzer,server.SETTINGS)
+
+    def test_real_registered_server_dependency_is_not_relaxed_by_fixture(self):
+        original_path=study.ROOT/'.github/research/local15_structure_protocol.json'
+        with patch.object(study,'PROTOCOL',original_path), \
+             patch.object(study,'PROTOCOL_SHA256','5ddc5d2e11a5b058bf00dc4754f088c2df821d9c2e910e2a73efc084865213dd'):
+            registered=study.protocol()
+            self.assertEqual(registered['frozen_dependencies_sha256']['analysis_terminal/server.py'],
+                             'a3d5de24681200106bab6d50d24c4bcd26c9ff9969fe2de60e1159583e110858')
+            with self.assertRaisesRegex(ValueError,'Frozen dependency changed'):
+                study.frozen(server.analyze_contract,server.SETTINGS)
 
 
 if __name__=='__main__':unittest.main()
