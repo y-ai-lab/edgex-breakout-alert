@@ -6,6 +6,7 @@ CREATE notional differs for the experimental arm; no outcome/fill changes.
 import argparse
 from collections import Counter
 from copy import deepcopy
+from dataclasses import fields
 from datetime import datetime
 import hashlib
 import json
@@ -21,6 +22,7 @@ from analysis_terminal import pending_entry_replay as engine
 from analysis_terminal import pending_followup as follow
 from analysis_terminal import execution_funnel as funnel
 from analysis_terminal.vwap_reclaim_replay import stressed_metrics
+from analysis_terminal.replay import rule_fingerprint, strategy_parameters
 
 STEP, FEE = engine.STEP, engine.FEE
 floor_size, cost_levels = engine.floor_size, engine.cost_levels
@@ -132,25 +134,29 @@ def _portfolio(records, *, equal_ceiling):
     return summary, admitted, creations
 
 
-def compare(records, expected):
-    """Preserve original ledger; both models use identical allocation rules."""
-    if len({r['key'] for r in records}) != len(records):
-        raise ValueError('Duplicate setup key')
-    before = deepcopy(records)
-    original, _, _ = _portfolio(records, equal_ceiling=False)
-    if original != expected or original != engine.portfolio(records):
-        raise ValueError('Original portfolio does not reproduce exactly')
-    proposal, admitted, creations = _portfolio(records, equal_ceiling=True)
+def funded_rows(records, admitted):
     selected = []
     for r in records:
         if r['key'] not in admitted:
             continue
         o = admitted[r['key']]
-        row = dict(r, status=o['status'],
-                   filled_ms=r['filled_ms'] if o['filled'] else None)
+        row = dict(r, status=o['status'], filled_ms=r['filled_ms'] if o['filled'] else None)
         if o['status'] not in {'TP', 'SL'}:
             row['final_net_r'] = None
         selected.append(row)
+    return selected
+
+
+def compare(records, expected):
+    """Preserve original ledger; both models use identical allocation rules."""
+    if len({r['key'] for r in records}) != len(records):
+        raise ValueError('Duplicate setup key')
+    before = deepcopy(records)
+    original, original_orders, _ = _portfolio(records, equal_ceiling=False)
+    if original != expected or original != engine.portfolio(records):
+        raise ValueError('Original portfolio does not reproduce exactly')
+    proposal, admitted, creations = _portfolio(records, equal_ceiling=True)
+    selected = funded_rows(records, admitted)
     done = [r for r in selected if r['status'] in {'TP', 'SL'}]
     stressed_cash = 0.0
     for r in done:
@@ -159,13 +165,13 @@ def compare(records, expected):
         exit_price = r['exit_price']/(1-d*engine.SLIP)*(1-d*.0005)
         pnl = d*(exit_price-entry)-.001*(entry+exit_price)
         stressed_cash += admitted[r['key']]['quantity']*pnl
-    old_fills = {k for k, o in _portfolio(records, equal_ceiling=False)[1].items()
-                 if o['filled']}
+    old_fills = {k for k, o in original_orders.items() if o['filled']}
     new_fills = {k for k, o in admitted.items() if o['filled']}
     shared, added, missing = old_fills & new_fills, new_fills-old_fills, old_fills-new_fills
     if records != before:
         raise ValueError('Allocation mutated source ledger')
     result = dict(original_portfolio=original, equal_ceiling_portfolio=proposal,
+                  original_funded_metrics=engine.metrics(funded_rows(records, original_orders)),
                   funded_metrics=engine.metrics(selected),
                   funded_stress_metrics=stressed_metrics(selected),
                   uncapped_metrics_unchanged=engine.metrics(records),
@@ -195,6 +201,8 @@ def review(source_dir, ledger_path, *, role, now_ms):
     source = json.loads(source_path.read_bytes())
     if (report['start_ms'], report['end_ms']) != (period['start_ms'], period['end_ms']):
         raise ValueError('Unregistered market window')
+    if report.get('period_complete') is not period.get('period_complete', True):
+        raise ValueError('Partial period cannot be treated as complete')
     if role == 'development' and (sha(ledger_path) != period['ledger_sha256']
                                   or sha(source_path) != period['source_sha256']):
         raise ValueError('Viewed development archive changed')
@@ -209,6 +217,14 @@ def review(source_dir, ledger_path, *, role, now_ms):
         if not path.is_relative_to(source_dir.resolve()) or sha(path) != item['sha256']:
             raise ValueError('Public source archive hash/path mismatch')
     funnel.summarize(report)
+    if role != 'development':
+        from analysis_terminal import server
+        reconstructed = build_registered_controls(source_dir, role=role, now_ms=now_ms,
+                                                   analyze=server.analyze_contract, settings=server.SETTINGS)
+        for field in ('records', 'markets', 'metrics', 'portfolios', 'opportunities',
+                      'coverage', 'baseline_first_entries_reproduced', 'source_files_verified'):
+            if reconstructed[field] != report[field]:
+                raise ValueError('Original full market ledger does not reproduce')
     groups = {m: [r for r in report['records'] if r['model'] == m] for m in engine.MODELS}
     models, orders, evidence = {}, {}, {}
     for model, rows in groups.items():
@@ -228,6 +244,25 @@ def review(source_dir, ledger_path, *, role, now_ms):
                       current_filled_missing_in_proposal=len(shared-proposed),
                       net_filled_count_difference=len(proposed)-len(shared))
     m = models[proposal]['funded_metrics']
+    s = models[proposal]['funded_stress_metrics']
+    p = models[proposal]['equal_ceiling_portfolio']
+    uncapped_delta = (report['metrics'][proposal]['filled']
+                      -report['metrics'][current]['filled'])
+    checks = dict(minimum_50_funded_resolved=m['resolved'] >= 50,
+                  net_win_rate_at_least_40=m['win_rate'] is not None and m['win_rate'] >= 40,
+                  base_avg_r_positive=m['avg_net_r'] is not None and m['avg_net_r'] > 0,
+                  base_pf_at_least_1_2=m['profit_factor'] == 'INF' or
+                                      m['profit_factor'] is not None and m['profit_factor'] >= 1.2,
+                  stress_avg_r_positive=s['avg_net_r'] is not None and s['avg_net_r'] > 0,
+                  stress_pf_above_1=s['profit_factor'] == 'INF' or
+                                    s['profit_factor'] is not None and s['profit_factor'] > 1,
+                  uncapped_fill_gain_positive=uncapped_delta > 0,
+                  same_allocator_capped_fill_gain_positive=comparison['net_filled_count_difference'] > 0,
+                  allocation_only_capped_fill_gain_positive=models[proposal]['allocation_fill_comparison']['net_fill_difference'] > 0,
+                  minimum_20_capped_resolved=p['resolved'] >= 20,
+                  known_positive_final_roi=p['closed_portfolio_roi_pct'] is not None and p['closed_portfolio_roi_pct'] > 0,
+                  no_active_or_uncertain_capital=not (p['active'] or p['uncertain']),
+                  funding_and_actual_execution_verified=False)
     negative = m['resolved'] >= 20 and (m['avg_net_r'] <= 0 or m['profit_factor'] != 'INF' and m['profit_factor'] <= 1)
     blocked = any(r['status'] in {'AMBIGUOUS', 'DATA_GAP', 'INVALIDATED_GAP'}
                   for r in report['records']) or bool(source['manifest']['failures'])
@@ -244,10 +279,14 @@ def review(source_dir, ledger_path, *, role, now_ms):
                   entry_period_complete=period.get('period_complete', True),
                   previously_viewed=period['market_already_viewed'],
                   source_sha256=sha(source_path), ledger_sha256=sha(ledger_path),
+                  source_coverage=source['coverage'],
                   models=models, capped_proposal_vs_same_allocator_current=comparison,
+                  qualification_checks=checks, selection_qualified=False,
                   decision=decision, data_quality_status='BLOCKED_DATA_QUALITY' if blocked else 'NO_BLOCKED_RECORDS',
                   original_entries_outcomes_metrics_portfolios_preserved=True,
-                  future_periods_unopened=True, actual_execution_evidence=False,
+                  unopened_future_periods=[p['id'] for p in plan['future_periods']
+                                           if role == 'development' or p['id'] > role],
+                  actual_execution_evidence=False,
                   eligible_for_live_promotion=False, real_orders_enabled=False,
                   automatic_promotion=False, changes_live_rules=False,
                   limitations=plan['limitations']+[
@@ -257,12 +296,71 @@ def review(source_dir, ledger_path, *, role, now_ms):
     return result, dict(admitted=orders, creation_evidence=evidence)
 
 
+def build_registered_controls(source_dir, *, role, now_ms, analyze, settings):
+    """Use frozen candidate/evaluator bytes on this experiment's own weeks.
+
+    The old weekly runner deliberately rejects a different weekly anchor. This
+    isolated adapter calls its unchanged market function, verifies both archived
+    controls and retains their original costs. It never edits the old protocol.
+    """
+    plan = validate_plan()
+    periods = {p['id']: p for p in plan['future_periods']}
+    if role not in periods or type(now_ms) is not int:
+        raise ValueError('Only registered future allocation periods supported')
+    period = periods[role]
+    if now_ms < period['end_ms']:
+        raise ValueError('Registered period has not ended')
+    source = json.loads((source_dir/'replay-report.json').read_bytes())
+    parameters = strategy_parameters(settings)
+    registered = json.loads(engine.PROTOCOL.read_bytes())['production_parameters']
+    if (source.get('dataset') != 'RETROSPECTIVE'
+            or source.get('eligible_for_live_promotion') is not False
+            or (source['start_ms'], source['end_ms']) != (period['start_ms'], period['end_ms'])
+            or parameters != registered or source['manifest']['parameters'] != parameters
+            or source['manifest']['rule_fingerprint'] != rule_fingerprint(analyze, settings)):
+        raise ValueError('Unregistered source window or changed entry conditions')
+    records, markets = [], []
+    allowed = {f.name for f in fields(engine.scanner.Contract)}
+    for item in source['manifest']['sources']:
+        path = (source_dir/item['file']).resolve()
+        if not path.is_relative_to(source_dir.resolve()) or sha(path) != item['sha256']:
+            raise ValueError('Public source archive hash/path mismatch')
+        data = json.loads(path.read_bytes())
+        contract = engine.scanner.Contract(**{k: v for k, v in data['contract'].items() if k in allowed})
+        market = engine.replay_market(contract, [engine.scanner.Candle(**c) for c in data['HOUR_4']],
+                                      [engine.scanner.Candle(**c) for c in data['MINUTE_15']],
+                                      analyze, settings, start_ms=period['start_ms'], end_ms=period['end_ms'])
+        records.extend(market.pop('records')); markets.append(market)
+    groups = {m: [r for r in records if r['model'] == m] for m in engine.MODELS}
+    for model, archived_model in zip(engine.MODELS[:2], ('current', 'shadow')):
+        computed = {(r['setup_id'], r['created_ms'], r['trigger'], r['stop'], r['target']) for r in groups[model]}
+        archived = {(r['setup_id'], r['created_ms'], r['entry'], r['stop'], r['target']) for r in source['signals'][archived_model]}
+        if computed != archived or len(computed) != len(groups[model]):
+            raise ValueError('Archived first-entry control mismatch')
+    current = {r['setup_id'] for r in groups[engine.MODELS[0]] if r['filled_ms'] is not None}
+    proposed = {r['setup_id'] for r in groups[engine.MODEL] if r['filled_ms'] is not None}
+    return dict(protocol=json.loads(engine.PROTOCOL.read_text())['protocol'], dataset='RETROSPECTIVE',
+                role='REGISTERED_ALLOCATION_ONLY_CONTROL_REPLAY',
+                eligible_for_live_promotion=False, automatic_promotion=False, real_orders_enabled=False,
+                start_ms=period['start_ms'], end_ms=period['end_ms'], period_complete=True,
+                production_rule_fingerprint=source['manifest']['rule_fingerprint'],
+                source_rule_fingerprint=source['manifest']['rule_fingerprint'], baseline_first_entries_reproduced=True,
+                protocol_sha256=sha(engine.PROTOCOL), engine_sha256=sha(Path(engine.__file__)),
+                source_files_verified=len(markets), coverage=source['coverage'],
+                metrics={m: engine.metrics(rows) for m, rows in groups.items()},
+                portfolios={m: engine.portfolio(rows) for m, rows in groups.items()},
+                opportunities=dict(additional_filled_setups_vs_current=len(proposed-current), shared_filled_setups=len(proposed & current)),
+                markets=markets, records=records, limitations=plan['limitations'])
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source', type=Path, required=True)
     parser.add_argument('--ledger', type=Path, required=True)
     parser.add_argument('--role', choices=('development', 'future_validation_1', 'future_validation_2'), required=True)
     parser.add_argument('--previous-review', type=Path)
+    parser.add_argument('--build-controls', action='store_true',
+                        help='Build unchanged market controls for a completed registered future week')
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     if args.output.exists():
@@ -278,7 +376,17 @@ def main():
                 or (previous.get('start_ms'), previous.get('end_ms')) != (p['start_ms'], p['end_ms'])
                 or previous.get('decision') in {'KILL_ALLOCATION_NO_PROMOTION', 'BLOCKED_DATA_QUALITY'}):
             raise ValueError('Prior holdout missing, blocked, mismatched or KILL')
-    result, _ = review(args.source, args.ledger, role=args.role, now_ms=int(time.time()*1000))
+    now_ms = int(time.time()*1000)
+    if args.build_controls:
+        if args.ledger.exists():
+            raise ValueError('Never replace a sealed control ledger')
+        from analysis_terminal import server
+        controls = build_registered_controls(args.source, role=args.role, now_ms=now_ms,
+                                              analyze=server.analyze_contract, settings=server.SETTINGS)
+        with args.ledger.open('x') as out:
+            json.dump(controls, out, indent=2, allow_nan=False)
+            out.write('\n')
+    result, _ = review(args.source, args.ledger, role=args.role, now_ms=now_ms)
     with args.output.open('x') as out:
         json.dump(result, out, indent=2, ensure_ascii=False)
         out.write('\n')

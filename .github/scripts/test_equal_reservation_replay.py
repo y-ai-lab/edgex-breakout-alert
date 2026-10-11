@@ -190,6 +190,20 @@ class EqualReservationTests(unittest.TestCase):
         self.assertEqual(result['equal_ceiling_portfolio']['filled'], 0)
         self.assertIsNone(result['funded_metrics']['win_rate'])
 
+    def test_future_control_builder_does_not_open_unfinished_prices(self):
+        plan = allocation.validate_plan(); p = plan['future_periods'][0]
+        with patch.object(allocation, 'validate_plan', return_value=plan), \
+                patch.object(Path, 'read_bytes', side_effect=AssertionError('peeked')):
+            with self.assertRaisesRegex(ValueError, 'has not ended'):
+                allocation.build_registered_controls(Path('missing'), role=p['id'],
+                                                       now_ms=p['end_ms']-1, analyze=None, settings=None)
+
+    def test_control_builder_rejects_development_or_unregistered_roles(self):
+        for role in ('development', 'other'):
+            with self.assertRaises(ValueError):
+                allocation.build_registered_controls(Path('missing'), role=role,
+                                                       now_ms=START, analyze=None, settings=None)
+
 
 if __name__ == '__main__':
     unittest.main()
