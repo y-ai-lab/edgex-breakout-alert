@@ -1,0 +1,94 @@
+{
+  "protocol": "frozen_vwap_historical_only_completion_v1",
+  "registered_utc": "2026-10-11T08:55:52.249054+00:00",
+  "registration_base_sha": "975e3f6c64ff4e19024634b722a3eb0d4f213e04",
+  "user_direction": "2026-10-11: complete a historical-only backtest; future calendar dates are not a condition for this historical review. This creates an additional comparison, not a rewrite of old results or live protocols.",
+  "model": "trend_session_vwap_reclaim_net2r",
+  "period_days": 35,
+  "periods": [
+    {
+      "id": "historical_1",
+      "start_ms": 1784937600000,
+      "end_ms": 1787961600000,
+      "exit_cutoff_ms": 1788566400000
+    },
+    {
+      "id": "historical_2",
+      "start_ms": 1787961600000,
+      "end_ms": 1790985600000,
+      "exit_cutoff_ms": 1791590400000
+    }
+  ],
+  "period_selection": "Two adjacent equal 35-day entry intervals ending at last completed UTC day minus original 7-day exit followup. Fixed before fetch/results. Previously viewed prices overlap parts; not pristine holdout. Entry intervals do not overlap; first followup overlaps second market period and is not a separate sample.",
+  "universe_sha256": "1ee2f543d56f61b4adf0560f2ccf12bb29b755358ab686b9c107c778978681cd",
+  "universe_count": 182,
+  "production_parameters": {
+    "monitor_interval": "HOUR_4",
+    "entry_interval": "MINUTE_15",
+    "trend_fast_ema": 20,
+    "trend_slow_ema": 50,
+    "atr_period": 14,
+    "roll_lookback": 20,
+    "roll_max_age": 6,
+    "retest_lookback": 4,
+    "atr_stop_buffer": 0.5,
+    "atr_target_buffer": 0.25,
+    "retest_atr_tolerance": 0.35,
+    "min_rr": 2.0
+  },
+  "production_rule_fingerprint": "9b2df54f9d908d4b653fc270992ad3e1ada2e812f2d38133581f476516e55afd",
+  "scanner_hashes": [
+    "2e24f61e47ee40fdb3ae5f18152129f6632e83d508b73d27bf33fda0919ac9ab",
+    "b1f4d4d15dc1ce4665f0f9f776de050059b60fb18faa4cf1583b04bf02a6c4af"
+  ],
+  "frozen_dependencies_sha256": {
+    "analysis_terminal/vwap_reclaim_replay.py": "228347266f5e17956c9110475d037c0be52a0a3d57ffd2da27eeadbe277f5ba5",
+    "analysis_terminal/vwap_reclaim_protocol.json": "98ac4bc347f00769b4d5e5c2647c2a9c4dc0717224c3792cd8e8d520c0fc1dd5",
+    "analysis_terminal/confirmation_zone_replay.py": "fa62fd6571a5a153ef8b1b5a4a8f95551159edece717549d8b4816df696e7602",
+    "analysis_terminal/pending_entry_replay.py": "111686641afe5e61c64311fa730716b5198d3a74e34440e06f48d99da3c53df8",
+    "analysis_terminal/pending_entry_protocol.json": "1ed8af4b9bb0dd7281e80a21956677bb6d9e315f47fb0c00689992662a29ee0f",
+    "analysis_terminal/replay.py": "67417c93cdbab1640945c55f3f2c5d99552af711b40006f2db204e2ac55bdd5e"
+  },
+  "rules": "Exact frozen VWAP candidate/replay/evaluate. No parameter tuning, ticker selection, SL/TP changes or variant search. First strict session reclaim, volume2x, closed 4H trend, local4bar stop +.5ATR15, room-constrained net2R, original4bar expiry and all prior-state checks preserved.",
+  "comparator": "current_next_open only. Generate exact original control with pending_entry_replay.replay_market, preserve all diagnostic control rows, use current rows for comparison. Independently match current first-entry identity/price/time to replay.replay_contract.current. Legacy Shadow negative-target inconsistencies are not repaired or used to invalidate an otherwise exact current-only comparator; record diagnostics, never claim Shadow has reproduced. Prior August BLOCKED remains unchanged.",
+  "outcomes": "Initial entry ledger evaluated only through end_ms. Seal its hashes. Only already filled OPEN gets original generic control.evaluate(start_ms=end_ms) through fixed exit_cutoff_ms; no new entries or pending fills, no alteration of entry/stop/target/fill/expiry/terminal records. Exclude signal and earlier bars, same-bar/unknown-fill AMBIGUOUS, missing first/later bar DATA_GAP, capital remains locked.",
+  "base_costs": {
+    "fee_bps_each_side": 5,
+    "slippage_bps_each_side": 2
+  },
+  "stress_costs": {
+    "fee_bps_each_side": 10,
+    "slippage_bps_each_side": 5,
+    "scope": "Same frozen fills and exits, not new quantity or a different portfolio."
+  },
+  "funding": "Existing public funding coverage auditor may report exact retrospective funding where exposure/settlement timing is proven; missing or intrabar boundary settlement remains unknown. Do not claim all-cost profitability or real fills without that proof.",
+  "portfolio": "Exact original independent 10000USDC research portfolio per period: 1% risk,3slots,3%aggregate,1x notional,JST3%daily. Not actual user account, not updated actual policy. OPEN/uncertain reservations remain locked; null ROI stays null. Do not sum period ROIs as continuous account.",
+  "decision": {
+    "kill_minimum_resolved_each_period": 20,
+    "kill_if_avg_net_r_leq": 0,
+    "kill_if_pf_leq": 1,
+    "numeric_zero_tolerance": 1e-12,
+    "minimum_resolved_each_period": 50,
+    "minimum_net_win_rate_pct": 40,
+    "minimum_base_pf": 1.2,
+    "positive_base_expectancy": true,
+    "positive_stress_expectancy": true,
+    "stress_pf_gt": 1,
+    "positive_uncapped_pure_fill_difference": true,
+    "positive_capped_pure_fill_difference": true,
+    "minimum_capped_resolved_each_period": 20,
+    "known_positive_closed_roi": true,
+    "no_open_or_uncertain_capital": true
+  },
+  "sequence": "Complete first period and verify full original ledger/source reproduction before second. Negative >=20 or corrupted source/current comparator stops the second. No later favorable replacement or period extension. Insufficient evidence is a completed historical evaluation with no qualified replacement, not an instruction to wait for future dates. Original live/replay decisions are separate and not automatically changed.",
+  "limitations": [
+    "Archived fixed current182 markets: survivorship/listing/contract-size bias. Require and disclose per-market contiguous180bar coverage.",
+    "OHLC hypothetical fills, not queue/order-book/real-execution evidence; market correlation, many previously tested hypotheses and viewed-price bias.",
+    "Net stop-risk R differs from MFE/MAE price R and capital ROI. TP hit rate differs from net win rate.",
+    "Missing/ambiguous records and unresolved money are preserved, never excluded to manufacture success. No pooling daily repeats, replay/live, controls/proposal or different fixed selection periods."
+  ],
+  "real_orders_enabled": false,
+  "automatic_promotion": false,
+  "changes_live_rules": false,
+  "future_dates_required_for_historical_conclusion": false
+}
