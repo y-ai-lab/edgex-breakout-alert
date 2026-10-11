@@ -1,0 +1,855 @@
+{
+  "review_id": "pending_fixed_week_update_2026_10_11",
+  "dataset": "LOCAL_PUBLIC_REPLAY_OF_REGISTERED_WEEK_NOT_ACTIONS_ARTIFACT_OR_LIVE_CAPTURE",
+  "base_sha": "7b863deb3693485e8c62cd8218f4a3b22a283664",
+  "recorded_utc": "2026-10-11T00:48:30.470024+00:00",
+  "prior_actions_artifact": {
+    "run_id": 38039624194,
+    "artifact_id": 11665128319,
+    "sha256": "642466a86300c432d55554205df55a2a3c00de09be5416bf89be582a30993e1a",
+    "entire_original_summary_reproduced": true
+  },
+  "review": {
+    "dataset": "FROZEN_WEEKLY_RESEARCH_REVIEW",
+    "collection_status": "RESULTS_VERIFIED",
+    "evaluated_at_ms": 1791679397522,
+    "first_completed_day_ms": 1791417600000,
+    "automatic_promotion": false,
+    "eligible_for_live_promotion": false,
+    "real_orders_enabled": false,
+    "changes_live_rules": false,
+    "independent_sample_counts_added": false,
+    "next_step": "COLLECT_REGISTERED_WINDOW_WITHOUT_PARAMETER_CHANGES",
+    "cohort_start_ms": 1791331200000,
+    "cohort_end_ms": 1791676800000,
+    "period_complete": false,
+    "cohort_key": "1791331200000:1791936000000",
+    "sample_note": "Daily reports update this cohort; never sum their signals.",
+    "outcome_completion": {
+      "current_next_open": {
+        "total_candidates": 8,
+        "filled": 8,
+        "verified_resolved": 5,
+        "open_filled": 3,
+        "pending_unfilled": 0,
+        "blocked_records": 0,
+        "blocked_filled": 0,
+        "resolved_pct": 62.5,
+        "entry_period_complete": false,
+        "cohort_complete": false,
+        "status": "PARTIAL_PERIOD",
+        "sample_status": "INSUFFICIENT SAMPLE",
+        "capped_active": 2,
+        "capped_uncertain": 0,
+        "closed_portfolio_roi_pct": null
+      },
+      "shadow_v2_next_open": {
+        "total_candidates": 248,
+        "filled": 0,
+        "verified_resolved": 0,
+        "open_filled": 0,
+        "pending_unfilled": 0,
+        "blocked_records": 0,
+        "blocked_filled": 0,
+        "resolved_pct": null,
+        "entry_period_complete": false,
+        "cohort_complete": false,
+        "status": "PARTIAL_PERIOD",
+        "sample_status": "INSUFFICIENT SAMPLE",
+        "capped_active": 0,
+        "capped_uncertain": 0,
+        "closed_portfolio_roi_pct": 0.0
+      },
+      "confirmed_pullback_cost_2r": {
+        "total_candidates": 290,
+        "filled": 19,
+        "verified_resolved": 13,
+        "open_filled": 3,
+        "pending_unfilled": 0,
+        "blocked_records": 3,
+        "blocked_filled": 3,
+        "resolved_pct": 68.421053,
+        "entry_period_complete": false,
+        "cohort_complete": false,
+        "status": "BLOCKED_DATA_QUALITY",
+        "sample_status": "INSUFFICIENT SAMPLE",
+        "capped_active": 2,
+        "capped_uncertain": 0,
+        "closed_portfolio_roi_pct": null
+      }
+    },
+    "current_cohort_rule_decision": "CONTINUE_INSUFFICIENT_SAMPLE",
+    "decision": "PROVISIONAL_CONTINUE_INSUFFICIENT_SAMPLE",
+    "coverage": {
+      "expected_points": 69888,
+      "valid_points": 64176,
+      "failed_markets": 0,
+      "requested_markets": 182,
+      "fetched_markets": 182,
+      "expected_points_all_markets": 69888
+    },
+    "metrics": {
+      "current_next_open": {
+        "candidates": 8,
+        "filled": 8,
+        "resolved": 5,
+        "tp": 2,
+        "sl": 3,
+        "statuses": {
+          "SL": 3,
+          "TP": 2,
+          "OPEN": 3
+        },
+        "win_rate": 40.0,
+        "avg_net_r": 0.17227115059006035,
+        "expectancy_net_r": 0.17227115059006035,
+        "profit_factor": 1.2871185843167672,
+        "avg_mfe_r": 1.4840368677539884,
+        "avg_mae_r": 0.6612009363827467,
+        "max_consecutive_losses": 3,
+        "sample_status": "INSUFFICIENT SAMPLE"
+      },
+      "shadow_v2_next_open": {
+        "candidates": 248,
+        "filled": 0,
+        "resolved": 0,
+        "tp": 0,
+        "sl": 0,
+        "statuses": {
+          "REJECTED_AT_FILL": 248
+        },
+        "win_rate": null,
+        "avg_net_r": null,
+        "expectancy_net_r": null,
+        "profit_factor": null,
+        "avg_mfe_r": null,
+        "avg_mae_r": null,
+        "max_consecutive_losses": null,
+        "sample_status": "INSUFFICIENT SAMPLE"
+      },
+      "confirmed_pullback_cost_2r": {
+        "candidates": 290,
+        "filled": 19,
+        "resolved": 13,
+        "tp": 6,
+        "sl": 7,
+        "statuses": {
+          "EXPIRED": 270,
+          "TP": 6,
+          "SL": 7,
+          "OPEN": 3,
+          "AMBIGUOUS": 3,
+          "INVALIDATED": 1
+        },
+        "win_rate": 46.15384615384615,
+        "avg_net_r": 0.38461538461538414,
+        "expectancy_net_r": 0.38461538461538414,
+        "profit_factor": 1.7142857142857133,
+        "avg_mfe_r": 1.7180615383889857,
+        "avg_mae_r": 0.850167975421355,
+        "max_consecutive_losses": 4,
+        "sample_status": "INSUFFICIENT SAMPLE"
+      }
+    },
+    "portfolios": {
+      "current_next_open": {
+        "initial_cash_usdc": 10000,
+        "known_cash_usdc": 10158.288009037,
+        "realized_net_pnl_usdc": 161.8257985220695,
+        "admitted": 7,
+        "filled": 7,
+        "resolved": 5,
+        "active": 2,
+        "uncertain": 0,
+        "exclusions": {
+          "CAPACITY_OR_TICKER": 1
+        },
+        "realized_roi_pct": 1.618257985220695,
+        "closed_portfolio_roi_pct": null,
+        "equity_usdc": null,
+        "max_known_cash_drawdown_pct": 2.224184711301043,
+        "profit_factor": 1.7111942807681828,
+        "notes": [
+          "Realized return is not total ROI when positions remain open.",
+          "Cash drawdown excludes unrealized losses; not equity drawdown.",
+          "Intrabar fills booked at bar close; reservations prevent future-profit sizing."
+        ]
+      },
+      "shadow_v2_next_open": {
+        "initial_cash_usdc": 10000,
+        "known_cash_usdc": 10000.0,
+        "realized_net_pnl_usdc": 0.0,
+        "admitted": 172,
+        "filled": 0,
+        "resolved": 0,
+        "active": 0,
+        "uncertain": 0,
+        "exclusions": {
+          "SIZE_OR_RISK_LIMIT": 28,
+          "CAPACITY_OR_TICKER": 48
+        },
+        "realized_roi_pct": 0.0,
+        "closed_portfolio_roi_pct": 0.0,
+        "equity_usdc": 10000.0,
+        "max_known_cash_drawdown_pct": 0.0,
+        "profit_factor": null,
+        "notes": [
+          "Realized return is not total ROI when positions remain open.",
+          "Cash drawdown excludes unrealized losses; not equity drawdown.",
+          "Intrabar fills booked at bar close; reservations prevent future-profit sizing."
+        ]
+      },
+      "confirmed_pullback_cost_2r": {
+        "initial_cash_usdc": 10000,
+        "known_cash_usdc": 10083.71053733086,
+        "realized_net_pnl_usdc": 87.97215567730287,
+        "admitted": 64,
+        "filled": 6,
+        "resolved": 4,
+        "active": 2,
+        "uncertain": 0,
+        "exclusions": {
+          "SIZE_OR_RISK_LIMIT": 148,
+          "CAPACITY_OR_TICKER": 78
+        },
+        "realized_roi_pct": 0.8797215567730288,
+        "closed_portfolio_roi_pct": null,
+        "equity_usdc": null,
+        "max_known_cash_drawdown_pct": 1.1471710449619423,
+        "profit_factor": 1.6278450342281285,
+        "notes": [
+          "Realized return is not total ROI when positions remain open.",
+          "Cash drawdown excludes unrealized losses; not equity drawdown.",
+          "Intrabar fills booked at bar close; reservations prevent future-profit sizing."
+        ]
+      }
+    },
+    "comparison": {
+      "current_filled": 8,
+      "proposal_filled": 19,
+      "shared_filled_setups": 3,
+      "proposal_only_filled_setups": 16,
+      "current_filled_missing_in_proposal": 5,
+      "net_filled_count_difference": 11,
+      "capped_filled_count_difference": -1,
+      "capped_shared_setup_count": null
+    },
+    "capital_admission_audit": {
+      "current_next_open": {
+        "verified": true,
+        "engine_sha256": "111686641afe5e61c64311fa730716b5198d3a74e34440e06f48d99da3c53df8",
+        "candidates": 8,
+        "uncapped_filled": 8,
+        "capped_filled": 7,
+        "filled_omitted": 1,
+        "reasons": {
+          "CAPACITY_OR_TICKER": {
+            "excluded_candidates": 1,
+            "excluded_with_uncapped_fill": 1,
+            "excluded_without_uncapped_fill": 0,
+            "lost_filled_with_unfilled_reservations": 0,
+            "lost_filled_with_filled_reservations": 1,
+            "lost_filled_capacity_full": 1,
+            "lost_filled_same_ticker": 0,
+            "lost_filled_minimum_notional_above_remaining": 0,
+            "lost_filled_minimum_risk_above_remaining": 1
+          }
+        },
+        "retained_filled_statuses": {
+          "TP": 2,
+          "SL": 3,
+          "OPEN": 2
+        },
+        "capped_shared_setup_count": null,
+        "new_samples_added": false,
+        "actual_execution_evidence": false,
+        "policy": "FROZEN_10000_USDC_1PCT_MAX3_TOTAL3PCT_1X_JST_DAILY3PCT",
+        "limitations": [
+          "Same ledger and original portfolio, not a new strategy or causal experiment.",
+          "Exclusions without an uncapped fill are not lost trades.",
+          "Reservation and affordability diagnostics overlap; do not sum them as extra exclusions.",
+          "This frozen research policy is different from the actual operating account policy."
+        ]
+      },
+      "shadow_v2_next_open": {
+        "verified": true,
+        "engine_sha256": "111686641afe5e61c64311fa730716b5198d3a74e34440e06f48d99da3c53df8",
+        "candidates": 248,
+        "uncapped_filled": 0,
+        "capped_filled": 0,
+        "filled_omitted": 0,
+        "reasons": {
+          "SIZE_OR_RISK_LIMIT": {
+            "excluded_candidates": 28,
+            "excluded_with_uncapped_fill": 0,
+            "excluded_without_uncapped_fill": 28,
+            "lost_filled_with_unfilled_reservations": 0,
+            "lost_filled_with_filled_reservations": 0,
+            "lost_filled_capacity_full": 0,
+            "lost_filled_same_ticker": 0,
+            "lost_filled_minimum_notional_above_remaining": 0,
+            "lost_filled_minimum_risk_above_remaining": 0
+          },
+          "CAPACITY_OR_TICKER": {
+            "excluded_candidates": 48,
+            "excluded_with_uncapped_fill": 0,
+            "excluded_without_uncapped_fill": 48,
+            "lost_filled_with_unfilled_reservations": 0,
+            "lost_filled_with_filled_reservations": 0,
+            "lost_filled_capacity_full": 0,
+            "lost_filled_same_ticker": 0,
+            "lost_filled_minimum_notional_above_remaining": 0,
+            "lost_filled_minimum_risk_above_remaining": 0
+          }
+        },
+        "retained_filled_statuses": {},
+        "capped_shared_setup_count": null,
+        "new_samples_added": false,
+        "actual_execution_evidence": false,
+        "policy": "FROZEN_10000_USDC_1PCT_MAX3_TOTAL3PCT_1X_JST_DAILY3PCT",
+        "limitations": [
+          "Same ledger and original portfolio, not a new strategy or causal experiment.",
+          "Exclusions without an uncapped fill are not lost trades.",
+          "Reservation and affordability diagnostics overlap; do not sum them as extra exclusions.",
+          "This frozen research policy is different from the actual operating account policy."
+        ]
+      },
+      "confirmed_pullback_cost_2r": {
+        "verified": true,
+        "engine_sha256": "111686641afe5e61c64311fa730716b5198d3a74e34440e06f48d99da3c53df8",
+        "candidates": 290,
+        "uncapped_filled": 19,
+        "capped_filled": 6,
+        "filled_omitted": 13,
+        "reasons": {
+          "SIZE_OR_RISK_LIMIT": {
+            "excluded_candidates": 148,
+            "excluded_with_uncapped_fill": 13,
+            "excluded_without_uncapped_fill": 135,
+            "lost_filled_with_unfilled_reservations": 11,
+            "lost_filled_with_filled_reservations": 7,
+            "lost_filled_capacity_full": 0,
+            "lost_filled_same_ticker": 0,
+            "lost_filled_minimum_notional_above_remaining": 13,
+            "lost_filled_minimum_risk_above_remaining": 0
+          },
+          "CAPACITY_OR_TICKER": {
+            "excluded_candidates": 78,
+            "excluded_with_uncapped_fill": 0,
+            "excluded_without_uncapped_fill": 78,
+            "lost_filled_with_unfilled_reservations": 0,
+            "lost_filled_with_filled_reservations": 0,
+            "lost_filled_capacity_full": 0,
+            "lost_filled_same_ticker": 0,
+            "lost_filled_minimum_notional_above_remaining": 0,
+            "lost_filled_minimum_risk_above_remaining": 0
+          }
+        },
+        "retained_filled_statuses": {
+          "TP": 2,
+          "SL": 2,
+          "OPEN": 2
+        },
+        "capped_shared_setup_count": null,
+        "new_samples_added": false,
+        "actual_execution_evidence": false,
+        "policy": "FROZEN_10000_USDC_1PCT_MAX3_TOTAL3PCT_1X_JST_DAILY3PCT",
+        "limitations": [
+          "Same ledger and original portfolio, not a new strategy or causal experiment.",
+          "Exclusions without an uncapped fill are not lost trades.",
+          "Reservation and affordability diagnostics overlap; do not sum them as extra exclusions.",
+          "This frozen research policy is different from the actual operating account policy."
+        ]
+      }
+    },
+    "capital_admission_audit_sha256": "368893deb713e640f83407edbe8411f4f42be584944e8b2bf1c4843aac028a38",
+    "reservation_time_audit": {
+      "current_next_open": {
+        "verified": true,
+        "engine_sha256": "111686641afe5e61c64311fa730716b5198d3a74e34440e06f48d99da3c53df8",
+        "observation_start_ms": 1791331200000,
+        "observation_end_ms": 1791676800000,
+        "observation_hours": 96.0,
+        "event_count": 21,
+        "occupied_hours": 72.5,
+        "groups": {
+          "PENDING": {
+            "slot_hours": 1.75,
+            "risk_usdc_hours": 158.59111932218383,
+            "notional_usdc_hours": 8289.918960666,
+            "time_weighted_average_slots": 0.018229166666666668,
+            "time_weighted_average_risk_usdc": 1.6519908262727483,
+            "time_weighted_average_notional_usdc": 86.3533225069375
+          },
+          "FILLED": {
+            "slot_hours": 140.0,
+            "risk_usdc_hours": 14092.610184675128,
+            "notional_usdc_hours": 602177.921402359,
+            "time_weighted_average_slots": 1.4583333333333333,
+            "time_weighted_average_risk_usdc": 146.79802275703258,
+            "time_weighted_average_notional_usdc": 6272.686681274573
+          },
+          "UNCERTAIN": {
+            "slot_hours": 0.0,
+            "risk_usdc_hours": 0.0,
+            "notional_usdc_hours": 0.0,
+            "time_weighted_average_slots": 0.0,
+            "time_weighted_average_risk_usdc": 0.0,
+            "time_weighted_average_notional_usdc": 0.0
+          }
+        },
+        "pending_share_of_reserved_notional_time_pct": 1.3579616177219522,
+        "end_counts": {
+          "PENDING": 0,
+          "FILLED": 2,
+          "UNCERTAIN": 0
+        },
+        "time_basis": "FROZEN_PORTFOLIO_EVENT_BOOKING",
+        "new_samples_added": false,
+        "actual_execution_evidence": false,
+        "changes_policy": false,
+        "unknown_capital_released": false,
+        "limitations": [
+          "Reservation-time is descriptive, not a causal estimate of additional fills or profit.",
+          "Fill reservations switch at the original bar-close booking time; intrabar order is unknown.",
+          "PENDING, filled and uncertain capital remain reserved exactly as in the original portfolio.",
+          "No policy tuning, alternate portfolio, realized ROI inference or candidate ranking."
+        ]
+      },
+      "shadow_v2_next_open": {
+        "verified": true,
+        "engine_sha256": "111686641afe5e61c64311fa730716b5198d3a74e34440e06f48d99da3c53df8",
+        "observation_start_ms": 1791331200000,
+        "observation_end_ms": 1791676800000,
+        "observation_hours": 96.0,
+        "event_count": 496,
+        "occupied_hours": 27.75,
+        "groups": {
+          "PENDING": {
+            "slot_hours": 43.0,
+            "risk_usdc_hours": 3893.090064361198,
+            "notional_usdc_hours": 182126.76358024403,
+            "time_weighted_average_slots": 0.4479166666666667,
+            "time_weighted_average_risk_usdc": 40.55302150376248,
+            "time_weighted_average_notional_usdc": 1897.1537872942088
+          },
+          "FILLED": {
+            "slot_hours": 0.0,
+            "risk_usdc_hours": 0.0,
+            "notional_usdc_hours": 0.0,
+            "time_weighted_average_slots": 0.0,
+            "time_weighted_average_risk_usdc": 0.0,
+            "time_weighted_average_notional_usdc": 0.0
+          },
+          "UNCERTAIN": {
+            "slot_hours": 0.0,
+            "risk_usdc_hours": 0.0,
+            "notional_usdc_hours": 0.0,
+            "time_weighted_average_slots": 0.0,
+            "time_weighted_average_risk_usdc": 0.0,
+            "time_weighted_average_notional_usdc": 0.0
+          }
+        },
+        "pending_share_of_reserved_notional_time_pct": 100.0,
+        "end_counts": {
+          "PENDING": 0,
+          "FILLED": 0,
+          "UNCERTAIN": 0
+        },
+        "time_basis": "FROZEN_PORTFOLIO_EVENT_BOOKING",
+        "new_samples_added": false,
+        "actual_execution_evidence": false,
+        "changes_policy": false,
+        "unknown_capital_released": false,
+        "limitations": [
+          "Reservation-time is descriptive, not a causal estimate of additional fills or profit.",
+          "Fill reservations switch at the original bar-close booking time; intrabar order is unknown.",
+          "PENDING, filled and uncertain capital remain reserved exactly as in the original portfolio.",
+          "No policy tuning, alternate portfolio, realized ROI inference or candidate ranking."
+        ]
+      },
+      "confirmed_pullback_cost_2r": {
+        "verified": true,
+        "engine_sha256": "111686641afe5e61c64311fa730716b5198d3a74e34440e06f48d99da3c53df8",
+        "observation_start_ms": 1791331200000,
+        "observation_end_ms": 1791676800000,
+        "observation_hours": 96.0,
+        "event_count": 596,
+        "occupied_hours": 89.75,
+        "groups": {
+          "PENDING": {
+            "slot_hours": 60.75,
+            "risk_usdc_hours": 3500.638600287673,
+            "notional_usdc_hours": 313646.9081271546,
+            "time_weighted_average_slots": 0.6328125,
+            "time_weighted_average_risk_usdc": 36.46498541966326,
+            "time_weighted_average_notional_usdc": 3267.1552929911936
+          },
+          "FILLED": {
+            "slot_hours": 106.0,
+            "risk_usdc_hours": 7281.748905875156,
+            "notional_usdc_hours": 457859.675476775,
+            "time_weighted_average_slots": 1.1041666666666667,
+            "time_weighted_average_risk_usdc": 75.85155110286621,
+            "time_weighted_average_notional_usdc": 4769.371619549739
+          },
+          "UNCERTAIN": {
+            "slot_hours": 0.0,
+            "risk_usdc_hours": 0.0,
+            "notional_usdc_hours": 0.0,
+            "time_weighted_average_slots": 0.0,
+            "time_weighted_average_risk_usdc": 0.0,
+            "time_weighted_average_notional_usdc": 0.0
+          }
+        },
+        "pending_share_of_reserved_notional_time_pct": 40.653821340320846,
+        "end_counts": {
+          "PENDING": 0,
+          "FILLED": 2,
+          "UNCERTAIN": 0
+        },
+        "time_basis": "FROZEN_PORTFOLIO_EVENT_BOOKING",
+        "new_samples_added": false,
+        "actual_execution_evidence": false,
+        "changes_policy": false,
+        "unknown_capital_released": false,
+        "limitations": [
+          "Reservation-time is descriptive, not a causal estimate of additional fills or profit.",
+          "Fill reservations switch at the original bar-close booking time; intrabar order is unknown.",
+          "PENDING, filled and uncertain capital remain reserved exactly as in the original portfolio.",
+          "No policy tuning, alternate portfolio, realized ROI inference or candidate ranking."
+        ]
+      }
+    },
+    "reservation_time_audit_sha256": "f87f695d79fd7ea25b4a40b6d48f08fc01a1c06f89f80b1a690d4cfbd257aa4b",
+    "cost_headroom_audit": {
+      "current_next_open": {
+        "verified": true,
+        "engine_sha256": "111686641afe5e61c64311fa730716b5198d3a74e34440e06f48d99da3c53df8",
+        "resolved_r_basket": {
+          "resolved": 5,
+          "status": "POSITIVE_RESOLVED_SURPLUS",
+          "additional_uniform_charge_break_even_bps": 27.026759096726753
+        },
+        "capped_resolved_cash_basket": {
+          "resolved": 5,
+          "status": "POSITIVE_RESOLVED_SURPLUS",
+          "additional_uniform_charge_break_even_bps": 62.07137795079681
+        },
+        "open_records": 3,
+        "blocked_records": 0,
+        "original_portfolio_roi_pct": null,
+        "portfolio_active": 2,
+        "portfolio_uncertain": 0,
+        "extra_charge_basis": "TOTAL_ADDITIONAL_ENTRY_NOTIONAL_BPS_PER_RESOLVED_TRADE",
+        "r_basis": "ORIGINAL_FROZEN_NET_STOP_RISK",
+        "new_samples_added": false,
+        "actual_funding_included": false,
+        "changes_metrics_or_policy": false,
+        "limitations": [
+          "Only already-resolved trades; OPEN/uncertain costs and P&L are unknown.",
+          "R-basket uses equal original risk units; cash-basket uses original admitted quantities.",
+          "Uniform extra charge is descriptive, not actual Funding, future cost tolerance or ROI.",
+          "No rate, holding-time, side, mark-price, queue or funding-settlement history is inferred.",
+          "Do not change costs, stop risk, allocations, decisions or rules using this budget."
+        ]
+      },
+      "shadow_v2_next_open": {
+        "verified": true,
+        "engine_sha256": "111686641afe5e61c64311fa730716b5198d3a74e34440e06f48d99da3c53df8",
+        "resolved_r_basket": {
+          "resolved": 0,
+          "status": "NO_RESOLVED_TRADES",
+          "additional_uniform_charge_break_even_bps": null
+        },
+        "capped_resolved_cash_basket": {
+          "resolved": 0,
+          "status": "NO_RESOLVED_TRADES",
+          "additional_uniform_charge_break_even_bps": null
+        },
+        "open_records": 0,
+        "blocked_records": 0,
+        "original_portfolio_roi_pct": 0.0,
+        "portfolio_active": 0,
+        "portfolio_uncertain": 0,
+        "extra_charge_basis": "TOTAL_ADDITIONAL_ENTRY_NOTIONAL_BPS_PER_RESOLVED_TRADE",
+        "r_basis": "ORIGINAL_FROZEN_NET_STOP_RISK",
+        "new_samples_added": false,
+        "actual_funding_included": false,
+        "changes_metrics_or_policy": false,
+        "limitations": [
+          "Only already-resolved trades; OPEN/uncertain costs and P&L are unknown.",
+          "R-basket uses equal original risk units; cash-basket uses original admitted quantities.",
+          "Uniform extra charge is descriptive, not actual Funding, future cost tolerance or ROI.",
+          "No rate, holding-time, side, mark-price, queue or funding-settlement history is inferred.",
+          "Do not change costs, stop risk, allocations, decisions or rules using this budget."
+        ]
+      },
+      "confirmed_pullback_cost_2r": {
+        "verified": true,
+        "engine_sha256": "111686641afe5e61c64311fa730716b5198d3a74e34440e06f48d99da3c53df8",
+        "resolved_r_basket": {
+          "resolved": 13,
+          "status": "POSITIVE_RESOLVED_SURPLUS",
+          "additional_uniform_charge_break_even_bps": 43.51083491201163
+        },
+        "capped_resolved_cash_basket": {
+          "resolved": 4,
+          "status": "POSITIVE_RESOLVED_SURPLUS",
+          "additional_uniform_charge_break_even_bps": 33.13975331530971
+        },
+        "open_records": 3,
+        "blocked_records": 3,
+        "original_portfolio_roi_pct": null,
+        "portfolio_active": 2,
+        "portfolio_uncertain": 0,
+        "extra_charge_basis": "TOTAL_ADDITIONAL_ENTRY_NOTIONAL_BPS_PER_RESOLVED_TRADE",
+        "r_basis": "ORIGINAL_FROZEN_NET_STOP_RISK",
+        "new_samples_added": false,
+        "actual_funding_included": false,
+        "changes_metrics_or_policy": false,
+        "limitations": [
+          "Only already-resolved trades; OPEN/uncertain costs and P&L are unknown.",
+          "R-basket uses equal original risk units; cash-basket uses original admitted quantities.",
+          "Uniform extra charge is descriptive, not actual Funding, future cost tolerance or ROI.",
+          "No rate, holding-time, side, mark-price, queue or funding-settlement history is inferred.",
+          "Do not change costs, stop risk, allocations, decisions or rules using this budget."
+        ]
+      }
+    },
+    "cost_headroom_audit_sha256": "9d5e2dbee056766c14553f7f34d6583c914f1cec1723040f9e27f8f751f2d6b3",
+    "entry_execution_funnel": {
+      "current_next_open": {
+        "candidates": 8,
+        "filled": 8,
+        "unfilled": 0,
+        "fill_rate_pct": 100.0,
+        "unfilled_status_counts": {},
+        "capped_filled": 7,
+        "filled_omitted_by_capital_model": 1
+      },
+      "shadow_v2_next_open": {
+        "candidates": 248,
+        "filled": 0,
+        "unfilled": 248,
+        "fill_rate_pct": 0.0,
+        "unfilled_status_counts": {
+          "REJECTED_AT_FILL": 248
+        },
+        "capped_filled": 0,
+        "filled_omitted_by_capital_model": 0
+      },
+      "confirmed_pullback_cost_2r": {
+        "candidates": 290,
+        "filled": 19,
+        "unfilled": 271,
+        "fill_rate_pct": 6.551724,
+        "unfilled_status_counts": {
+          "EXPIRED": 270,
+          "INVALIDATED": 1
+        },
+        "capped_filled": 6,
+        "filled_omitted_by_capital_model": 13
+      }
+    },
+    "entry_price_audit": {
+      "status": "VERIFIED_FROM_FROZEN_PUBLIC_SOURCES",
+      "source_report_sha256": "5d2152631541b5556e72dab0ced72b4ef5f2b4725438cb660aaae03825c974db",
+      "source_manifest_sha256": "a914e1c6d12e5abea5196549c7a016d5d0c7304cc23150646bdfb482fa4da2b9",
+      "diagnostics_sha256": "022bd1e470a6fc9ba339e36b199bceed370f98171bda7cd79d76092676c91215",
+      "source_files_verified": 182,
+      "original_candidates_reproduced": 290,
+      "observation": {
+        "original_pending_bars": 4,
+        "extra_observation_bars": 4,
+        "distance_r_basis": "TRIGGER_TO_FROZEN_STOP_PRICE_DISTANCE",
+        "bins": [
+          0.25,
+          0.5,
+          1
+        ]
+      },
+      "summary": {
+        "candidates": 290,
+        "expired": 270,
+        "trigger_on_confirmed_side_of_roll": 12,
+        "trigger_across_roll": 278,
+        "target_behind_signal_close": 110,
+        "expired_target_touched_before_expiry": 161,
+        "expired_closest_distance_bins": {
+          "> 1R": 211,
+          "(0.5, 1]R": 31,
+          "(0.25, 0.5]R": 21,
+          "<= 0.25R": 7
+        },
+        "expired_closest_distance_median_r": 1.6675044086825634,
+        "expired_later_observations": {
+          "NO_TOUCH_IN_FIXED_EXTRA_WINDOW": 252,
+          "SETUP_CHANGED": 6,
+          "LATE_PRICE_TOUCH": 12
+        },
+        "late_price_touches": 12,
+        "late_touches_after_prior_target": 4,
+        "late_touches_with_exit_same_bar": 3,
+        "late_touches_without_prior_target_or_same_bar_exit": 8,
+        "counterfactual_fills": null,
+        "counterfactual_win_rate": null,
+        "counterfactual_avg_r": null,
+        "counterfactual_portfolio_roi_pct": null
+      },
+      "new_samples_added": false,
+      "actual_execution_evidence": false,
+      "limitations": [
+        "Same historical cohort; do not add these observations as trades.",
+        "Late touches do not change expiry, entries, outcomes or portfolio ROI.",
+        "Price distance R differs from net stop-risk P&L R.",
+        "Do not tune prices, wait bars or select symbols from these diagnostics."
+      ]
+    },
+    "report_sha256": "5d2152631541b5556e72dab0ced72b4ef5f2b4725438cb660aaae03825c974db",
+    "source_manifest_sha256": "a914e1c6d12e5abea5196549c7a016d5d0c7304cc23150646bdfb482fa4da2b9",
+    "protocol_sha256": "1ed8af4b9bb0dd7281e80a21956677bb6d9e315f47fb0c00689992662a29ee0f",
+    "engine_sha256": "111686641afe5e61c64311fa730716b5198d3a74e34440e06f48d99da3c53df8",
+    "limitations": [
+      "Historical OHLC replay with frozen parameters, not captured-live fills or actual ROI.",
+      "Partial periods are provisional; no new cohort is created by another daily report.",
+      "OPEN, ambiguous results and gaps are not wins or losses; unknown portfolio ROI stays unknown.",
+      "This review does not combine historical development, validation or other weekly samples."
+    ]
+  },
+  "stress_diagnostic": {
+    "fee_bps_each_side": 10,
+    "slippage_bps_each_side": 5,
+    "scope": "SAME_ORIGINAL_FILLED_OUTCOMES_ONLY_NO_NEW_EXECUTION_OR_RESIZING",
+    "r_basis": "STRESS_COST_ADJUSTED_STOP_RISK_NOT_BASE_R_OR_CAPITAL_ROI",
+    "metrics": {
+      "current_next_open": {
+        "candidates": 8,
+        "filled": 8,
+        "resolved": 5,
+        "tp": 2,
+        "sl": 3,
+        "statuses": {
+          "SL": 3,
+          "TP": 2,
+          "OPEN": 3
+        },
+        "win_rate": 40.0,
+        "avg_net_r": 0.06560998238206586,
+        "expectancy_net_r": 0.06560998238206586,
+        "profit_factor": 1.1093499706367764,
+        "max_consecutive_losses": 3,
+        "sample_status": "INSUFFICIENT SAMPLE"
+      },
+      "shadow_v2_next_open": {
+        "candidates": 248,
+        "filled": 0,
+        "resolved": 0,
+        "tp": 0,
+        "sl": 0,
+        "statuses": {
+          "REJECTED_AT_FILL": 248
+        },
+        "win_rate": null,
+        "avg_net_r": null,
+        "expectancy_net_r": null,
+        "profit_factor": null,
+        "max_consecutive_losses": null,
+        "sample_status": "INSUFFICIENT SAMPLE"
+      },
+      "confirmed_pullback_cost_2r": {
+        "candidates": 290,
+        "filled": 19,
+        "resolved": 13,
+        "tp": 6,
+        "sl": 7,
+        "statuses": {
+          "EXPIRED": 270,
+          "TP": 6,
+          "SL": 7,
+          "OPEN": 3,
+          "AMBIGUOUS": 3,
+          "INVALIDATED": 1
+        },
+        "win_rate": 46.15384615384615,
+        "avg_net_r": 0.2435866014617027,
+        "expectancy_net_r": 0.2435866014617027,
+        "profit_factor": 1.452375117000305,
+        "max_consecutive_losses": 4,
+        "sample_status": "INSUFFICIENT SAMPLE"
+      }
+    },
+    "helper_sha256": "228347266f5e17956c9110475d037c0be52a0a3d57ffd2da27eeadbe277f5ba5",
+    "independent_arithmetic": "MATCH",
+    "portfolio_roi_pct": null
+  },
+  "market_verification": {
+    "prior_prefix": {
+      "status": "MATCH",
+      "markets": 182,
+      "closed_prefix_candles": 138710,
+      "changes": [],
+      "prior_end_ms": 1791590400000,
+      "new_end_ms": 1791676800000,
+      "new_source_report_sha256": "a914e1c6d12e5abea5196549c7a016d5d0c7304cc23150646bdfb482fa4da2b9",
+      "new_collection_coverage": {
+        "expected_points": 69888,
+        "valid_points": 64176,
+        "failed_markets": 0,
+        "requested_markets": 182,
+        "fetched_markets": 182,
+        "expected_points_all_markets": 69888
+      }
+    },
+    "new_day": {
+      "status": "MATCH",
+      "markets": 182,
+      "matched_markets": 182,
+      "matched_candles": 17376,
+      "missing_candles_in_full_day": 96,
+      "start_ms": 1791590400000,
+      "end_ms": 1791676800000,
+      "new_samples_added": 0,
+      "scope": "INDEPENDENT_UNSIGNED_REST_RECHECK_SAME_EDGEX_API_NOT_INDEPENDENT_TRADES_OR_VENUE"
+    }
+  },
+  "ledger_verification": {
+    "status": "MATCH",
+    "unique_candidates": 546,
+    "strict_signal_confirmations": 546,
+    "fills": 27,
+    "resolved": 18,
+    "signal_and_prior_candles_excluded": true,
+    "original_costs_mfe_mae_and_metrics_verified": true,
+    "prior_terminal_and_price_records_unchanged": true,
+    "status_updates": [
+      {
+        "model": "current_next_open",
+        "before": "OPEN",
+        "after": "SL"
+      }
+    ],
+    "new_candidates_by_model": {
+      "confirmed_pullback_cost_2r": 11,
+      "shadow_v2_next_open": 12
+    },
+    "sample_policy": "CUMULATIVE_UPDATE_SAME_COHORT_NOT_ADDED_TO_PRIOR_COUNTS"
+  },
+  "study_report_sha256": "5d2152631541b5556e72dab0ced72b4ef5f2b4725438cb660aaae03825c974db",
+  "study_summary_sha256": "3199b1cf98bb9ab8917c73df5d82407d118a16d7a306ed97c5a07e6b80d2b3b0",
+  "interpretation": [
+    "Partial four-day update of Oct7-Oct14 UTC anchored cohort; no daily counts added to prior artifact.",
+    "New11 proposal candidates produced no additional fills or resolved proposal trades by cutoff. Existing current OPEN became SL.",
+    "Base5bpsfee+2bpsslip each side: hypothetical, Funding/depth/tick/queue/actual collateral not verified.",
+    "Higher-cost10bpsfee+5bpsslip applies to same frozen fill/outcomes only. Stress R denominator includes stress stop-risk; do not combine base/stressR or infer alternative fills/portfolio.",
+    "All19 proposal fills compared with8 current fills: shared3, proposal-only16, current missing5, pure net+11. Capped6 vs7 yields -1; capped commonsetup unknown, not inferred.",
+    "13 omitted filled proposals all had minimum notional above remaining budget under original 10000USDC/1%/max3/total3%/1x/JSTdaily3% research policy. Actual operating3% policy differs. No causal alternate-policy experiment or allocation changes.",
+    "Reservation explanations overlap: 11 omissions with unfilled reservations and7 with filled reservations cannot be added.226 excluded candidates are not226 lost trades.",
+    "Positive resolved statistics are provisional; proposal OPEN3/AMBIGUOUS3, capped OPEN2. Cohort quality blocked and finalROI unknown; do not exclude uncertain trades or unlock capital.",
+    "No KILL revival, new hypothesis, parameter optimization, original result rewrite or sealed period opening for other studies. No production orders/notifications/UI/DB changes."
+  ],
+  "production_data_exported_to_github": false,
+  "changes_live_rules": false,
+  "real_orders_enabled": false,
+  "automatic_promotion": false
+}
