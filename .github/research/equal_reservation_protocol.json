@@ -1,0 +1,100 @@
+{
+  "protocol": "pending_equal_notional_reservation_v1",
+  "registered_utc": "2026-10-11T01:22:21.993553+00:00",
+  "registration_base_sha": "4a7270d98a17120a42aad9e17f22e55b7a5227f3",
+  "hypothesis": "A narrow-stop pending candidate can reserve almost all unlevered notional despite low risk. A fixed per-candidate notional ceiling of current known cash / original three slots may leave budget for other candidates. This tests execution allocation only, not additional strategy signals, higher uncapped win rate or relaxed entries. One ratio fixed from existing slots; no optimization grid.",
+  "development": {
+    "start_ms": 1791331200000,
+    "end_ms": 1791676800000,
+    "period_complete": false,
+    "market_already_viewed": true,
+    "role": "VIEWED_PARTIAL_DEVELOPMENT_NOT_HOLDOUT",
+    "ledger_sha256": "5d2152631541b5556e72dab0ced72b4ef5f2b4725438cb660aaae03825c974db",
+    "source_sha256": "a914e1c6d12e5abea5196549c7a016d5d0c7304cc23150646bdfb482fa4da2b9"
+  },
+  "future_periods": [
+    {
+      "id": "future_validation_1",
+      "start_ms": 1794009600000,
+      "end_ms": 1794614400000,
+      "market_already_viewed": false
+    },
+    {
+      "id": "future_validation_2",
+      "start_ms": 1794614400000,
+      "end_ms": 1795219200000,
+      "market_already_viewed": false
+    }
+  ],
+  "models": [
+    "current_next_open",
+    "shadow_v2_next_open",
+    "confirmed_pullback_cost_2r"
+  ],
+  "baseline": "Exact original portfolio for each model, including original research cash/risk/notional/day/size/uncertainty policy.",
+  "allocation": {
+    "only_change": "At CREATE, notional=max(0,min(cash/3,cash-reserved_notional)); original quantity uses this amount and unchanged risk, max size, floor and minimum size. No reallocation, retry, cancellation or release of existing reservations.",
+    "ratio_denominator": 3,
+    "ratio_reason": "Original maximum simultaneous research slots, chosen before alternate outcomes.",
+    "ordering": "Unchanged sorted (timestamp,event priority,key): fills booked at bar close, known endings before new creations. No prioritization by eventual touch, profit, ticker performance, volume or future data.",
+    "known_cash": "Use original event-booked cash at CREATE only; later profits cannot change earlier reservation. Current and proposal receive the same ceiling for fair comparison.",
+    "fixed_policy": {
+      "initial_cash_usdc": 10000,
+      "risk_pct": 1,
+      "max_positions": 3,
+      "max_total_risk_pct": 3,
+      "max_notional_multiple": 1,
+      "daily_loss_pct": 3,
+      "daily_loss_timezone": "Asia/Tokyo"
+    },
+    "uncertainty": "OPEN/AMBIGUOUS/DATA_GAP funds remain reserved; final ROI null. Unfilled expiry only releases at original known END. No added fills or changed outcome chronology."
+  },
+  "costs": {
+    "fee_bps_each_side": 5,
+    "slippage_bps_each_side": 2,
+    "funding": "Unverified; no all-cost claim or qualification until verified without timing ambiguity."
+  },
+  "stress": {
+    "fee_bps_each_side": 10,
+    "slippage_bps_each_side": 5,
+    "scope": "Same admitted hypothetical fills and frozen exits, recompute per-unit costs/net stop risk and cash cost sensitivity at fixed original assigned quantity. Does not replay alternative stress entries, funding, sizing or capital; stress final ROI stays null."
+  },
+  "decision": {
+    "early_kill": "In any complete registered week with proposal >=20 admitted resolved, base net AvgR<=0 or PF<=1: KILL_ALLOCATION_NO_PROMOTION. Stop next holdout; preserve old strategy and OPEN tracking.",
+    "minimum_resolved_each_period": 50,
+    "minimum_net_win_rate_pct": 40,
+    "minimum_base_pf": 1.2,
+    "stress_avg_net_r_positive": true,
+    "stress_pf_greater_than": 1,
+    "uncapped_proposal_vs_current_fill_increase_positive": true,
+    "capped_proposal_vs_same_allocator_current_fill_increase_positive": true,
+    "capped_proposal_vs_original_proposal_fill_increase_positive": true,
+    "capped_minimum_resolved_each_period": 20,
+    "known_final_portfolio_roi_positive": true,
+    "additional_requirements": "Both complete untouched weeks pass separately. No open/pending/uncertain capital, source gaps or missing costs. Real-time separate Shadow >=20 resolved positive AvgR/PF>1 and actual fill/protection evidence still required. No automatic promotion.",
+    "insufficient": "Incomplete periods, small sample or missing costs remain INSUFFICIENT SAMPLE / BLOCKED_DATA_QUALITY. Do not change frozen entry rules, ratio or old protocol; do not fit a replacement. Daily/weekly updates never pooled.",
+    "development": "Viewed partial development is implementation/causal backtest only, never selection evidence or completion; sufficient complete development negative would KILL. No future prices are opened before each end; process future_1 then future_2, halt on KILL or mismatch."
+  },
+  "preserve_sha256": {
+    "analysis_terminal/pending_entry_replay.py": "111686641afe5e61c64311fa730716b5198d3a74e34440e06f48d99da3c53df8",
+    "analysis_terminal/pending_entry_protocol.json": "1ed8af4b9bb0dd7281e80a21956677bb6d9e315f47fb0c00689992662a29ee0f",
+    ".github/workflows/strategy-research.yml": "f350735b1f014149e6cb3bf311fdc8e2d47f47ede7e70f3d9e86f7d6910319bc"
+  },
+  "sealed_periods_preserved": [
+    "2026-09-05/2026-09-12",
+    "VWAP 2026-10-09/2026-10-23",
+    "volume 2026-10-24/2026-11-07"
+  ],
+  "limitations": [
+    "Backtest touch is hypothetical, not queue/depth/tick/actual fill evidence.",
+    "Allocator changes admitted subset and size, not uncapped candidates or win rate; apparent subset improvements have selection bias.",
+    "Shared historical development and correlated market periods / many earlier experiments create overfitting risk. Future two weeks are non-overlapping within this experiment; no pooling other studies.",
+    "Fixed 1x research notional is not the actual account leverage/collateral/per-position 3% policy. No production policy changes.",
+    "No observation/fill/outcome imputation or unknown-capital release. Original metrics/portfolio/decisions/files remain unchanged.",
+    "Public registered research only; no production payloads exported."
+  ],
+  "changes_live_rules": false,
+  "real_orders_enabled": false,
+  "automatic_promotion": false,
+  "eligible_for_live_promotion": false
+}
