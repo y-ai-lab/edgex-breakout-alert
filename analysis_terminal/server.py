@@ -45,6 +45,7 @@ from analysis_terminal import execution_health
 from analysis_terminal import execution_controls
 from analysis_terminal import push_security
 from analysis_terminal import market_status
+from analysis_terminal import trade_guidance
 from analysis_terminal.tracking import tracking_summary
 from analysis_terminal.history import fetch_history
 from analysis_terminal.outcome_history import BACKFILL_BARS, BACKFILL_REQUESTS, consecutive_window, merge_candles
@@ -4167,7 +4168,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="EdgeX Analysis Terminal",
-    version="19.0.63",
+    version="19.0.64",
     lifespan=lifespan,
 )
 app.add_middleware(push_security.BrowserSecurityMiddleware)
@@ -4252,11 +4253,14 @@ async def analyze_api(ticker: str = Query(min_length=2, max_length=64)):
     except Exception as exc:
         raise HTTPException(502, f"EdgeX WebSocket failed: {exc}") from exc
 
-    return analyze_contract(
+    analysis = analyze_contract(
         contract,
         data.get((contract.contract_id, SETTINGS.monitor_interval), []),
         data.get((contract.contract_id, SETTINGS.entry_interval), []),
     )
+    return dict(analysis, trade_guidance=trade_guidance.describe(
+        analysis, _action_for_stage(str(analysis.get("stage") or ""))
+    ))
 
 
 def _resolve_contract(
@@ -4356,7 +4360,12 @@ async def chart_api(
     monitor_raw = data.get((contract.contract_id, SETTINGS.monitor_interval), [])
     entry_raw = data.get((contract.contract_id, SETTINGS.entry_interval), [])
     analysis = analyze_contract(contract, monitor_raw, entry_raw)
-    analysis["action"] = _action_for_stage(str(analysis.get("stage") or ""))
+    # Describe price feasibility without changing the frozen analyzer or signals.
+    guidance = trade_guidance.describe(
+        analysis, _action_for_stage(str(analysis.get("stage") or ""))
+    )
+    analysis["trade_guidance"] = guidance
+    analysis["action"] = guidance["action"]
 
     return {
         "ticker": contract.contract_name,
@@ -4377,7 +4386,7 @@ async def chart_api(
             "breakout": analysis.get("breakout_level"),
             "entry": analysis.get("entry_reference"),
             "stop": analysis.get("stop_loss"),
-            "tp1": analysis.get("tp1_2r"),
+            "tp1": guidance["first_target"],
             "target": analysis.get("take_profit"),
             "support": analysis.get("support_4h"),
             "resistance": analysis.get("resistance_4h"),
