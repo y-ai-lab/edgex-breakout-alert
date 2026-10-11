@@ -145,6 +145,10 @@ button{-webkit-tap-highlight-color:transparent}
   <div id="entryNowContent" class="entryNowContent"><span class="muted">最新データを取得しています。</span></div>
 </div>
 <div id="dashSummary" class="summary executiveSummary"></div>
+<details id="marketDataDetails" class="dashboardDrawer" hidden>
+<summary>データの確認状況<span id="marketDataSummary" class="drawerHint"></span></summary>
+<div class="drawerBody"><div id="marketDataStatus" class="sub" role="status"></div><div id="marketDataMissing" class="sub"></div></div>
+</details>
 <div class="analyticsBox" role="status" aria-live="polite">
   <div class="row compactRow"><b>API自動取引</b><span id="liveExecutionBadge" class="pill">確認中</span><button id="openLiveStatus" class="ghost">稼働・ルールを見る</button></div>
   <div id="liveExecutionBrief" class="sub">接続状態を確認しています。ENTRYは条件成立の表示で、約定済みを意味しません。</div>
@@ -1018,9 +1022,11 @@ function renderNearCandidates(j){
  var note=document.getElementById("nearCandidatesStatus"),s=j&&j.summary;
  if(note)note.textContent=entryFreshness(j).stale?"最新データを確認中です。":s&&Number.isFinite(s.near_signal_count)&&Number.isFinite(s.qualified_near_count)?'確認・リテスト待ち '+s.near_signal_count+'件 / RR条件を満たす候補 '+s.qualified_near_count+'件。':'条件成立前の候補です。';
  if(entryFreshness(j).stale){el.innerHTML='<span class="warn">データ鮮度を確認 — 更新後に候補を表示します。</span>';return}
- var near=(j.qualified_near_candidates||[]).filter(function(r){return r.stage!=="READY"}).slice(0,6);
- if(!near.length){el.innerHTML='<span class="muted">有力な直前候補はありません。</span>';return}
- el.innerHTML=near.map(function(r){var e=lifecycleEscape;return '<button class="nearCandidateCard" data-ticker="'+e(r.ticker)+'"><div class="entryReadyTop"><b class="entryTicker">'+e(r.ticker)+'</b><span class="entryDirection">'+e(directionJa(r.direction))+'</span><span class="badge warn">まだ待つ</span></div><div class="pickMeta"><span class="warn">'+e(stageJa(r.stage))+'</span><span class="pill">RR '+fmt(r.rr,2)+'</span></div><div class="entryNumbers">'+entryMetric("Entry目安",fmt(r.entry_reference,8))+entryMetric("SL",fmt(r.stop_loss,8))+entryMetric("TP",fmt(r.take_profit,8))+'</div><div class="pickReason">'+e(reasonJa(r.reason))+'</div></button>'}).join("");
+ var near=(j.qualified_near_candidates||[]).filter(function(r){return r.stage!=="READY"}).slice(0,6),seen=new Set(near.map(function(r){return r.setup_id||r.ticker}));
+ var blocked=(j.blocked_setup_candidates||[]).filter(function(r){return r.stage!=="READY"&&!seen.has(r.setup_id||r.ticker)}).slice(0,Math.max(0,6-near.length));
+ if(!near.length&&!blocked.length){el.innerHTML='<span class="muted">現在、表示できるブレイク後のセットアップはありません。</span>';return}
+ function candidateCard(r,watchOnly){var e=lifecycleEscape,why=watchOnly?(r.entry_band&&r.entry_band.status==='NO_OVERLAP'?'現在の構造では確認水準とRR条件を両立できません。構造の更新を監視します。':r.rr==null?'SL/TPの価格構造が未成立です。':'RRが最低条件に届いていません。'):reasonJa(r.reason);return '<button class="nearCandidateCard" data-ticker="'+e(r.ticker)+'"><div class="entryReadyTop"><b class="entryTicker">'+e(r.ticker)+'</b><span class="entryDirection">'+e(directionJa(r.direction))+'</span><span class="badge warn">'+(watchOnly?'監視のみ・条件不足':'まだ待つ')+'</span></div><div class="pickMeta"><span class="warn">'+e(stageJa(r.stage))+'</span><span class="pill">RR '+fmt(r.rr,2)+'</span></div><div class="entryNumbers">'+entryMetric("Entry目安",fmt(r.entry_reference,8))+entryMetric("SL",fmt(r.stop_loss,8))+entryMetric("TP",fmt(r.take_profit,8))+'</div><div class="pickReason">'+e(why)+'</div></button>'}
+ el.innerHTML=near.map(function(r){return candidateCard(r,false)}).join('')+(blocked.length?'<div class="sub">条件不足のセットアップ — エントリー不可</div>'+blocked.map(function(r){return candidateCard(r,true)}).join(''):'');
  el.querySelectorAll(".nearCandidateCard").forEach(function(b){b.onclick=function(){if(entryFreshness(j).stale){renderNearCandidates(j);return}document.getElementById("ticker").value=this.dataset.ticker;tab("analysis");analyze()}});
 }
 function stageJa(v){return ({READY:"エントリー可能",CONFIRMATION_WAIT:"15分足の確認待ち",RETEST_WAIT:"リテスト待ち",RR_WAIT:"RR不足",BREAKOUT_WAIT:"ブレイク待ち",TREND_WAIT:"方向感待ち",STRUCTURE_WAIT:"価格構造待ち",DATA_WAIT:"データ待ち",NEAR:"直前候補"}[v]||v||"—")}
@@ -1068,9 +1074,19 @@ function buildHypotheses(){
 }
 function renderDashboard(){
  var sum=document.getElementById("dashSummary"),upd=document.getElementById("dashUpdated"),j=globalEntrySnapshot||lastMarketPayload;if(!sum||!upd)return;
+ renderMarketDataStatus(j);
  if(!j||entryFreshness(j).stale){sum.innerHTML=card("データ","鮮度を確認");upd.textContent="更新待ち";return}
- sum.innerHTML=card("エントリー可能",(j.ready_candidates||[]).length)+card("次の監視候補",(j.qualified_near_candidates||[]).length)+card("評価済み",j.scanned||0)+card("データ取得率",fmt(j.coverage_pct,1)+"%");
+ var h=j.scan_health;
+ sum.innerHTML=card("エントリー可能",(j.ready_candidates||[]).length)+card("RR条件済みの直前候補",(j.qualified_near_candidates||[]).length)+card(h?"確認済み":"評価済み",h?h.checked+' / '+h.universe:j.scanned||0)+card("指標評価率",fmt(j.coverage_pct,1)+"%");
  upd.textContent="更新 "+new Date(j._client_rendered_ms).toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit"});
+}
+function renderMarketDataStatus(j){
+ var box=document.getElementById('marketDataDetails'),status=document.getElementById('marketDataStatus'),summary=document.getElementById('marketDataSummary'),list=document.getElementById('marketDataMissing');if(!box||!status||!summary||!list)return;
+ var h=j&&j.scan_health;box.hidden=!h;if(!h)return;
+ if(entryFreshness(j).stale){summary.textContent='鮮度を確認';status.textContent='最新データを確認中です。';list.innerHTML='';return}
+ summary.textContent='確認 '+h.checked+' / '+h.universe+'銘柄・評価保留 '+h.data_wait_count+'銘柄';
+ var required=h.required_closed_candles||{};status.textContent='全銘柄の確認と、指標を計算できるデータの充足は別です。指標評価可能 '+h.analysis_ready+' / '+h.universe+'銘柄。必要な確定足 '+Object.keys(required).map(function(i){return (i==='HOUR_4'?'4H':i==='MINUTE_15'?'15M':i)+' '+required[i]+'本'}).join(' / ')+'。不足した足は補完せず、データ待ちにします。';
+ list.innerHTML=(h.data_wait||[]).map(function(r){var e=lifecycleEscape,counts=r.closed_candles||{},why=(r.reasons||[]).map(function(v){return ({MISSING_SNAPSHOT:'足データ未受信',INSUFFICIENT_HISTORY:'確定足の履歴不足',ANALYSIS_UNAVAILABLE:'指標評価不可'}[v]||v)}).join(' / ');return '<div class="reportItem"><b>'+e(r.ticker)+'</b> — '+e(why)+'<br>'+Object.keys(required).map(function(i){return e(i==='HOUR_4'?'4H':i==='MINUTE_15'?'15M':i)+' '+e(counts[i]||0)+' / '+e(required[i])+'本'}).join(' / ')+'</div>'}).join('')||(h.data_wait_count?'詳細を確認中です。':'全銘柄の指標データがそろっています。');
 }
 function summaryView(s){var el=document.getElementById("summary");if(!s){el.innerHTML="";return}el.innerHTML=card("エントリー可能",s.ready_count)+card("有力な直前候補",s.qualified_near_count||0)+card("直前候補 合計",s.near_signal_count)+card("ロング",s.direction_counts.LONG||0)+card("ショート",s.direction_counts.SHORT||0)+card("平均スコア",fmt(s.average_score,1))+card("有力候補",(s.top_qualified_near||[]).join(", ")||"—")}
 function renderRows(){var body=document.getElementById("screenBody");body.innerHTML="";var filtered=showWatch?rows.filter(r=>watch.has(r.ticker)):rows;filtered.forEach(function(r){var tr=document.createElement("tr");tr.innerHTML='<td class="star">'+(watch.has(r.ticker)?"★":"☆")+'</td><td><b>'+r.ticker+'</b></td><td><span class="badge '+r.stage+'">'+stageJa(r.stage)+'</span></td><td>'+directionJa(r.direction)+'</td><td>'+fmt(r.score,1)+'</td><td>'+fmt(r.current_price,8)+'</td><td>'+pct(r.change_24h_pct)+'</td><td>'+fmt(r.volume_ratio,2)+'x</td><td>'+fmt(r.rr,2)+'</td><td>'+stageAction(r.stage)+'</td><td>'+fmt(r.data_age_seconds,0)+'s</td><td>'+reasonJa(r.reason)+'</td>';

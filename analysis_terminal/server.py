@@ -44,6 +44,7 @@ from analysis_terminal import account_risk
 from analysis_terminal import execution_health
 from analysis_terminal import execution_controls
 from analysis_terminal import push_security
+from analysis_terminal import market_status
 from analysis_terminal.tracking import tracking_summary
 from analysis_terminal.history import fetch_history
 from analysis_terminal.outcome_history import BACKFILL_BARS, BACKFILL_REQUESTS, consecutive_window, merge_candles
@@ -2634,16 +2635,16 @@ async def market_snapshots(force: bool = False):
                 continue
             data.update(part)
 
-        received_contracts = {contract_id for contract_id, _interval in data}
-        missing = [
-            contract_id
-            for contract_id in contract_ids
-            if contract_id not in received_contracts
-        ]
+        missing = market_status.missing_snapshot_contracts(
+            contract_ids, data, (SETTINGS.monitor_interval, SETTINGS.entry_interval)
+        )
         if missing:
             try:
                 retry = await fetch_snapshots(missing, timeout=20.0)
-                data.update(retry)
+                # Preserve already received streams; retry only fills missing pairs.
+                for key, candles in retry.items():
+                    if not data.get(key):
+                        data[key] = candles
             except Exception:
                 pass
 
@@ -3764,6 +3765,13 @@ async def _scan_market_rows(
     return contracts, rows
 
 
+def _scan_health(contracts, rows):
+    return market_status.describe_scan(
+        contracts, rows, _snapshot_cache[1] if _snapshot_cache else {}, SETTINGS,
+        scanner.INTERVAL_MS, now_ms=int(time.time()*1000),
+    )
+
+
 def _persist_scan_result(
     contracts: dict[str, scanner.Contract],
     rows: list[dict[str, Any]],
@@ -3777,6 +3785,7 @@ def _persist_scan_result(
         "universe": len(contracts),
         "scanned": len(rows),
         "coverage_pct": round(len(rows) / len(contracts) * 100.0, 1) if contracts else 0.0,
+        "scan_health": _scan_health(contracts, rows),
         "ready": summary["ready_count"],
         "near": summary["near_signal_count"],
         "qualified_near": summary["qualified_near_count"],
@@ -4158,7 +4167,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="EdgeX Analysis Terminal",
-    version="19.0.62",
+    version="19.0.63",
     lifespan=lifespan,
 )
 app.add_middleware(push_security.BrowserSecurityMiddleware)
@@ -4505,6 +4514,14 @@ async def screener_api(
         and row.get("rr") is not None
         and float(row["rr"]) >= SETTINGS.min_rr
     ][:50]
+    # Display-only context. These remain ineligible for entries or notifications.
+    blocked_setup_candidates = [
+        row for row in _sort_rows(all_rows)
+        if row.get("setup_id")
+        and row.get("stage") in {"CONFIRMATION_WAIT", "RETEST_WAIT", "RR_WAIT", "STRUCTURE_WAIT"}
+        and not (row.get("stage") in {"CONFIRMATION_WAIT", "RETEST_WAIT"}
+                 and row.get("rr") is not None and float(row["rr"]) >= SETTINGS.min_rr)
+    ][:50]
     watch_names = {
         item.strip().upper()
         for item in (watch or "").split(",")
@@ -4531,6 +4548,7 @@ async def screener_api(
         "universe": len(contracts),
         "scanned": len(all_rows),
         "coverage_pct": round(len(all_rows) / len(contracts) * 100.0, 1) if contracts else 0.0,
+        "scan_health": _scan_health(contracts, all_rows),
         "matched": len(rows),
         "snapshot_age_seconds": (
             int(time.time() - _snapshot_cache[0])
@@ -4546,6 +4564,7 @@ async def screener_api(
         "early_watch": early_watch,
         "ready_candidates": ready_candidates,
         "qualified_near_candidates": qualified_near_candidates,
+        "blocked_setup_candidates": blocked_setup_candidates,
         "watch_status": watch_status,
         "results": rows[:limit],
     }
