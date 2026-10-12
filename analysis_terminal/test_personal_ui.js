@@ -13,7 +13,9 @@ const ctx={console,Date:class extends Date{static now(){return now}},document:{g
 vm.createContext(ctx);vm.runInContext(script.slice(script.indexOf('function summaryView('),script.indexOf('function syncAutoJournalButton(')),ctx);
 ctx.marketRowsFilterKey=ctx.marketFilterKey();ctx.renderRows();
 const testcase=process.argv[3];
-if(testcase==='stale_list'){
+if(testcase==='independent_expiry'){
+ const expiry=[...timers.values()].find(t=>t.ms===120000);assert(expiry);ctx.globalEntrySnapshot._client_rendered_ms=now+60000;now+=120000;expiry.fn();assert(!nodes.marketCards.innerHTML.includes('isReady'));assert(nodes.marketCards.innerHTML.includes('isStale'));assert.equal(ctx.marketRowsExpiryTimer,null);
+}else if(testcase==='stale_list'){
  assert(nodes.marketCards.innerHTML.includes('isReady'));now+=119999;ctx.renderRows();assert(nodes.marketCards.innerHTML.includes('isReady'));now++;ctx.renderRows();assert(!nodes.marketCards.innerHTML.includes('isReady'));assert(nodes.marketCards.innerHTML.includes('isStale'));assert(!nodes.screenBody.innerHTML.includes('badge READY'));assert(nodes.screenFreshness.textContent.includes('鮮度'));ctx.globalEntrySnapshot._client_rendered_ms=now;ctx.renderRows();assert(!nodes.marketCards.innerHTML.includes('isReady'),'Fresh global ENTRY must not refresh an old filtered list');ctx.lastMarketPayload._client_rendered_ms=now;ctx.renderRows();assert(nodes.marketCards.innerHTML.includes('isReady'));
 }else if(testcase==='stale_summary'){
  ctx.summaryView({ready_count:1,near_signal_count:0,direction_counts:{},average_score:1});assert(nodes.summary.innerHTML.includes('エントリー可能'));now+=120000;ctx.summaryView({ready_count:1});assert(!nodes.summary.innerHTML.includes('エントリー可能'));assert(nodes.summary.innerHTML.includes('鮮度を確認'));

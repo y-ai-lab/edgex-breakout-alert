@@ -6,6 +6,7 @@ class PersonalMarketUiTests(unittest.TestCase):
     def run_case(self,case):
         result=subprocess.run(['node',str(ROOT/'test_personal_ui.js'),str(ROOT/'index.html'),case],capture_output=True,text=True,timeout=20)
         self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+    def test_list_owns_its_120_second_expiry_timer(self): self.run_case('independent_expiry')
     def test_stale_rows_never_keep_ready_or_borrow_global_freshness(self): self.run_case('stale_list')
     def test_stale_global_summary_is_not_an_entry_count(self): self.run_case('stale_summary')
     def test_unchanged_age_tick_does_not_reset_dom(self): self.run_case('unchanged_dom')

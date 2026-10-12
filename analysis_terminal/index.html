@@ -1163,11 +1163,12 @@ function renderMarketDataStatus(j){
  list.innerHTML=(h.data_wait||[]).map(function(r){var e=lifecycleEscape,counts=r.closed_candles||{},why=(r.reasons||[]).map(function(v){return ({MISSING_SNAPSHOT:'足データ未受信',INSUFFICIENT_HISTORY:'確定足の履歴不足',ANALYSIS_UNAVAILABLE:'指標評価不可'}[v]||v)}).join(' / ');return '<div class="reportItem"><b>'+e(r.ticker)+'</b> — '+e(why)+'<br>'+Object.keys(required).map(function(i){return e(i==='HOUR_4'?'4H':i==='MINUTE_15'?'15M':i)+' '+e(counts[i]||0)+' / '+e(required[i])+'本'}).join(' / ')+'</div>'}).join('')||(h.data_wait_count?'詳細を確認中です。':'全銘柄の指標データがそろっています。');
 }
 function summaryView(s){var el=document.getElementById("summary");if(!s){el.innerHTML="";return}if(entryFreshness(globalEntrySnapshot).stale){el.innerHTML=card('市場データ','鮮度を確認');return}el.innerHTML=card("エントリー可能",s.ready_count)+card("有力な直前候補",s.qualified_near_count||0)+card("直前候補 合計",s.near_signal_count)+card("ロング",s.direction_counts.LONG||0)+card("ショート",s.direction_counts.SHORT||0)+card("平均スコア",fmt(s.average_score,1))+card("有力候補",lifecycleEscape((s.top_qualified_near||[]).join(", "))||"—")}
-var marketFilterTimer=null,marketRowsFilterKey=null;
+var marketFilterTimer=null,marketRowsFilterKey=null,marketRowsExpiryTimer=null;
 function marketFilterKey(){return JSON.stringify(['stage','direction','minScore','minRR','q'].map(function(id){return String(document.getElementById(id).value).trim()}))}
 function renderRows(){
  var body=document.getElementById('screenBody'),cards=document.getElementById('marketCards'),empty=document.getElementById('screenEmpty'),status=document.getElementById('screenFreshness');if(!body||!cards||!empty||!status)return;
  var pending=marketRowsFilterKey!==marketFilterKey(),fresh=entryFreshness(lastMarketPayload),stale=fresh.stale;
+ clearTimeout(marketRowsExpiryTimer);marketRowsExpiryTimer=null;if(!pending&&!stale)marketRowsExpiryTimer=setTimeout(renderRows,Math.ceil((120-fresh.age)*1000));
  status.textContent=pending?'絞り込みを確認中です。前の条件の一覧は表示しません。':stale?'一覧のデータ鮮度を確認 — 古いREADYは成立表示しません。銘柄の分析で最新状態を確認できます。':'一覧更新 '+Math.round(fresh.age)+'秒前 / 銘柄をタップして分析・☆でお気に入り';
  var filtered=pending?[]:showWatch?rows.filter(function(r){return watch.has(r.ticker)}):rows;
  empty.hidden=pending||filtered.length>0;empty.textContent=showWatch?'現在の絞り込みに一致するお気に入りはありません。☆で追加するか「リセット」で全市場に戻せます。':'現在の絞り込みに一致する銘柄はありません。「リセット」で全市場に戻せます。';
