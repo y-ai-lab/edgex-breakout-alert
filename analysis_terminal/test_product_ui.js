@@ -12,6 +12,7 @@ const context={console,AbortController,Date:class extends Date{static now(){retu
  navigator:{clipboard:{writeText:async t=>clipboard.push(t)}},lastAnalysis:null,quickRiskVersion:0,manualCalcVersion:0,
  jf:async(url,opt)=>{calls.push({url,opt});let reply=replies.shift();if(reply instanceof Error)throw reply;if(typeof reply==='function')return reply();return reply},
  addRecentTicker(){},card:(k,v)=>k+':'+v+';',fmt:x=>x==null?'—':String(x),pct:String,lifecycleEscape:String,reasonJa:String,stageJa:String,directionJa:String,trendJa:String,
+ renderAnalysisCriteria(){},syncAnalysisWatch(){},
  renderReadyActionCard:r=>nodes.readyActionCard.innerHTML=r?'READY':'',renderEntryBand:()=>'',renderQuickRisk(){},updateUrl(){},drawChart(){},actionClass:String,copyTextValue(){},openRiskCalculator(){},alert:()=>assert.fail('no alert'),location:{href:'https://test/'}}
 vm.createContext(context);
 vm.runInContext(script.slice(script.indexOf('function planAction('),script.indexOf('function reasonJa(')),context);

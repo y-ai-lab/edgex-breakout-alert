@@ -132,6 +132,13 @@ button:disabled{opacity:.5;cursor:not-allowed}
 .marketItem .pickReason{line-height:1.6}.marketItemMetrics{display:flex;flex-wrap:wrap;gap:7px;margin:7px 0;font-size:13px}
 .marketItem.isStale{border-style:dashed}.marketStaleLabel{color:var(--warn)}
 @media(max-width:720px){.marketList{display:grid;gap:8px;margin-top:12px}#marketTable,#marketTableHint{display:none}#screen .summary{grid-template-columns:repeat(2,minmax(0,1fr))}#screen .summary .card:nth-child(n+3){display:none}#screen>.filters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}#screen>.filters .field.small{min-width:0;max-width:none}#screen>.filters .field.small:first-child{grid-column:1/-1}.marketToolbar{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.marketToolbar .ghost{width:100%}}
+/* Keep the decision and its evidence readable together. */
+.analysisIdentity{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:12px 0}.analysisIdentity b{font-size:20px}.analysisIdentity .sub{font-size:12px}
+.conditionPanel{margin:12px 0;border:1px solid var(--line);border-radius:13px;padding:14px;background:var(--panel2)}
+.conditionPanel h3{margin:0;font-size:16px}.conditionChecklist{list-style:none;padding:0;margin:10px 0 0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.conditionCheck{padding:11px;border:1px solid var(--line);border-radius:10px;background:var(--panel)}.conditionCheckHeader{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+.conditionCheckHeader b{font-size:13px}.conditionCheck p{margin:7px 0 0;font-size:12px;line-height:1.6;color:var(--muted);overflow-wrap:anywhere}.conditionCheck.pass{border-color:rgba(74,222,128,.25)}
+@media(max-width:720px){.conditionChecklist{grid-template-columns:1fr}.conditionPanel{padding:11px}}
 </style>
 </head>
 <body><main>
@@ -274,9 +281,11 @@ button:disabled{opacity:.5;cursor:not-allowed}
 
 <section id="analysis" class="panel">
 <h2>銘柄分析</h2>
-<div class="row"><div class="field"><label for="ticker">銘柄</label><input id="ticker" value="BTCUSDC"></div><button class="primary" id="analyze">分析</button><button class="ghost" id="toRisk">資金・数量</button><button class="ghost" id="copyPlan" disabled>プランをコピー</button><button class="ghost" id="sharePlan" disabled>共有</button></div>
+<div class="row"><div class="field"><label for="ticker">銘柄</label><input id="ticker" value="BTCUSDC"></div><button class="primary" id="analyze">分析</button><button class="ghost" id="toRisk">資金・数量</button><button class="ghost" id="copyPlan" disabled>プランをコピー</button><button class="ghost" id="sharePlan" disabled>共有</button><button class="ghost" id="analysisWatch" type="button" aria-pressed="false" disabled>☆ お気に入り</button></div>
 <div id="analysisStatus" class="status" role="status" aria-live="polite">BTC のような短縮入力でも検索します。</div>
+<div id="analysisIdentity" class="analysisIdentity"></div>
 <div id="actionOut"></div>
+<div id="entryCriteria" data-min-rr="__RULE_MIN_RR__"></div>
 <div id="readyActionCard"></div>
 <div id="quickRiskOut"></div>
 <div id="analysisOut"></div>
@@ -931,7 +940,7 @@ async function toggleCandidateNotify(){if(!("Notification" in window)){alert("�
 function renderWatchStatus(items){var el=document.getElementById("dashWatch");if(!el)return;var m={};(items||[]).forEach(x=>m[x.ticker]=x);var names=Array.from(watch);if(!names.length){el.innerHTML='<span class="muted">まだありません</span>';return}el.innerHTML=names.map(function(t){var x=m[t];return '<div class="watchState"><button class="ghost quickTicker" data-ticker="'+lifecycleEscape(t)+'">'+lifecycleEscape(t)+'</button>'+(x?'<span class="badge '+x.stage+'">'+stageJa(x.stage)+'</span><span class="pill">'+directionJa(x.direction)+'</span><span class="pill">'+fmt(x.score,1)+'点</span>':'<span class="muted">次回スキャンで更新</span>')+'</div>'}).join("");el.querySelectorAll(".quickTicker").forEach(function(b){b.onclick=function(){document.getElementById("ticker").value=this.dataset.ticker;tab("analysis");analyze()}})}
 function addRecentTicker(ticker){if(!ticker)return;recentTickers=[ticker].concat(recentTickers.filter(x=>x!==ticker)).slice(0,8);browserStorageWrite("edgexRecentTickers",JSON.stringify(recentTickers));renderQuickAccess()}
 function quickButtons(items){return items&&items.length?items.map(t=>'<button class="ghost quickTicker" data-ticker="'+lifecycleEscape(t)+'">'+lifecycleEscape(t)+'</button>').join(" "):'<span class="muted">まだありません</span>'}
-function renderQuickAccess(){var w=document.getElementById("dashWatch"),r=document.getElementById("recentTickers");if(w)w.innerHTML=quickButtons(Array.from(watch));if(r)r.innerHTML=quickButtons(recentTickers);document.querySelectorAll(".quickTicker").forEach(function(b){b.onclick=function(){document.getElementById("ticker").value=this.dataset.ticker;tab("analysis");analyze()}})}
+function renderQuickAccess(){if(typeof syncAnalysisWatch==='function')syncAnalysisWatch();var w=document.getElementById("dashWatch"),r=document.getElementById("recentTickers");if(w)w.innerHTML=quickButtons(Array.from(watch));if(r)r.innerHTML=quickButtons(recentTickers);document.querySelectorAll(".quickTicker").forEach(function(b){b.onclick=function(){document.getElementById("ticker").value=this.dataset.ticker;tab("analysis");analyze()}})}
 function regimeBiasJa(v){return ({LONG_BIASED:"ロング優勢",SHORT_BIASED:"ショート優勢",BALANCED:"ほぼ均衡"}[v]||"不明")}
 function regimeActivityJa(v){return ({SIGNAL_ACTIVE:"シグナルあり",SETUP_BUILDING:"セットアップ形成中",QUIET:"静観相場",SELECTIVE:"選別相場"}[v]||"不明")}
 function evidenceConfidenceJa(v){return ({NO_SAMPLE:"履歴なし",LOW:"低",EARLY:"初期",OK:"十分"}[v]||v||"—")}
@@ -1280,13 +1289,46 @@ function renderEntryBand(r){
  }
  return header+'<div class="'+(b.status==='NO_OVERLAP'?'warn':'muted')+'">'+title+'</div><div class="muted">'+detail+'</div><div class="muted">取得した4H構造での価格条件です。足の方向・リテスト・鮮度を含むエントリー可否は上の状態を確認してください。</div></div>';
 }
+function reviewEntryConditions(r,minimum){
+ var known=function(v){return v===true||v===false},positive=function(v){return Number.isFinite(v)&&v>0},validSide=r&&['LONG','SHORT'].includes(r.direction),stage=r&&r.stage;
+ r=r||{};var early=stage==='DATA_WAIT'||stage==='TREND_WAIT'||stage==='BREAKOUT_WAIT',checks=[];
+ function add(key,label,state,detail){checks.push({key:key,label:label,state:state,detail:detail})}
+ function state(v){return known(v)?v?'PASS':'FAIL':'UNKNOWN'}
+ var trend=stage==='DATA_WAIT'?null:r.trend==='NEUTRAL'?false:validSide&&(r.direction==='LONG'&&r.trend==='UP'||r.direction==='SHORT'&&r.trend==='DOWN')?true:null;
+ add('trend','1. 4Hの方向',state(trend),trend===true?'EMAと終値の位置が'+directionJa(r.direction)+'方向に一致しています。':trend===false?'EMAと終値の方向が揃うまで待ちます。':'4Hの方向を確認できません。');
+ var breakout=stage==='BREAKOUT_WAIT'?false:stage==='DATA_WAIT'||stage==='TREND_WAIT'?null:positive(r.breakout_level)&&Number.isInteger(r.breakout_time_ms)&&r.breakout_time_ms>0?true:null;
+ add('breakout','2. 直近のブレイク',stage==='DATA_WAIT'?'UNKNOWN':stage==='TREND_WAIT'?'UNEVALUATED':state(breakout),breakout===true?'ブレイク水準 '+fmt(r.breakout_level,8)+' / '+new Date(r.breakout_time_ms).toLocaleString('ja-JP'):breakout===false?'直近の4H終値で水準突破を確認できていません。':'方向・足データが揃ってから評価します。');
+ add('retest','3. 水準への戻り',early?'UNEVALUATED':state(r.retest_touched),early?'ブレイク成立後に評価します。':r.retest_touched===true?'最新4本の15分足で水準付近への戻りを確認。':r.retest_touched===false?'ブレイク水準付近への戻りがまだありません。':'戻りの判定情報を確認できません。');
+ var flags=known(r.confirmation_color_ok)&&known(r.confirmation_level_ok),confirmation=flags?r.confirmation_color_ok&&r.confirmation_level_ok:null;
+ if(flags&&known(r.confirmed)&&r.confirmed!==confirmation)confirmation=null;
+ var detail=early?'ブレイク成立後に、足方向と終値の水準突破を両方確認します。':'足方向 '+(known(r.confirmation_color_ok)?r.confirmation_color_ok?'成立':'未達':'未確認')+' / 終値の水準突破 '+(known(r.confirmation_level_ok)?r.confirmation_level_ok?'成立':'未達':'未確認');
+ if(!early&&positive(r.confirmation_latest_open)&&positive(r.confirmation_latest_close))detail+='。始値 '+fmt(r.confirmation_latest_open,8)+' → 終値 '+fmt(r.confirmation_latest_close,8);
+ add('confirmation','4. 15分足の確認',early?'UNEVALUATED':state(confirmation),detail);
+ var b=r.entry_band&&r.entry_band.version===1&&r.entry_band.direction===r.direction?r.entry_band:null;
+ var entry=r.entry_reference,stop=positive(r.stop_loss)?r.stop_loss:b&&b.structural_stop,target=positive(r.take_profit)?r.take_profit:b&&b.structural_target;
+ var prices=validSide&&[entry,stop,target].every(positive),structure=prices?(r.direction==='LONG'?stop<entry&&entry<target:target<entry&&entry<stop):stage==='STRUCTURE_WAIT'?false:null;
+ add('structure','5. SL・Entry・TPの位置',early?'UNEVALUATED':state(structure),early?'ブレイク成立後に価格構造を評価します。':structure===true?(r.direction==='LONG'?'SL < Entry < TP':'TP < Entry < SL')+' の位置関係が成立。':structure===false?'Entryが有効なSL・TPの間に入っていません。':'価格構造の情報を確認できません。');
+ var minimumKnown=positive(minimum),rrKnown=Number.isFinite(r.rr)&&r.rr>=0,rrPass=minimumKnown&&rrKnown&&structure===true?r.rr>=minimum:null;
+ add('rr','6. RR'+(minimumKnown?' ≥ '+fmt(minimum,2):''),early?'UNEVALUATED':state(rrPass),early?'価格構造が揃ってからRRを評価します。':rrPass!==null?'現在 '+fmt(r.rr,2)+' / 必要 '+fmt(minimum,2)+'（費用控除前）。':structure===false?'価格構造が無効なため、有効なRRを計算できません。':'RRまたは最低条件を確認できません。');
+ return {checks:checks,passed:checks.filter(function(x){return x.state==='PASS'}).length,failed:checks.filter(function(x){return x.state==='FAIL'}).length,unconfirmed:checks.filter(function(x){return ['UNKNOWN','UNEVALUATED'].includes(x.state)}).length,changes_ready_rules:false};
+}
+function renderAnalysisCriteria(r){
+ var el=document.getElementById('entryCriteria');if(!el)return;if(!analysisFresh(r)){el.innerHTML='';return}
+ var review=reviewEntryConditions(r,Number(el.dataset.minRr)),e=lifecycleEscape,labels={PASS:'成立',FAIL:'未達',UNEVALUATED:'未評価',UNKNOWN:'未確認'};
+ el.innerHTML='<section class="conditionPanel" aria-label="現行エントリーの成立条件"><div class="row" style="justify-content:space-between;align-items:center"><h3>現行READYの成立条件</h3><span class="pill">成立 '+review.passed+' / 6</span></div><p class="sub">未達 '+review.failed+' / 未評価・未確認 '+review.unconfirmed+'。エントリー可否は上の判定で確認してください。</p><ol class="conditionChecklist">'+review.checks.map(function(c){return '<li class="conditionCheck '+(c.state==='PASS'?'pass':'')+'"><div class="conditionCheckHeader"><b>'+e(c.label)+'</b><span class="'+(c.state==='PASS'?'good':c.state==='FAIL'?'warn':'muted')+'">'+labels[c.state]+'</span></div><p>'+e(c.detail)+'</p></li>'}).join('')+'</ol><p class="sub">成立数は勝率や成功確率ではありません。RRは価格の比率です。</p></section>';
+}
+function syncAnalysisWatch(){
+ var button=document.getElementById('analysisWatch');if(!button)return;var valid=analysisFresh(lastAnalysis),on=valid&&watch.has(lastAnalysis.ticker);button.disabled=!valid;button.setAttribute('aria-pressed',on?'true':'false');button.textContent=on?'★ お気に入り済み':'☆ お気に入り';
+}
+document.getElementById('analysisWatch').onclick=function(){refreshAnalysisAge();if(!lastAnalysis||!analysisFresh(lastAnalysis))return;var t=lastAnalysis.ticker;watch.has(t)?watch.delete(t):watch.add(t);saveWatch();syncAnalysisWatch();if(typeof renderRows==='function')renderRows()};
 var analysisRequestVersion=0,analysisAbortController=null,analysisExpiryTimer=null;
 function analysisFresh(r){var now=Date.now();return !!r&&Number.isFinite(r._client_received_ms)&&r._client_received_ms>0&&now>=r._client_received_ms&&now-r._client_received_ms<120000&&Number.isFinite(r.data_age_seconds)&&r.data_age_seconds>=0&&r.data_age_seconds+(now-r._client_received_ms)/1000<900}
 function clearAnalysisView(){
  lastAnalysis=null;quickRiskVersion++;manualCalcVersion++;clearTimeout(analysisExpiryTimer);analysisExpiryTimer=null;
- ['analysisOut','actionOut','readyActionCard','quickRiskOut','riskOut'].forEach(function(id){document.getElementById(id).innerHTML=''});
+ ['analysisOut','actionOut','readyActionCard','quickRiskOut','riskOut','analysisIdentity','entryCriteria'].forEach(function(id){document.getElementById(id).innerHTML=''});
  ['entry','stop','target','step','minOrder','maxOrder','lev'].forEach(function(id){document.getElementById(id).value=''});
  ['copyPlan','sharePlan'].forEach(function(id){document.getElementById(id).disabled=true});
+ syncAnalysisWatch();
  ['chart4h','chart15m'].forEach(function(id){var c=document.getElementById(id),ctx=c&&c.getContext&&c.getContext('2d');if(ctx)ctx.clearRect(0,0,c.width,c.height)});
 }
 function refreshAnalysisAge(){if(lastAnalysis&&!analysisFresh(lastAnalysis)){clearAnalysisView();document.getElementById('analysisStatus').textContent='データ鮮度を確認 — 個別分析が古くなりました。「分析」で最新状態を再確認してください。';}}
@@ -1301,9 +1343,12 @@ async function analyze(){
   if(!pack||!pack.analysis||typeof pack.analysis.ticker!=='string'||!pack.analysis.stage||!pack.series||!Array.isArray(pack.series.HOUR_4)||!Array.isArray(pack.series.MINUTE_15))throw new Error('INVALID_ANALYSIS_RESPONSE');
   var r=Object.assign({},pack.analysis,{_client_received_ms:Date.now()}),b=r.score_breakdown||{};lastAnalysis=r;addRecentTicker(r.ticker);
   if(!analysisFresh(r)){clearAnalysisView();s.textContent='確定足の鮮度を確認できません。「分析」で再確認してください。';return}
+  syncAnalysisWatch();
+  document.getElementById('analysisIdentity').innerHTML='<b>'+lifecycleEscape(r.ticker)+'</b><span class="pill">'+lifecycleEscape(directionJa(r.direction))+'</span><span class="sub">取得 '+new Date(r._client_received_ms).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit',second:'2-digit'})+'</span>';
+  renderAnalysisCriteria(r);
   ['copyPlan','sharePlan'].forEach(function(id){document.getElementById(id).disabled=false});
   analysisExpiryTimer=setTimeout(refreshAnalysisAge,Math.max(1,Math.min(120000,(900-r.data_age_seconds)*1000)));
-  s.innerHTML='<span class="badge '+r.stage+'">'+planStage(r)+'</span> '+directionJa(r.direction)+' — '+planReason(r);
+  s.innerHTML='<span class="badge '+lifecycleEscape(/^[A-Z_]+$/.test(r.stage)?r.stage:'')+'">'+lifecycleEscape(planStage(r))+'</span> '+lifecycleEscape(directionJa(r.direction))+' — '+lifecycleEscape(planReason(r));
   a.innerHTML='<div class="actionBox"><div><div class="k">いまの判断</div><div class="actionMain '+actionClass(planAction(r))+'">'+actionJa(planAction(r))+'</div></div><div class="pill">スコア '+fmt(r.score,1)+'/100</div><div class="pill">RR '+fmt(r.rr,2)+'</div><div class="pill">'+directionJa(r.direction)+'</div></div>';
   renderReadyActionCard(r,null);
   o.innerHTML='<div class="section"><h2>Entry / SL / TP</h2><div class="grid">'+card("Entry目安",fmt(r.entry_reference,8))+card("損切り SL",fmt(r.stop_loss,8))+card("利確 TP",fmt(r.take_profit,8))+card("RR",fmt(r.rr,2))+'</div></div><details class="dashboardDrawer"><summary>指標・取引条件</summary><div class="drawerBody grid">'+card("現在価格",fmt(r.current_price,8))+card("24時間変化",pct(r.change_24h_pct))+card("4Hの方向",trendJa(r.trend))+card("データ鮮度",fmt(r.data_age_seconds,0)+"秒前")+card("EMA20 / EMA50",fmt(r.ema20_4h,8)+" / "+fmt(r.ema50_4h,8))+card("ATR 4H / 15M",fmt(r.atr_4h,8)+" / "+fmt(r.atr_15m,8))+card("出来高比",fmt(r.volume_ratio,2)+"倍")+card("ブレイク基準",fmt(r.breakout_level,8))+card("4Hサポート",fmt(r.support_4h,8))+card("4Hレジスタンス",fmt(r.resistance_4h,8))+card("注文刻み",fmt(r.step_size,8))+card("最小 / 最大注文量",fmt(r.min_order_size,8)+" / "+fmt(r.max_order_size,8))+card("最大ロング / ショート倍率",fmt(r.max_long_leverage,2)+" / "+fmt(r.max_short_leverage,2))+'</div></details>';
