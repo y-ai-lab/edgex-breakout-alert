@@ -243,10 +243,10 @@ button:disabled{opacity:.5;cursor:not-allowed}
 <div class="filters">
 <div class="field small"><label for="entryHistoryKind">候補</label><select id="entryHistoryKind"><option value="ALL">すべて</option><option value="READY">ENTRYになった</option><option value="NEAR">あと一歩まで来た</option></select></div>
 <div class="field small"><label for="entryHistoryDays">期間</label><select id="entryHistoryDays"><option value="7">7日</option><option value="30">30日</option><option value="0">全期間</option></select></div>
-<div class="field small"><label for="entryHistoryTicker">銘柄</label><input id="entryHistoryTicker" placeholder="BTC / HYPE" maxlength="64"></div>
-<button id="entryHistoryRefresh" class="ghost">履歴を更新</button>
+<div class="field small"><label for="entryHistoryTicker">銘柄</label><input id="entryHistoryTicker" type="search" placeholder="BTC / HYPE" maxlength="64" autocomplete="off" spellcheck="false" autocapitalize="characters"></div>
+<button id="entryHistoryRefresh" class="ghost" type="button">履歴を更新</button><button id="entryHistoryReset" class="ghost" type="button">検索をリセット</button>
 </div>
-<p id="entryHistoryStatus" class="sub">開くと履歴を取得します。</p>
+<p id="entryHistoryStatus" class="sub" role="status" aria-live="polite">開くと履歴を取得します。</p>
 <div id="entryHistoryItems" class="entryReadyGrid"></div>
 <button id="entryHistoryMore" class="ghost" hidden>もっと見る</button>
 <p class="sub">同じセットアップは1件にまとめます。価格は初回の記録を保持。TP/SLは仮想追跡で、実際の約定結果ではありません。過去に削除された履歴は復元できません。</p>
@@ -565,6 +565,8 @@ document.getElementById('entryHistoryDetails').ontoggle=function(){if(this.open&
 document.getElementById('entryHistoryRefresh').onclick=function(){loadEntryHistory(false)};
 document.getElementById('entryHistoryMore').onclick=function(){loadEntryHistory(true)};
 ['entryHistoryKind','entryHistoryDays','entryHistoryTicker'].forEach(function(id){document.getElementById(id).onchange=function(){loadEntryHistory(false)}});
+var historySearch=document.getElementById('entryHistoryTicker');historySearch.addEventListener('input',scheduleEntryHistorySearch);historySearch.addEventListener('compositionend',scheduleEntryHistorySearch);historySearch.addEventListener('keydown',function(event){if(event.key==='Enter'&&!event.isComposing)loadEntryHistory(false)});
+document.getElementById('entryHistoryReset').onclick=function(){document.getElementById('entryHistoryKind').value='ALL';document.getElementById('entryHistoryDays').value='7';document.getElementById('entryHistoryTicker').value='';loadEntryHistory(false)};
 function saveWatch(){browserStorageWrite("edgexWatch",JSON.stringify(Array.from(watch)));renderQuickAccess();saveWatchToServer()}
 function newSyncKey(){var a=new Uint32Array(4);crypto.getRandomValues(a);return Array.from(a).map(x=>x.toString(16).padStart(8,"0")).join("")}
 function showWatchSyncStatus(msg,cls){var e=document.getElementById("watchSyncStatus");if(e)e.innerHTML='<span class="'+(cls||"muted")+'">'+msg+'</span>'}
@@ -749,10 +751,25 @@ function renderEntryDiagnostics(j){
 async function loadEntryDiagnostics(){try{renderEntryDiagnostics(await jf('/api/entry-diagnostics'))}catch(e){var st=document.getElementById('entryDiagnosticsStatus');if(st)st.textContent='Entry分析を取得できません: '+e.message}}
 function lifecycleEscape(value){return String(value==null?"—":value).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
 function lifecycleTime(ms){return ms==null?"—":new Date(ms).toLocaleString("ja-JP")}
-var entryHistoryItems=[],entryHistoryCursor=null,entryHistoryRequest=0,entryHistoryLoaded=false;
+var entryHistoryItems=[],entryHistoryCursor=null,entryHistoryRequest=0,entryHistoryLoaded=false,entryHistoryBusy=false,entryHistoryController=null,entryHistoryFilterTimer=null,entryHistoryQueryKey=null,entryHistoryLastSuccess=null;
+function entryHistoryFilterKey(){return JSON.stringify(['entryHistoryDays','entryHistoryKind','entryHistoryTicker'].map(function(id){return document.getElementById(id).value.trim()}))}
+function scheduleEntryHistorySearch(event){
+ clearTimeout(entryHistoryFilterTimer);entryHistoryFilterTimer=null;entryHistoryRequest++;if(entryHistoryController)entryHistoryController.abort();entryHistoryController=null;entryHistoryBusy=false;entryHistoryLoaded=false;entryHistoryItems=[];entryHistoryCursor=null;
+ document.getElementById('entryHistoryMore').hidden=true;document.getElementById('entryHistoryMore').disabled=false;document.getElementById('entryHistoryRefresh').setAttribute('aria-busy','false');document.getElementById('entryHistoryRefresh').textContent='履歴を更新';
+ document.getElementById('entryHistoryStatus').textContent='検索条件を確認中です…';document.getElementById('entryHistoryItems').innerHTML='<span class="muted">検索条件を確認中です…</span>';
+ if(!event||!event.isComposing)entryHistoryFilterTimer=setTimeout(function(){entryHistoryFilterTimer=null;loadEntryHistory(false)},300);
+}
+function validEntryHistoryReply(j,cursor){
+ var counts=j&&j.totals,nonnegative=function(v){return Number.isInteger(v)&&v>=0},validCursor=function(v){return !!v&&nonnegative(v.before_ms)&&typeof v.before_setup==='string'&&v.before_setup.length>0};
+ if(!j||j.historical!==true||!Array.isArray(j.items)||!counts||!['setups','ready','near'].every(function(k){return nonnegative(counts[k])})||counts.ready>counts.setups||counts.near>counts.setups)return false;
+ if(!j.items.every(function(item){return item&&typeof item.setup_id==='string'&&item.setup_id.length>0&&typeof item.ticker==='string'&&item.ticker.length>0}))return false;
+ if(new Set(j.items.map(function(item){return item.setup_id})).size>counts.setups)return false;
+ if(j.next_cursor!==null&&(!validCursor(j.next_cursor)||!j.items.some(function(item){return item.setup_id===j.next_cursor.before_setup})))return false;
+ return !cursor||j.next_cursor===null||j.next_cursor.before_ms<cursor.before_ms||j.next_cursor.before_ms===cursor.before_ms&&j.next_cursor.before_setup<cursor.before_setup;
+}
 function renderEntryHistory(){
  var el=document.getElementById('entryHistoryItems');
- if(!entryHistoryItems.length){el.innerHTML='<span class="muted">この条件の履歴はまだありません。</span>';return}
+ if(!entryHistoryItems.length){el.innerHTML='<span class="muted">'+(entryHistoryLoaded?'この条件の履歴はまだありません。':entryHistoryBusy?'履歴を取得しています…':'履歴の取得を確認してください。')+'</span>';return}
  el.innerHTML=entryHistoryItems.map(function(item){
   var ready=item.first_ready,near=item.first_near,first=ready||near||{},latest=item.latest||{},life=item.lifecycle||{},out=item.reference_outcome;
   var progression=life.ended_ms?'終了: '+lifecycleReason(life.end_reason):'最終観測: '+stageJa(latest.stage);
@@ -765,21 +782,25 @@ function renderEntryHistory(){
  el.querySelectorAll('.entryHistoryAnalyze').forEach(function(button){button.onclick=function(){document.getElementById('ticker').value=this.dataset.ticker;tab('analysis');analyze()}});
 }
 async function loadEntryHistory(more){
- var request=++entryHistoryRequest,status=document.getElementById('entryHistoryStatus'),button=document.getElementById('entryHistoryMore');
- var cursor=more?entryHistoryCursor:null;
- if(!more){entryHistoryItems=[];entryHistoryCursor=null;button.hidden=true;renderEntryHistory()}
- button.disabled=true;status.textContent='履歴を取得しています…';
+ clearTimeout(entryHistoryFilterTimer);entryHistoryFilterTimer=null;
+ var key=entryHistoryFilterKey();if(more&&entryHistoryBusy)return;if(more&&key!==entryHistoryQueryKey)more=false;if(more&&!entryHistoryCursor)return;
+ var request=++entryHistoryRequest,status=document.getElementById('entryHistoryStatus'),button=document.getElementById('entryHistoryMore'),refresh=document.getElementById('entryHistoryRefresh'),cursor=more?entryHistoryCursor:null;
+ if(entryHistoryController)entryHistoryController.abort();var controller=new AbortController();entryHistoryController=controller;var timer=setTimeout(function(){controller.abort()},20000);
+ if(key!==entryHistoryQueryKey){entryHistoryItems=[];entryHistoryCursor=null;entryHistoryLoaded=false;entryHistoryLastSuccess=null;button.hidden=true}
+ entryHistoryBusy=true;button.disabled=true;refresh.setAttribute('aria-busy','true');refresh.textContent='取得中…';status.textContent='履歴を取得しています…'+(entryHistoryItems.length?' 現在の表示は前回取得分です。':'');renderEntryHistory();
  var url='/api/entry-history?limit=30&days='+encodeURIComponent(document.getElementById('entryHistoryDays').value)+'&kind='+encodeURIComponent(document.getElementById('entryHistoryKind').value)+'&ticker='+encodeURIComponent(document.getElementById('entryHistoryTicker').value.trim());
  if(cursor)url+='&before_ms='+encodeURIComponent(cursor.before_ms)+'&before_setup='+encodeURIComponent(cursor.before_setup);
  try{
-  var j=await jf(url);if(request!==entryHistoryRequest)return;
-  if(j.historical!==true||!Array.isArray(j.items)||!j.totals)throw new Error('履歴の応答を確認できません');
-  entryHistoryItems=entryHistoryItems.concat(j.items.filter(function(item){return !entryHistoryItems.some(function(old){return old.setup_id===item.setup_id})}));
-  entryHistoryCursor=j.next_cursor;entryHistoryLoaded=true;renderEntryHistory();
-  status.textContent='セットアップ '+j.totals.setups+'件 / ENTRY '+j.totals.ready+'件 / あと一歩 '+j.totals.near+'件（両方に含まれる候補あり）';
+  var j=await jf(url,{signal:controller.signal,cache:'no-store'});if(request!==entryHistoryRequest)return;
+  if(controller.signal.aborted)throw Object.assign(new Error('HISTORY_TIMEOUT'),{name:'AbortError'});
+  if(key!==entryHistoryFilterKey()){scheduleEntryHistorySearch();return}
+  if(!validEntryHistoryReply(j,cursor))throw new Error('INVALID_HISTORY_RESPONSE');
+  var base=more?entryHistoryItems:[],seen=new Set(base.map(function(item){return item.setup_id})),added=j.items.filter(function(item){if(seen.has(item.setup_id))return false;seen.add(item.setup_id);return true});
+  entryHistoryItems=base.concat(added);entryHistoryCursor=j.next_cursor;entryHistoryQueryKey=key;entryHistoryLoaded=true;entryHistoryLastSuccess=Date.now();renderEntryHistory();
+  status.textContent='表示 '+entryHistoryItems.length+'件 / 対象セットアップ '+j.totals.setups+'件 / ENTRY '+j.totals.ready+'件 / あと一歩 '+j.totals.near+'件（両方に含まれる候補あり） / 取得 '+new Date(entryHistoryLastSuccess).toLocaleTimeString('ja-JP')+(entryHistoryItems.length>j.totals.setups?'。取得中に対象件数が変わりました。履歴を更新して再確認してください。':'');
   button.hidden=!entryHistoryCursor;
- }catch(e){if(request===entryHistoryRequest)status.textContent='履歴を取得できません。履歴を更新して再試行してください。'}
- finally{if(request===entryHistoryRequest)button.disabled=false}
+ }catch(e){if(request===entryHistoryRequest){entryHistoryLoaded=false;status.textContent=(e.name==='AbortError'?'履歴の取得に時間がかかっています。':'履歴を取得できません。')+'履歴を更新して再試行してください。'+(entryHistoryItems.length?' 前回取得分 '+entryHistoryItems.length+'件の表示を保持しています。':'');if(!entryHistoryItems.length)document.getElementById('entryHistoryItems').innerHTML='<span class="muted">取得を確認できません。再試行してください。</span>'}}
+ finally{clearTimeout(timer);if(request===entryHistoryRequest){entryHistoryBusy=false;button.disabled=false;refresh.setAttribute('aria-busy','false');refresh.textContent='履歴を更新';if(entryHistoryController===controller)entryHistoryController=null}}
 }
 function lifecycleReason(reason){return ({BREAKOUT_WINDOW_EXPIRED:"4Hブレイク期限切れ",TREND_INVALIDATED:"4Hトレンド条件が崩れた",SUPERSEDED:"別setupへ交代",BREAKOUT_NOT_SELECTED:"ブレイク条件が対象外",STRUCTURAL_STOP_INVALID:"構造ストップが無効",REACTIVATED:"同setupの条件が再成立",RECORDED_ENTRY_IMPORTED:"既存の成立記録を保持",SETUP_OBSERVED:"監視開始",READY_OBSERVED:"現行READY成立",STAGE_CHANGED:"確認段階が変化",SHADOW_READY_OBSERVED:"Shadow条件が成立"}[reason]||reason||"—")}
 function renderSetupLifecycles(j){

@@ -4168,7 +4168,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="EdgeX Analysis Terminal",
-    version="19.0.70",
+    version="19.0.71",
     lifespan=lifespan,
 )
 app.add_middleware(push_security.BrowserSecurityMiddleware)
