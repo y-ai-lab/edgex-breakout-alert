@@ -123,6 +123,15 @@ button:disabled{opacity:.5;cursor:not-allowed}
 #screenEmpty{padding:18px;border:1px dashed var(--line);border-radius:12px;line-height:1.6}
 @media(max-width:720px){.guideSteps{grid-template-columns:1fr}.headerChips .statusChip{min-height:36px;display:inline-flex;align-items:center}.nearCandidateCard.watchOnly{padding:11px}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+/* A market shortlist that can be read without horizontal scrolling. */
+.marketList{display:none}.marketItem{padding:13px;border:1px solid var(--line);border-radius:12px;background:var(--panel2)}
+.marketItem.isReady{border-color:rgba(74,222,128,.6);background:#0d1812}
+.marketItemTop{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.marketSymbol{font:inherit;font-weight:750;font-size:16px;border:0;background:none;color:var(--text);text-align:left;min-height:44px;padding:0 6px 0 0;cursor:pointer}
+.marketStar{min-width:44px;min-height:44px;padding:7px;flex-shrink:0;font-size:20px}.marketStar[aria-pressed=true]{color:var(--warn)}
+.marketItem .pickReason{line-height:1.6}.marketItemMetrics{display:flex;flex-wrap:wrap;gap:7px;margin:7px 0;font-size:13px}
+.marketItem.isStale{border-style:dashed}.marketStaleLabel{color:var(--warn)}
+@media(max-width:720px){.marketList{display:grid;gap:8px;margin-top:12px}#marketTable,#marketTableHint{display:none}#screen .summary{grid-template-columns:repeat(2,minmax(0,1fr))}#screen .summary .card:nth-child(n+3){display:none}#screen>.filters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}#screen>.filters .field.small{min-width:0;max-width:none}#screen>.filters .field.small:first-child{grid-column:1/-1}.marketToolbar{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.marketToolbar .ghost{width:100%}}
 </style>
 </head>
 <body><main>
@@ -240,22 +249,27 @@ button:disabled{opacity:.5;cursor:not-allowed}
 </section>
 
 <section id="screen" class="panel">
-<h2>銘柄スキャン</h2>
+<div class="row" style="align-items:center;justify-content:space-between"><h2>銘柄スキャン</h2><button class="primary" id="scan">再取得</button></div>
 <div class="filters">
 <div class="field small"><label for="q">銘柄検索</label><input id="q" placeholder="BTC / HYPE"></div>
 <div class="field small"><label for="stage">状態</label><select id="stage"><option value="ALL">すべて</option><option value="READY">エントリー可能</option><option value="NEAR">直前候補</option><option value="CONFIRMATION_WAIT">15分足確認待ち</option><option value="RETEST_WAIT">リテスト待ち</option><option value="RR_WAIT">RR不足</option><option value="BREAKOUT_WAIT">ブレイク待ち</option><option value="TREND_WAIT">方向感待ち</option></select></div>
 <div class="field small"><label for="direction">方向</label><select id="direction"><option value="ALL">すべて</option><option value="LONG">ロング</option><option value="SHORT">ショート</option><option value="NEUTRAL">中立</option></select></div>
 </div>
-<details class="dashboardDrawer"><summary>絞り込み</summary><div class="drawerBody filters">
+<details class="dashboardDrawer"><summary>詳細条件・更新設定</summary><div class="drawerBody filters">
 <div class="field small"><label for="minScore">最低スコア</label><input id="minScore" type="number" min="0" max="100" value="0"></div>
 <div class="field small"><label for="minRR">最低RR</label><input id="minRR" type="number" min="0" step="0.1" placeholder="指定なし"></div>
+<div class="row"><button class="ghost" id="force">強制更新</button><button class="ghost" id="autoScan">自動更新 ON (30秒)</button></div>
 </div></details>
-<div class="row" style="margin-top:10px"><button class="primary" id="scan">スキャン</button><button class="ghost" id="force">強制更新</button><button class="ghost" id="autoScan">自動更新 ON (30秒)</button><button class="ghost" id="presetNear">直前候補</button><button class="ghost" id="presetReady">エントリー可能</button><button class="ghost" id="presetReset">リセット</button><button class="ghost" id="watchOnly">★のみ</button><span id="lastScan" class="pill">未更新</span></div>
+<div class="row marketToolbar" style="margin-top:10px"><button class="ghost" id="presetNear">直前候補</button><button class="ghost" id="presetReady">エントリー可能</button><button class="ghost" id="presetReset">リセット</button><button class="ghost" id="watchOnly">★のみ</button></div>
+<div class="row" style="margin-top:8px"><span id="lastScan" class="sub">未更新</span></div>
+<p class="sub">全市場の状況（絞り込み前）</p>
 <div id="summary" class="summary"></div>
+<div id="screenFreshness" class="sub" role="status"></div>
 <div id="screenStatus" class="status" role="status">4H→15Mで全取引可能銘柄を確認します。</div>
 <div id="screenEmpty" class="sub" hidden></div>
-<div class="tableHint">横にスクロールするとRR・待ち理由を確認できます。銘柄をタップして分析。</div>
-<div class="scroll"><table><thead><tr><th>★</th><th>銘柄</th><th>状態</th><th>方向</th><th>スコア</th><th>価格</th><th>24h</th><th>出来高比</th><th>RR</th><th>次の行動</th><th>データ鮮度</th><th>状態</th></tr></thead><tbody id="screenBody"></tbody></table></div>
+<div id="marketTableHint" class="tableHint">横にスクロールするとRR・待ち理由を確認できます。銘柄をタップして分析。</div>
+<div id="marketCards" class="marketList" aria-label="銘柄の一覧"></div>
+<div id="marketTable" class="scroll"><table><thead><tr><th>★</th><th>銘柄</th><th>状態</th><th>方向</th><th>スコア</th><th>価格</th><th>24h</th><th>出来高比</th><th>RR</th><th>次の行動</th><th>データ鮮度</th><th>状態</th></tr></thead><tbody id="screenBody"></tbody></table></div>
 </section>
 
 <section id="analysis" class="panel">
@@ -995,7 +1009,7 @@ function renderGlobalEntryBar(j){
 }
 function refreshGlobalEntryAge(){
  if(!globalEntrySnapshot)return;
- renderGlobalEntryBar(globalEntrySnapshot);if(entryFreshness(globalEntrySnapshot).stale)renderEntryNow(globalEntrySnapshot);if(typeof renderNearCandidates==="function")renderNearCandidates(globalEntrySnapshot);if(typeof renderDashboard==="function")renderDashboard()
+ renderGlobalEntryBar(globalEntrySnapshot);if(entryFreshness(globalEntrySnapshot).stale)renderEntryNow(globalEntrySnapshot);if(typeof renderNearCandidates==="function")renderNearCandidates(globalEntrySnapshot);if(typeof renderDashboard==="function")renderDashboard();if(typeof lastMarketPayload!=="undefined"&&lastMarketPayload&&typeof renderRows==="function"){summaryView(globalEntrySnapshot&&globalEntrySnapshot.summary);renderRows()}
 }
 async function refreshEntryHeartbeat(){
  if(typeof autoScanTimer!=="undefined"&&autoScanTimer)return scan(false,true);
@@ -1148,9 +1162,32 @@ function renderMarketDataStatus(j){
  var required=h.required_closed_candles||{};status.textContent='全銘柄の確認と、指標を計算できるデータの充足は別です。指標評価可能 '+h.analysis_ready+' / '+h.universe+'銘柄。必要な確定足 '+Object.keys(required).map(function(i){return (i==='HOUR_4'?'4H':i==='MINUTE_15'?'15M':i)+' '+required[i]+'本'}).join(' / ')+'。不足した足は補完せず、データ待ちにします。';
  list.innerHTML=(h.data_wait||[]).map(function(r){var e=lifecycleEscape,counts=r.closed_candles||{},why=(r.reasons||[]).map(function(v){return ({MISSING_SNAPSHOT:'足データ未受信',INSUFFICIENT_HISTORY:'確定足の履歴不足',ANALYSIS_UNAVAILABLE:'指標評価不可'}[v]||v)}).join(' / ');return '<div class="reportItem"><b>'+e(r.ticker)+'</b> — '+e(why)+'<br>'+Object.keys(required).map(function(i){return e(i==='HOUR_4'?'4H':i==='MINUTE_15'?'15M':i)+' '+e(counts[i]||0)+' / '+e(required[i])+'本'}).join(' / ')+'</div>'}).join('')||(h.data_wait_count?'詳細を確認中です。':'全銘柄の指標データがそろっています。');
 }
-function summaryView(s){var el=document.getElementById("summary");if(!s){el.innerHTML="";return}el.innerHTML=card("エントリー可能",s.ready_count)+card("有力な直前候補",s.qualified_near_count||0)+card("直前候補 合計",s.near_signal_count)+card("ロング",s.direction_counts.LONG||0)+card("ショート",s.direction_counts.SHORT||0)+card("平均スコア",fmt(s.average_score,1))+card("有力候補",(s.top_qualified_near||[]).join(", ")||"—")}
-function renderRows(){var body=document.getElementById("screenBody");body.innerHTML="";var filtered=showWatch?rows.filter(r=>watch.has(r.ticker)):rows;filtered.forEach(function(r){var tr=document.createElement("tr");tr.innerHTML='<td class="star">'+(watch.has(r.ticker)?"★":"☆")+'</td><td><b>'+r.ticker+'</b></td><td><span class="badge '+r.stage+'">'+planStage(r)+'</span></td><td>'+directionJa(r.direction)+'</td><td>'+fmt(r.score,1)+'</td><td>'+fmt(r.current_price,8)+'</td><td>'+pct(r.change_24h_pct)+'</td><td>'+fmt(r.volume_ratio,2)+'x</td><td>'+fmt(r.rr,2)+'</td><td>'+actionJa(planAction(r))+'</td><td>'+fmt(r.data_age_seconds,0)+'s</td><td>'+planReason(r)+'</td>';
- var tds=tr.children;tds[0].onclick=function(e){e.stopPropagation();watch.has(r.ticker)?watch.delete(r.ticker):watch.add(r.ticker);saveWatch();renderRows()};tds[1].onclick=function(){document.getElementById("ticker").value=r.ticker;tab("analysis");analyze()};body.appendChild(tr)});var empty=document.getElementById('screenEmpty');if(empty){empty.hidden=filtered.length>0;empty.textContent=showWatch?'現在の絞り込みに一致するお気に入りはありません。★を追加するか「全件表示」で戻してください。':'現在の絞り込みに一致する銘柄はありません。「リセット」で全市場に戻せます。';}}
+function summaryView(s){var el=document.getElementById("summary");if(!s){el.innerHTML="";return}if(entryFreshness(globalEntrySnapshot).stale){el.innerHTML=card('市場データ','鮮度を確認');return}el.innerHTML=card("エントリー可能",s.ready_count)+card("有力な直前候補",s.qualified_near_count||0)+card("直前候補 合計",s.near_signal_count)+card("ロング",s.direction_counts.LONG||0)+card("ショート",s.direction_counts.SHORT||0)+card("平均スコア",fmt(s.average_score,1))+card("有力候補",lifecycleEscape((s.top_qualified_near||[]).join(", "))||"—")}
+var marketFilterTimer=null,marketRowsFilterKey=null;
+function marketFilterKey(){return JSON.stringify(['stage','direction','minScore','minRR','q'].map(function(id){return String(document.getElementById(id).value).trim()}))}
+function renderRows(){
+ var body=document.getElementById('screenBody'),cards=document.getElementById('marketCards'),empty=document.getElementById('screenEmpty'),status=document.getElementById('screenFreshness');if(!body||!cards||!empty||!status)return;
+ var pending=marketRowsFilterKey!==marketFilterKey(),fresh=entryFreshness(lastMarketPayload),stale=fresh.stale;
+ status.textContent=pending?'絞り込みを確認中です。前の条件の一覧は表示しません。':stale?'一覧のデータ鮮度を確認 — 古いREADYは成立表示しません。銘柄の分析で最新状態を確認できます。':'一覧更新 '+Math.round(fresh.age)+'秒前 / 銘柄をタップして分析・☆でお気に入り';
+ var filtered=pending?[]:showWatch?rows.filter(function(r){return watch.has(r.ticker)}):rows;
+ empty.hidden=pending||filtered.length>0;empty.textContent=showWatch?'現在の絞り込みに一致するお気に入りはありません。☆で追加するか「リセット」で全市場に戻せます。':'現在の絞り込みに一致する銘柄はありません。「リセット」で全市場に戻せます。';
+ var e=lifecycleEscape;
+ function star(r){return '<button type="button" class="ghost marketStar" data-market-watch="'+e(r.ticker)+'" aria-label="'+e(r.ticker)+(watch.has(r.ticker)?'をお気に入りから外す':'をお気に入りに追加')+'" aria-pressed="'+watch.has(r.ticker)+'">'+(watch.has(r.ticker)?'★':'☆')+'</button>'}
+ function symbol(r){return '<button type="button" class="marketSymbol" data-market-analyze="'+e(r.ticker)+'">'+e(r.ticker)+'</button>'}
+ var table=filtered.map(function(r){return '<tr><td>'+star(r)+'</td><td>'+symbol(r)+'</td><td><span class="badge '+(stale?'marketStaleLabel':e(/^[A-Z_]+$/.test(r.stage)?r.stage:''))+'">'+e(stale?'鮮度を確認':planStage(r))+'</span></td><td>'+e(directionJa(r.direction))+'</td><td>'+e(fmt(r.score,1))+'</td><td>'+e(fmt(r.current_price,8))+'</td><td>'+e(pct(r.change_24h_pct))+'</td><td>'+e(fmt(r.volume_ratio,2))+'x</td><td>'+e(fmt(r.rr,2))+'</td><td>'+e(stale?'現在の分析を再取得':actionJa(planAction(r)))+'</td><td>'+e(stale?'過去の参考値':fmt(r.data_age_seconds,0)+'s')+'</td><td>'+e(stale?'取得時点の参考値です。最新の条件成立は未確認です。':planReason(r))+'</td></tr>'}).join('');
+ var mobile=filtered.map(function(r){return '<article class="marketItem '+(stale?'isStale':r.stage==='READY'?'isReady':'')+'"><div class="marketItemTop">'+symbol(r)+star(r)+'</div><div class="pickMeta"><span class="badge '+(stale?'marketStaleLabel':e(/^[A-Z_]+$/.test(r.stage)?r.stage:''))+'">'+e(stale?'鮮度を確認':planStage(r))+'</span><span>'+e(directionJa(r.direction))+'</span></div><div class="marketItemMetrics"><span>価格 '+e(fmt(r.current_price,8))+'</span><span>24h '+e(pct(r.change_24h_pct))+'</span><span><b>RR '+e(fmt(r.rr,2))+'</b></span><span>スコア '+e(fmt(r.score,1))+'</span></div><div class="pickReason">'+e(stale?'過去の参考値 — 現在の条件は未確認です。タップして最新の分析を取得してください。':planReason(r))+'</div></article>'}).join('');
+ // Do not reset focus or horizontal scroll for an unchanged refresh/age tick.
+ var active=document.activeElement,activeIsMobile=active&&active.closest&&!!active.closest('#marketCards'),kind=active&&active.dataset&&(active.dataset.marketAnalyze?'analyze':active.dataset.marketWatch?'watch':null),ticker=kind&&active.dataset[kind==='analyze'?'marketAnalyze':'marketWatch'];
+ if(body.innerHTML!==table)body.innerHTML=table;if(cards.innerHTML!==mobile)cards.innerHTML=mobile;
+ [body,cards].forEach(function(el){el.querySelectorAll('[data-market-watch]').forEach(function(b){b.onclick=function(){var t=this.dataset.marketWatch;watch.has(t)?watch.delete(t):watch.add(t);saveWatch();renderRows()}});el.querySelectorAll('[data-market-analyze]').forEach(function(b){b.onclick=function(){document.getElementById('ticker').value=this.dataset.marketAnalyze;tab('analysis');analyze()}})});
+ if(kind&&document.activeElement!==active&&ticker){(activeIsMobile?[cards,body]:[body,cards]).some(function(el){var b=Array.from(el.querySelectorAll('[data-market-'+kind+']')).find(function(x){return x.dataset[kind==='analyze'?'marketAnalyze':'marketWatch']===ticker});if(b&&b.focus){b.focus({preventScroll:true});return true}return false})}
+}
+function scheduleMarketFilter(){clearTimeout(marketFilterTimer);renderRows();marketFilterTimer=setTimeout(function(){marketFilterTimer=null;scan(false)},300)}
+function initializeMarketFilters(){
+ ['q','minScore','minRR'].forEach(function(id){document.getElementById(id).addEventListener('input',scheduleMarketFilter);document.getElementById(id).addEventListener('keydown',function(event){if(event.key==='Enter'){clearTimeout(marketFilterTimer);marketFilterTimer=null;scan(false)}})});
+ ['stage','direction'].forEach(function(id){document.getElementById(id).addEventListener('change',scheduleMarketFilter)});
+}
+initializeMarketFilters();
 function syncAutoJournalButton(){var b=document.getElementById("autoJournalReady");if(b)b.textContent="READY自動記録 "+(autoJournalReady?"ON":"OFF")}
 function autoJournalReadyCandidates(items){
  if(!autoJournalReady||!Array.isArray(items)||!items.length)return 0;var added=0;
@@ -1174,16 +1211,16 @@ async function scan(force,background){
  try{
   var j=await freshScreenerRequest(u);j._client_rendered_ms=Date.now();renderGlobalEntryBar(j);renderDailyConvenience(j);summaryView(j.summary);
   if(u!==screenerQuery(force)){marketScanQueued=marketScanQueued===true||!!force;return}
-  lastMarketPayload=j;rows=j.results;processCandidateTransitions(j);
+  lastMarketPayload=j;rows=j.results;marketRowsFilterKey=marketFilterKey();processCandidateTransitions(j);
   s.textContent=j.matched+"件表示 / "+j.scanned+"/"+j.universe+"銘柄評価 / 指標評価率 "+fmt(j.coverage_pct,1)+"% / スキャン "+(j.snapshot_age_seconds||0)+"秒前";
   document.getElementById("lastScan").textContent="更新 "+new Date().toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit",second:"2-digit"});renderRows();
  }catch(e){s.textContent='更新できませんでした。自動で再確認します。';refreshGlobalEntryAge()}
  finally{entryHeartbeatBusy=false;flushMarketScanQueue()}
 }
 document.getElementById("scan").onclick=()=>scan(false);document.getElementById("force").onclick=()=>scan(true);document.getElementById("autoScan").onclick=function(){if(autoScanTimer){clearInterval(autoScanTimer);autoScanTimer=null;this.textContent="自動更新 OFF";var note=document.getElementById('marketRefreshStatus');if(note)note.textContent='一覧の自動更新はOFFです。ENTRYの鮮度は引き続き確認します。'}else{startAutoScan();scan(false)}};
-document.getElementById("presetNear").onclick=function(){document.getElementById("stage").value="NEAR";document.getElementById("minScore").value=0;document.getElementById("minRR").value="";scan(false)};
-document.getElementById("presetReady").onclick=function(){document.getElementById("stage").value="READY";document.getElementById("minScore").value=0;document.getElementById("minRR").value="";scan(false)};
-document.getElementById("presetReset").onclick=function(){document.getElementById("q").value="";document.getElementById("stage").value="ALL";document.getElementById("direction").value="ALL";document.getElementById("minScore").value=0;document.getElementById("minRR").value="";scan(false)};
+document.getElementById("presetNear").onclick=function(){document.getElementById("stage").value="NEAR";document.getElementById("minScore").value=0;document.getElementById("minRR").value="";renderRows();scan(false)};
+document.getElementById("presetReady").onclick=function(){document.getElementById("stage").value="READY";document.getElementById("minScore").value=0;document.getElementById("minRR").value="";renderRows();scan(false)};
+document.getElementById("presetReset").onclick=function(){clearTimeout(marketFilterTimer);marketFilterTimer=null;showWatch=false;document.getElementById("watchOnly").textContent="★のみ";document.getElementById("q").value="";document.getElementById("stage").value="ALL";document.getElementById("direction").value="ALL";document.getElementById("minScore").value=0;document.getElementById("minRR").value="";renderRows();scan(false)};
 document.getElementById("watchOnly").onclick=function(){showWatch=!showWatch;this.textContent=showWatch?"全件表示":"★のみ";renderRows()};
 
 

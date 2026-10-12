@@ -12,6 +12,7 @@ function setup(){
   Date:class extends Date{static now(){return clock}},
   document:{visibilityState:'visible',getElementById:x=>nodes[x]},
   watch:new Set(),autoScanTimer:null,marketScanQueued:null,entryHeartbeatBusy:false,
+  marketFilterKey:()=>JSON.stringify([nodes.stage.value,nodes.direction.value,nodes.minScore.value,nodes.minRR.value,nodes.q.value]),
   globalEntrySnapshot:null,lastMarketPayload:null,rows:[],
   setTimeout(fn,delay){const key=++id;timers.set(key,{fn,delay});return key},clearTimeout:key=>timers.delete(key),
   setInterval(fn,delay){const key=++id;intervals.set(key,{fn,delay});return key},clearInterval:key=>intervals.delete(key),
