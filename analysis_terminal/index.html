@@ -1008,7 +1008,7 @@ function renderGlobalEntryBar(j){
  if(!freshness.stale)entryExpiryTimer=setTimeout(refreshGlobalEntryAge,Math.ceil((120-age)*1000));
  bar.classList.remove("ready","waiting","stale","globalEntryPulse");
  if(freshness.stale){
-  bar.classList.add("stale");label.textContent="データ鮮度を確認";meta.textContent=freshness.transport_unavailable?"通信の復旧と最新スキャンの取得を確認するまでENTRY判定を止めています":age==null?"市場データの取得時刻を確認できません":"最終スキャン "+Math.round(age)+"秒前 — 120秒以上のためENTRY判定を強調表示しません";action.textContent="再スキャン";action.onclick=function(){scan(true)};document.title="確認中 | EdgeX";setTodayTabReady(false);return
+  bar.classList.add("stale");label.textContent="データ鮮度を確認";meta.textContent=freshness.transport_unavailable?"ENTRY未確認 / 通信・最新データを確認中":age==null?"市場データの取得時刻を確認できません":"最終スキャン "+Math.round(age)+"秒前 — 120秒以上のためENTRY判定を強調表示しません";action.textContent="再スキャン";action.onclick=function(){scan(true)};document.title="確認中 | EdgeX";setTodayTabReady(false);return
  }
  if(ready.length){
   bar.classList.add("ready");var names=ready.slice(0,2).map(x=>x.ticker).join(" / ");label.textContent="READY "+ready.length+"件 — "+names;meta.textContent="戦略条件成立 / スキャン "+Math.round(age)+"秒前 / タップして確認";action.textContent="ENTRYを見る";action.onclick=function(){if(entryFreshness(j).stale){refreshGlobalEntryAge();return}var r=ready[0];document.getElementById("ticker").value=r.ticker;tab("analysis");analyze()};
