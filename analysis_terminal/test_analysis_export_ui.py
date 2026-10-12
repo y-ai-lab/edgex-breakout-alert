@@ -34,3 +34,4 @@ class AnalysisExportUiTests(unittest.TestCase):
     def test_old_share_cannot_finish_new_copy(self): self.run_case("old_share_cannot_finish_new_copy")
     def test_numeric_tile_copy_preserves_value(self): self.run_case("numeric_tile_copy_preserves_value")
     def test_manual_selection_cannot_extend_freshness(self): self.run_case("manual_selection_cannot_extend_freshness")
+    def test_manual_copy_checks_boundary_without_timer(self): self.run_case("manual_copy_checks_boundary_without_timer")

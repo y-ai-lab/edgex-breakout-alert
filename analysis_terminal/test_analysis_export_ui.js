@@ -2,7 +2,7 @@
 const fs=require('fs'),vm=require('vm'),assert=require('assert');
 const html=fs.readFileSync(process.argv[2],'utf8'),script=html.match(/<script[^>]*>([\s\S]*?)<\/script>/)[1];new Function(script);
 let clock=Date.UTC(2026,9,12,19),id=0,copies=[],shares=[],frames=[],focused=null,unavailable=false;const timers=new Map(),nodes={};
-for(const m of html.matchAll(/id="([^"]+)"/g)){const name=m[1];nodes[name]={value:'',innerHTML:'',textContent:'',hidden:true,disabled:false,attrs:{},setAttribute(k,v){this.attrs[k]=v},addEventListener(){},getContext:()=>({clearRect(){}}),focus(){focused=name},select(){this.selected=true},setSelectionRange(a,b){this.range=[a,b]}}}
+for(const m of html.matchAll(/id="([^"]+)"/g)){const name=m[1];nodes[name]={value:'',innerHTML:'',textContent:'',hidden:true,disabled:false,attrs:{},handlers:{},setAttribute(k,v){this.attrs[k]=v},addEventListener(k,fn){this.handlers[k]=fn},getContext:()=>({clearRect(){}}),focus(){focused=name},select(){this.selected=true},setSelectionRange(a,b){this.range=[a,b]}}}
 nodes.copyPlan.innerHTML='<span>Copy tile children</span>';nodes.copyPlan.textContent='プランをコピー';nodes.ticker.value='BTC';
 const row=(ticker='BTCUSDC')=>({ticker,stage:'READY',direction:'LONG',action:'ENTER',data_age_seconds:0,entry_reference:100,stop_loss:90,take_profit:125,tp1_2r:120,rr:2.5,_client_received_ms:clock});
 const ctx={Date:class extends Date{static now(){return clock}},URL,Number,Math,Promise,Object,AbortController,document:{getElementById:k=>nodes[k],visibilityState:'visible',addEventListener(){}},setTimeout(fn,ms){const key=++id;timers.set(key,{fn,ms});return key},clearTimeout:k=>timers.delete(k),setInterval(){},requestAnimationFrame:fn=>frames.push(fn),
@@ -51,6 +51,8 @@ const settle=async()=>{for(let i=0;i<4;i++)await new Promise(setImmediate)},defe
   const a=defer(),b=defer();ctx.navigator.share=()=>a.promise;const old=share();ctx.invalidateAnalysisInput();ctx.lastAnalysis=row('ETHUSDC');ctx.clipReply=()=>b.promise;const next=copy();a.resolve();await old;assert.equal(nodes.copyPlan.attrs['aria-busy'],'true');assert.equal(nodes.analysisExportStatus.textContent,'取得時点の参考プランを準備中…');b.resolve();await next;assert(nodes.analysisExportStatus.textContent.includes('ETHUSDC'));
  }else if(name==='numeric_tile_copy_preserves_value'){
   await ctx.exportAnalysisValue(ctx.lastAnalysis,'100.1234',nodes.copyPlan);assert.deepEqual(copies,['100.1234']);assert(!nodes.analysisExportStatus.textContent.includes('エントリー可能'));
+ }else if(name==='manual_copy_checks_boundary_without_timer'){
+  ctx.clipReply=async()=>{throw Error('denied')};await copy();let prevented=0;nodes.analysisCopyText.handlers.copy({preventDefault(){prevented++}});assert.equal(prevented,0);clock+=120000;nodes.analysisCopyText.handlers.copy({preventDefault(){prevented++}});assert.equal(prevented,1);assert.equal(nodes.analysisCopyText.value,'');assert(nodes.analysisCopyFallback.hidden);assert.equal(ctx.analysisCopySnapshot,null);
  }else if(name==='manual_selection_cannot_extend_freshness'){
   ctx.clipReply=async()=>{throw Error('denied')};await copy();const stamp=ctx.lastAnalysis._client_received_ms;clock+=119999;nodes.analysisCopySelect.onclick();assert.equal(ctx.lastAnalysis._client_received_ms,stamp);clock++;nodes.analysisCopySelect.onclick();assert(nodes.analysisCopyFallback.hidden);assert.equal(nodes.analysisCopyText.value,'');
  }else throw Error(name);

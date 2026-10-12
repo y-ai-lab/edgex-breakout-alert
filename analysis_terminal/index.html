@@ -1510,7 +1510,7 @@ function renderAnalysisCriteria(r){
 function syncAnalysisWatch(){
  var button=document.getElementById('analysisWatch');if(!button)return;var valid=analysisFresh(lastAnalysis),on=valid&&watch.has(lastAnalysis.ticker);button.disabled=!valid;button.setAttribute('aria-pressed',on?'true':'false');button.textContent=on?'★ お気に入り済み':'☆ お気に入り';
 }
-var analysisRequestVersion=0,analysisAbortController=null,analysisExpiryTimer=null,analysisExportVersion=0,analysisExportPending=null;
+var analysisRequestVersion=0,analysisAbortController=null,analysisExpiryTimer=null,analysisExportVersion=0,analysisExportPending=null,analysisCopySnapshot=null;
 function analysisFresh(r){var now=Date.now();return !(typeof marketTransportUnavailable==='function'&&(marketTransportUnavailable()||marketConnectionMismatched(r)))&&!!r&&Number.isFinite(r._client_received_ms)&&r._client_received_ms>0&&now>=r._client_received_ms&&now-r._client_received_ms<120000&&Number.isFinite(r.data_age_seconds)&&r.data_age_seconds>=0&&r.data_age_seconds+(now-r._client_received_ms)/1000<900}
 function clearAnalysisView(){
  if(typeof clearAnalysisCharts==='function')clearAnalysisCharts();
@@ -1564,7 +1564,7 @@ function planLink(r){
  try{var url=new URL('/',location.href);if(!['https:','http:'].includes(url.protocol)||url.username||url.password)return null;url.searchParams.set('tab','analysis');url.searchParams.set('ticker',r.ticker);return url.href}catch(e){return null}
 }
 function clearAnalysisExport(message){
- analysisExportVersion++;var old=analysisExportPending;analysisExportPending=null;if(old&&old.button&&old.button.setAttribute)old.button.setAttribute('aria-busy','false');
+ analysisExportVersion++;analysisCopySnapshot=null;var old=analysisExportPending;analysisExportPending=null;if(old&&old.button&&old.button.setAttribute)old.button.setAttribute('aria-busy','false');
  var field=document.getElementById('analysisCopyText'),box=document.getElementById('analysisCopyFallback'),status=document.getElementById('analysisExportStatus');if(field)field.value='';if(box)box.hidden=true;if(status)status.textContent=message||'';
 }
 function analysisExportCurrent(pending){refreshAnalysisAge();return !!pending&&pending.version===analysisExportVersion&&lastAnalysis===pending.analysis&&analysisFresh(pending.analysis)}
@@ -1573,14 +1573,14 @@ function beginAnalysisExport(r,button){
  clearAnalysisExport();var pending={version:analysisExportVersion,analysis:r,button:button};analysisExportPending=pending;if(button&&button.setAttribute)button.setAttribute('aria-busy','true');document.getElementById('analysisExportStatus').textContent='取得時点の参考プランを準備中…';return pending;
 }
 function finishAnalysisExport(pending){if(analysisExportPending===pending){analysisExportPending=null;if(pending.button&&pending.button.setAttribute)pending.button.setAttribute('aria-busy','false')}}
-function selectAnalysisCopy(){refreshAnalysisAge();if(!lastAnalysis||!analysisFresh(lastAnalysis))return;var field=document.getElementById('analysisCopyText');if(field&&!document.getElementById('analysisCopyFallback').hidden){field.focus();field.select();if(field.setSelectionRange)field.setSelectionRange(0,field.value.length)}}
+function selectAnalysisCopy(){refreshAnalysisAge();if(!lastAnalysis||lastAnalysis!==analysisCopySnapshot||!analysisFresh(lastAnalysis))return;var field=document.getElementById('analysisCopyText');if(field&&!document.getElementById('analysisCopyFallback').hidden){field.focus();field.select();if(field.setSelectionRange)field.setSelectionRange(0,field.value.length)}}
 async function boundedAnalysisClipboard(value){
  if(!navigator.clipboard||typeof navigator.clipboard.writeText!=='function')throw new Error('CLIPBOARD_UNAVAILABLE');var timer;
  try{return await Promise.race([navigator.clipboard.writeText(value),new Promise(function(resolve,reject){timer=setTimeout(function(){reject(new Error('CLIPBOARD_TIMEOUT'))},5000)})])}finally{clearTimeout(timer)}
 }
 async function copyAnalysisSnapshot(pending,value){
  try{await boundedAnalysisClipboard(value);if(analysisExportCurrent(pending))document.getElementById('analysisExportStatus').textContent=pending.analysis.ticker+' の参考値をコピーしました。分析取得 '+analysisPlanTime(pending.analysis)+'。'}
- catch(e){if(!analysisExportCurrent(pending))return;var field=document.getElementById('analysisCopyText');field.value=value;document.getElementById('analysisCopyLabel').textContent=pending.analysis.ticker+' — 分析取得 '+analysisPlanTime(pending.analysis);document.getElementById('analysisCopyFallback').hidden=false;document.getElementById('analysisExportStatus').textContent='自動コピーを確認できません。選択したテキストを端末のコピー操作でコピーしてください。';selectAnalysisCopy()}
+ catch(e){if(!analysisExportCurrent(pending))return;var field=document.getElementById('analysisCopyText');analysisCopySnapshot=pending.analysis;field.value=value;document.getElementById('analysisCopyLabel').textContent=pending.analysis.ticker+' — 分析取得 '+analysisPlanTime(pending.analysis);document.getElementById('analysisCopyFallback').hidden=false;document.getElementById('analysisExportStatus').textContent='自動コピーを確認できません。選択したテキストを端末のコピー操作でコピーしてください。';selectAnalysisCopy()}
 }
 async function exportAnalysisValue(r,value,button){var pending=beginAnalysisExport(r,button);if(!pending)return;try{await copyAnalysisSnapshot(pending,String(value))}finally{finishAnalysisExport(pending)}}
 async function shareAnalysisPlan(button){
@@ -1596,6 +1596,7 @@ document.getElementById("analyze").onclick=analyze;document.getElementById("tick
 document.getElementById('analysisWatch').onclick=function(){refreshAnalysisAge();if(!lastAnalysis||!analysisFresh(lastAnalysis))return;var t=lastAnalysis.ticker;watch.has(t)?watch.delete(t):watch.add(t);saveWatch();syncAnalysisWatch();if(typeof renderRows==='function')renderRows()};
 document.getElementById("sharePlan").onclick=function(){return shareAnalysisPlan(this)};
 document.getElementById('analysisCopySelect').onclick=selectAnalysisCopy;
+document.getElementById('analysisCopyText').addEventListener('copy',function(event){refreshAnalysisAge();if(!lastAnalysis||lastAnalysis!==analysisCopySnapshot||!analysisFresh(lastAnalysis)){event.preventDefault();clearAnalysisExport('コピーする前に個別分析の鮮度を再確認してください。')}});
 document.getElementById('analysisCopyClose').onclick=function(){clearAnalysisExport('手動コピー欄を閉じました。');var button=document.getElementById('copyPlan');if(!button.disabled&&button.focus)button.focus()};
 
 
