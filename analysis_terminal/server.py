@@ -1188,51 +1188,69 @@ def _normalize_sync_key(value: str) -> str:
     return key
 
 
-def _load_synced_watchlist(sync_key: str) -> list[str]:
+def _watchlist_values(values: Any, *, stored: bool = False) -> list[str]:
+    status = 503 if stored else 400
+    if not isinstance(values, list) or len(values) > 200 or any(
+        not isinstance(value, str) or not value.strip() or len(value.strip()) > 64
+        for value in values
+    ):
+        raise HTTPException(status, "Watchlist data cannot be verified")
+    return list(dict.fromkeys(value.strip().upper() for value in values))
+
+
+def _watchlist_snapshot(row: sqlite3.Row | None) -> dict[str, Any]:
+    if row is None:
+        return {"exists": False, "revision": 0, "tickers": []}
+    try:
+        values = _watchlist_values(json.loads(row["payload"]), stored=True)
+        revision = row["updated_ms"]
+        if not isinstance(revision, int) or not 0 <= revision <= 9007199254740991:
+            raise ValueError("Invalid watchlist revision")
+    except (ValueError, TypeError):
+        raise HTTPException(503, "Watchlist data cannot be verified") from None
+    return {"exists": True, "revision": revision, "tickers": values}
+
+
+def _load_watchlist_snapshot(sync_key: str) -> dict[str, Any]:
     key = _normalize_sync_key(sync_key)
     with _db_connect() as conn:
         row = conn.execute(
-            "SELECT payload FROM synced_watchlists WHERE sync_key = ?",
-            (key,),
+            "SELECT payload, updated_ms FROM synced_watchlists WHERE sync_key = ?", (key,),
         ).fetchone()
-    if row is None:
-        return []
-    try:
-        values = json.loads(row["payload"])
-    except json.JSONDecodeError:
-        return []
-    return [
-        str(item).strip().upper()
-        for item in values
-        if str(item).strip()
-    ][:200]
+    return _watchlist_snapshot(row)
 
 
-def _save_synced_watchlist(req: WatchlistSyncRequest) -> list[str]:
+def _load_synced_watchlist(sync_key: str) -> list[str]:
+    return _load_watchlist_snapshot(sync_key)["tickers"]
+
+
+def _save_synced_watchlist(req: WatchlistSyncRequest) -> dict[str, Any]:
     key = _normalize_sync_key(req.sync_key)
-    values = list(dict.fromkeys(
-        str(item).strip().upper()
-        for item in req.tickers
-        if str(item).strip()
-    ))[:200]
-    now_ms = int(time.time() * 1000)
+    values = _watchlist_values(req.tickers)
+    if req.expected_revision is None:
+        raise HTTPException(409, "同期の更新番号が必要です。アプリを再読み込みしてください。")
     with _db_connect() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute(
+            "SELECT payload, updated_ms FROM synced_watchlists WHERE sync_key = ?", (key,),
+        ).fetchone()
+        previous = _watchlist_snapshot(row)
+        if req.expected_revision != previous["revision"]:
+            raise HTTPException(409, "別の保存が先に反映されました。一覧を再取得してください。")
+        revision = max(int(time.time() * 1000), previous["revision"] + 1, 1)
+        if revision > 9007199254740991:
+            raise HTTPException(503, "Watchlist revision cannot be verified")
         conn.execute(
             """
             INSERT INTO synced_watchlists(sync_key, payload, updated_ms)
             VALUES (?, ?, ?)
             ON CONFLICT(sync_key) DO UPDATE SET
-                payload=excluded.payload,
-                updated_ms=excluded.updated_ms
+                payload=excluded.payload, updated_ms=excluded.updated_ms
             """,
-            (
-                key,
-                json.dumps(values, separators=(",", ":")),
-                now_ms,
-            ),
+            (key, json.dumps(values, separators=(",", ":")), revision),
         )
         conn.commit()
-    return values
+    return {"exists": True, "revision": revision, "tickers": values}
 
 
 def _create_custom_alert(req: CustomAlertCreateRequest) -> dict[str, Any]:
@@ -2683,6 +2701,7 @@ class PushTestRequest(BaseModel):
 class WatchlistSyncRequest(BaseModel):
     sync_key: str = Field(min_length=24, max_length=128)
     tickers: list[str] = Field(default_factory=list, max_length=200)
+    expected_revision: int | None = Field(default=None, ge=0, le=9007199254740991)
 
 
 class CustomAlertCreateRequest(BaseModel):
@@ -4168,7 +4187,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="EdgeX Analysis Terminal",
-    version="19.0.74",
+    version="19.0.75",
     lifespan=lifespan,
 )
 app.add_middleware(push_security.BrowserSecurityMiddleware)
@@ -5060,19 +5079,19 @@ async def priority_events_api(
 
 @app.get("/api/watchlist")
 async def synced_watchlist_get_api(
-    sync_key: str = Query(min_length=24, max_length=128),
+    sync_key: str | None = Query(default=None, min_length=24, max_length=128),
+    watch_key: str | None = Header(default=None, alias="X-Watch-Sync-Key"),
 ):
-    return {
-        "tickers": _load_synced_watchlist(sync_key),
-    }
+    # New clients keep the capability out of URLs; legacy reads remain available.
+    key = watch_key if watch_key is not None else sync_key
+    if key is None:
+        raise HTTPException(400, "A watchlist sync key is required")
+    return _load_watchlist_snapshot(key)
 
 
 @app.post("/api/watchlist")
 async def synced_watchlist_save_api(req: WatchlistSyncRequest):
-    return {
-        "ok": True,
-        "tickers": _save_synced_watchlist(req),
-    }
+    return {"ok": True, **_save_synced_watchlist(req)}
 
 
 @app.get("/api/custom-alerts")

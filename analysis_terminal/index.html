@@ -254,7 +254,7 @@ button:disabled{opacity:.5;cursor:not-allowed}
 </div>
 </details>
 <div class="quickAccessGrid">
-  <div class="analyticsBox"><div class="boxLabel">★ お気に入り</div><div id="dashWatch" class="status">まだありません</div></div>
+  <div class="analyticsBox"><div class="boxLabel">★ お気に入り</div><div id="dashWatch" class="status">まだありません</div><div id="watchSaveStatus" class="sub" role="status" aria-live="polite"></div></div>
   <div class="analyticsBox"><div class="boxLabel">最近見た銘柄</div><div id="recentTickers" class="status">まだありません</div></div>
 </div>
 <div class="row compactRow"><span class="sub">次の15分足確定まで</span><span id="candleCountdown" class="pill">--:--</span><button class="ghost" id="openNotifications">通知設定</button></div>
@@ -389,8 +389,8 @@ button:disabled{opacity:.5;cursor:not-allowed}
     <div class="analyticsBox">
       <div class="boxLabel">お気に入りの端末間同期</div>
       <div class="sub">同じ同期コードを別端末へ入力するとお気に入りを共有できます。</div>
-      <div class="row compactRow"><input id="watchSyncKey" class="syncCode" placeholder="同期コード"><button class="ghost" id="copyWatchSync">コードをコピー</button><button class="ghost" id="loadWatchSync">このコードで同期</button></div>
-      <div id="watchSyncStatus" class="sub"></div>
+      <div class="row compactRow"><input id="watchSyncKey" class="syncCode" placeholder="同期コード"><button class="ghost" id="copyWatchSync">コードをコピー</button><button class="ghost" id="loadWatchSync">このコードの一覧を取得</button></div>
+      <div id="watchSyncStatus" class="sub" role="status" aria-live="polite"></div><div id="watchConflictDetails" class="sub"></div><div class="row compactRow"><button id="watchSyncRefresh" class="ghost" type="button">一覧を再確認</button><button id="watchSyncUseRemote" class="ghost" type="button" hidden>サーバーの一覧を取得</button><button id="watchSyncUseLocal" class="ghost" type="button" hidden>この端末の一覧を保存</button></div><p class="sub">同期コードを知っている端末はお気に入りを取得・変更できます。信頼する端末だけで共有してください。取引の権限とは別です。</p>
     </div>
   </div>
 </details></div></details>
@@ -572,16 +572,66 @@ document.getElementById('entryHistoryMore').onclick=function(){loadEntryHistory(
 ['entryHistoryKind','entryHistoryDays','entryHistoryTicker'].forEach(function(id){document.getElementById(id).onchange=function(){loadEntryHistory(false)}});
 var historySearch=document.getElementById('entryHistoryTicker');historySearch.addEventListener('input',scheduleEntryHistorySearch);historySearch.addEventListener('compositionend',scheduleEntryHistorySearch);historySearch.addEventListener('keydown',function(event){if(event.key==='Enter'&&!event.isComposing)loadEntryHistory(false)});
 document.getElementById('entryHistoryReset').onclick=function(){document.getElementById('entryHistoryKind').value='ALL';document.getElementById('entryHistoryDays').value='7';document.getElementById('entryHistoryTicker').value='';loadEntryHistory(false)};
-function saveWatch(){browserStorageWrite("edgexWatch",JSON.stringify(Array.from(watch)));renderQuickAccess();saveWatchToServer()}
-function newSyncKey(){var a=new Uint32Array(4);crypto.getRandomValues(a);return Array.from(a).map(x=>x.toString(16).padStart(8,"0")).join("")}
-function showWatchSyncStatus(msg,cls){var e=document.getElementById("watchSyncStatus");if(e)e.innerHTML='<span class="'+(cls||"muted")+'">'+msg+'</span>'}
-async function saveWatchToServer(){if(!watchSyncKey)return;try{await jf("/api/watchlist",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sync_key:watchSyncKey,tickers:Array.from(watch)})});showWatchSyncStatus("お気に入りをサーバー同期済み","good")}catch(e){showWatchSyncStatus("同期失敗: "+e.message,"error")}}
-async function loadWatchFromServer(key,replaceLocal){
- if(!key)return;try{var j=await jf("/api/watchlist?sync_key="+encodeURIComponent(key)),remote=j.tickers||[];watchSyncKey=key;browserStorageWrite("edgexWatchSyncKey",key);document.getElementById("watchSyncKey").value=key;
-  if(remote.length||replaceLocal){watch=new Set(remote);browserStorageWrite("edgexWatch",JSON.stringify(remote));renderQuickAccess();showWatchSyncStatus("同期しました — "+remote.length+"銘柄","good")}else{await saveWatchToServer()}
- }catch(e){showWatchSyncStatus("同期失敗: "+e.message,"error")}
+var watchEditRevision=0,watchSyncEpoch=0,watchReadController=null,watchLoadBusy=false,watchWriteTask=null,watchWriteQueued=false,watchRemoteSnapshot=null,watchSyncUncertain=false,watchSyncConflict=false,watchLocalSaved=null,watchSyncDirty=browserStorageRead('edgexWatchSyncDirty')==='true';
+function watchValuesEqual(a,b){return a.length===b.length&&a.every(function(value){return b.includes(value)})}
+function validWatchReply(j){return !!j&&typeof j.exists==='boolean'&&Number.isSafeInteger(j.revision)&&j.revision>=0&&Array.isArray(j.tickers)&&j.tickers.length<=200&&j.tickers.every(function(t){return typeof t==='string'&&t.length>0&&t.length<=64&&t.trim()===t&&t.toUpperCase()===t})&&new Set(j.tickers).size===j.tickers.length&&(j.exists||j.revision===0&&j.tickers.length===0)}
+function persistWatchLocal(){watchLocalSaved=browserStorageWrite('edgexWatch',JSON.stringify(Array.from(watch)));browserStorageWrite('edgexWatchSyncDirty',watchSyncDirty?'true':'false')}
+function renderWatchSyncControls(){
+ var local=document.getElementById('watchSaveStatus');if(local)local.textContent='お気に入り '+watch.size+'件 / '+(watchLocalSaved===true?'端末に保存済み':watchLocalSaved===false?'この画面内のみ（端末への保存を確認できません）':'この端末の一覧')+(watchSyncDirty?' / サーバー未同期':'');
+ var input=document.getElementById('watchSyncKey'),otherCode=input&&input.value.trim()!==watchSyncKey;var useLocal=document.getElementById('watchSyncUseLocal'),useRemote=document.getElementById('watchSyncUseRemote'),details=document.getElementById('watchConflictDetails');
+ if(useLocal){useLocal.hidden=!watchSyncDirty&&!watchSyncConflict;useLocal.disabled=otherCode||watchLoadBusy||!!watchWriteTask||!watchRemoteSnapshot||watchSyncUncertain}
+ if(useRemote){useRemote.hidden=!watchSyncConflict;useRemote.disabled=otherCode||watchLoadBusy||!!watchWriteTask||!watchRemoteSnapshot||watchSyncUncertain}
+ if(details)details.textContent=watchSyncConflict&&watchRemoteSnapshot?'この端末 '+watch.size+'件：'+Array.from(watch).slice(0,12).join(', ')+' / サーバー '+watchRemoteSnapshot.tickers.length+'件：'+watchRemoteSnapshot.tickers.slice(0,12).join(', ')+'（どちらもお気に入りの一覧です）':'';
+ var refresh=document.getElementById('watchSyncRefresh');if(refresh)refresh.disabled=!!watchWriteTask;
 }
-async function initWatchSync(){if(!watchSyncKey){watchSyncKey=newSyncKey();browserStorageWrite("edgexWatchSyncKey",watchSyncKey)}document.getElementById("watchSyncKey").value=watchSyncKey;await loadWatchFromServer(watchSyncKey,false)}
+function showWatchSyncStatus(msg,cls){var e=document.getElementById('watchSyncStatus');if(e){e.textContent=msg;e.setAttribute('data-state',cls||'muted')}renderWatchSyncControls()}
+function saveWatch(){watchEditRevision++;watchSyncDirty=true;persistWatchLocal();renderQuickAccess();renderWatchSyncControls();saveWatchToServer()}
+function newSyncKey(){var a=new Uint32Array(4);crypto.getRandomValues(a);return Array.from(a).map(x=>x.toString(16).padStart(8,'0')).join('')}
+async function watchSyncRequest(options){
+ var controller=new AbortController(),timer;
+ var deadline=new Promise(function(resolve,reject){timer=setTimeout(function(){reject(new Error('WATCH_TIMEOUT'));controller.abort()},8000)});
+ var opt=Object.assign({cache:'no-store'},options||{});if(opt.signal){var outside=opt.signal;if(outside.aborted)controller.abort();else outside.addEventListener('abort',function(){controller.abort()},{once:true})}opt.signal=controller.signal;
+ try{var response=await Promise.race([(async function(){var r=await fetch('/api/watchlist',opt),j=await r.json();if(!r.ok){var e=new Error('WATCH_REQUEST_FAILED');e.status=r.status;throw e}return j})(),deadline]);if(controller.signal.aborted)throw new Error('WATCH_REQUEST_ABORTED');return response}finally{clearTimeout(timer)}
+}
+async function saveWatchToServer(explicit){
+ if(explicit){watchSyncDirty=true;persistWatchLocal()}watchWriteQueued=true;
+ if(watchWriteTask)return watchWriteTask;
+ if(!watchSyncKey||watchLoadBusy||!watchRemoteSnapshot||watchSyncUncertain||watchSyncConflict&&!explicit){showWatchSyncStatus(watchSyncConflict?'端末の変更を保持しています。2つの一覧を確認して同期先を選んでください。':'端末の変更を保持しています。サーバーの一覧を再確認してください。','warn');return}
+ watchSyncConflict=false;var epoch=watchSyncEpoch,key=watchSyncKey,task;
+ task=(async function(){
+  while(watchWriteQueued&&epoch===watchSyncEpoch&&key===watchSyncKey){
+   watchWriteQueued=false;var values=Array.from(watch),edit=watchEditRevision,expected=watchRemoteSnapshot.revision;showWatchSyncStatus('お気に入りを保存中…','muted');
+   try{
+    var j=await watchSyncRequest({method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sync_key:key,tickers:values,expected_revision:expected})});if(epoch!==watchSyncEpoch||key!==watchSyncKey)return;
+    if(!validWatchReply(j)||j.ok!==true||!j.exists||j.revision<=expected||!watchValuesEqual(values,j.tickers))throw new Error('INVALID_WATCH_RESPONSE');
+    watchRemoteSnapshot=j;watchSyncUncertain=false;
+    if(edit===watchEditRevision&&watchValuesEqual(Array.from(watch),values)){watchSyncDirty=false;persistWatchLocal();showWatchSyncStatus('サーバー同期を確認済み — '+watch.size+'銘柄','good')}else{watchWriteQueued=true;showWatchSyncStatus('最新の端末変更を続けて保存します…','muted')}
+   }catch(e){if(epoch===watchSyncEpoch&&key===watchSyncKey){watchSyncUncertain=true;watchWriteQueued=false;showWatchSyncStatus(e.status===409?'別の保存が先に反映されました。端末の一覧は保持しています。一覧を再確認してください。':'保存を確認できません。端末の一覧は保持しています。一覧を再確認してください。','error')}return}
+  }
+ })();watchWriteTask=task;renderWatchSyncControls();
+ try{await task}finally{if(watchWriteTask===task){watchWriteTask=null;renderWatchSyncControls();if(watchWriteQueued&&!watchLoadBusy&&!watchSyncUncertain&&!watchSyncConflict&&watchRemoteSnapshot)saveWatchToServer()}}
+}
+async function loadWatchFromServer(key,replaceLocal){
+ key=typeof key==='string'?key.trim():'';if(key.length<24||key.length>128){showWatchSyncStatus('同期コードは24〜128文字で入力してください。','warn');return}
+ var epoch=++watchSyncEpoch,edit=watchEditRevision,previousKey=watchSyncKey;if(watchReadController)watchReadController.abort();var controller=new AbortController();watchReadController=controller;watchLoadBusy=true;watchWriteQueued=false;
+ showWatchSyncStatus('サーバーの一覧を確認中…端末の一覧は保持しています。','muted');
+ try{
+  var j=await watchSyncRequest({headers:{'X-Watch-Sync-Key':key},signal:controller.signal});if(epoch!==watchSyncEpoch)return;
+  if(!validWatchReply(j))throw new Error('INVALID_WATCH_RESPONSE');
+  if(replaceLocal&&!j.exists){showWatchSyncStatus('このコードの一覧は見つかりません。端末の一覧を保持しています。','warn');return}
+  if(key!==previousKey&&edit!==watchEditRevision){showWatchSyncStatus('取得中の端末変更を保持しています。コードの一覧をもう一度取得してください。','warn');return}
+  watchSyncKey=key;browserStorageWrite('edgexWatchSyncKey',key);var input=document.getElementById('watchSyncKey');if(input.value.trim()===key||!input.value)input.value=key;
+  watchRemoteSnapshot=j;watchSyncUncertain=false;
+  var values=Array.from(watch),same=watchValuesEqual(values,j.tickers);
+  if(replaceLocal&&edit===watchEditRevision||!watchSyncDirty&&watch.size===0&&edit===watchEditRevision&&j.exists){watch=new Set(j.tickers);watchEditRevision++;watchSyncDirty=false;watchSyncConflict=false;persistWatchLocal();renderQuickAccess();if(typeof renderRows==='function')renderRows();showWatchSyncStatus('サーバーの一覧を取得しました — '+watch.size+'銘柄','good')}
+  else if(same&&j.exists){watchSyncDirty=false;watchSyncConflict=false;persistWatchLocal();showWatchSyncStatus('サーバー同期を確認済み — '+watch.size+'銘柄','good')}
+  else if(!j.exists&&key===previousKey){watchSyncConflict=false;watchSyncDirty=true;persistWatchLocal();watchWriteQueued=true;showWatchSyncStatus('新しい同期先へ端末の一覧を保存します…','muted')}
+  else{watchSyncConflict=true;showWatchSyncStatus('一覧が異なります。端末の一覧を保持しています。保存・取得する一覧を選んでください。','warn')}
+ }catch(e){if(epoch===watchSyncEpoch){watchSyncUncertain=true;showWatchSyncStatus('一覧を確認できません。端末の一覧は保持しています。再確認してください。','error')}}
+ finally{if(epoch===watchSyncEpoch){watchLoadBusy=false;watchReadController=null;renderWatchSyncControls();if(watchWriteQueued&&!watchSyncConflict&&!watchSyncUncertain)saveWatchToServer()}}
+}
+async function initWatchSync(){watch=new Set(Array.from(watch).map(function(t){return t.trim().toUpperCase()}));renderQuickAccess();if(!watchSyncKey){watchSyncKey=newSyncKey();browserStorageWrite('edgexWatchSyncKey',watchSyncKey)}document.getElementById('watchSyncKey').value=watchSyncKey;renderWatchSyncControls();await loadWatchFromServer(watchSyncKey,false)}
+
 function tab(name){if(name==="risk"){openRiskCalculator();return}if(name==="compare"||name==="journal")name="dashboard";var b=document.querySelector('[data-tab="'+name+'"]');if(b)b.click()}
 function updateUrl(tabName,ticker){var u=new URL(location.href);u.searchParams.set("tab",tabName);if(tabName==="analysis"&&ticker)u.searchParams.set("ticker",ticker);else u.searchParams.delete("ticker");history.replaceState(null,"",u)}
 document.querySelectorAll("[data-tab]").forEach(function(b){b.onclick=function(){document.querySelectorAll("[data-tab]").forEach(function(x){x.classList.remove("active");x.setAttribute("aria-pressed","false")});document.querySelectorAll(".panel").forEach(x=>x.classList.remove("active"));b.classList.add("active");b.setAttribute("aria-pressed","true");document.getElementById(b.dataset.tab).classList.add("active");updateUrl(b.dataset.tab,b.dataset.tab==="analysis"?document.getElementById("ticker").value.trim():"");if(b.dataset.tab==="analysis"&&typeof scheduleAnalysisChartRedraw==='function')scheduleAnalysisChartRedraw();if(b.dataset.tab==="api"){checkApiConnections();loadPaperExecution()}}});
@@ -1764,7 +1814,11 @@ window.addEventListener('pageshow',function(e){if(e.persisted){refreshGlobalEntr
 renderDashboard();loadLiveExecution();setInterval(function(){renderLiveExecution(liveExecutionSnapshot);if(document.visibilityState==="visible")loadLiveExecution()},15000);
 window.addEventListener("beforeinstallprompt",function(e){e.preventDefault();deferredInstallPrompt=e;document.getElementById("installApp").classList.add("good")});
 document.getElementById("copyWatchSync").onclick=async function(){var key=document.getElementById("watchSyncKey").value.trim();try{await navigator.clipboard.writeText(key);showWatchSyncStatus("同期コードをコピーしました","good")}catch(e){alert(key)}};
-document.getElementById("loadWatchSync").onclick=function(){var key=document.getElementById("watchSyncKey").value.trim();if(key.length<24){showWatchSyncStatus("同期コードが短すぎます","warn");return}loadWatchFromServer(key,true)};
+document.getElementById("loadWatchSync").onclick=function(){return loadWatchFromServer(document.getElementById('watchSyncKey').value,true)};
+document.getElementById('watchSyncKey').addEventListener('input',renderWatchSyncControls);
+document.getElementById('watchSyncRefresh').onclick=function(){return loadWatchFromServer(watchSyncKey,false)};
+document.getElementById('watchSyncUseRemote').onclick=function(){return loadWatchFromServer(watchSyncKey,true)};
+document.getElementById('watchSyncUseLocal').onclick=function(){return saveWatchToServer(true)};
 document.getElementById("pushCandidatePref").onchange=savePushPreferences;
 document.getElementById("pushDailyPref").onchange=savePushPreferences;
 document.getElementById("snooze30").onclick=function(){setPushSnooze("30")};
