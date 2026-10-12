@@ -896,12 +896,14 @@ async function loadPushEvents(){try{var j=await jf("/api/push/events?limit=20");
 async function loadPushPreferences(sub,isCurrent,signal){
  var cbox=document.getElementById('pushCandidatePref'),dbox=document.getElementById('pushDailyPref'),st=document.getElementById('pushPrefStatus');
  if(!sub){cbox.checked=false;dbox.checked=false;cbox.disabled=true;dbox.disabled=true;st.textContent='バックグラウンド通知をONにすると設定できます。';return null}
+ var formKey=JSON.stringify(['quietStart','quietEnd'].map(function(id){return document.getElementById(id).value}));
  var p=await pushRequest(sub,'/api/push/preferences?endpoint='+encodeURIComponent(sub.endpoint),{signal:signal,cache:'no-store'});
  if(!isCurrent())return null;
  if(!validPushReadinessPreferences(p))throw new Error('INVALID_PUSH_PREFERENCES');
  pushPreferenceState=Object.assign({},p);cbox.disabled=false;dbox.disabled=true;cbox.checked=p.candidate_alerts;dbox.checked=false;
- document.getElementById('quietStart').value=p.quiet_start||'23:00';document.getElementById('quietEnd').value=p.quiet_end||'07:00';renderSnoozeStatus();
- st.textContent='この端末の設定を同期済み'+(p.last_success_ms?' / 最終サーバー送信 '+new Date(p.last_success_ms).toLocaleString('ja-JP'):'');return p;
+ var currentKey=JSON.stringify(['quietStart','quietEnd'].map(function(id){return document.getElementById(id).value})),serverKey=JSON.stringify([p.quiet_start||'23:00',p.quiet_end||'07:00']),preserveDraft=currentKey!==serverKey&&(pushQuietFormKey!==null?currentKey!==pushQuietFormKey:currentKey!==formKey);
+ if(!preserveDraft){document.getElementById('quietStart').value=p.quiet_start||'23:00';document.getElementById('quietEnd').value=p.quiet_end||'07:00'}pushQuietFormKey=serverKey;renderSnoozeStatus();
+ st.textContent='この端末の設定を同期済み'+(preserveDraft?' / 入力中の静音時間は未保存です。':'')+(p.last_success_ms?' / 最終サーバー送信 '+new Date(p.last_success_ms).toLocaleString('ja-JP'):'');return p;
 }
 async function savePushPreferences(){
  var sub=await currentPushSubscription();if(!sub)return;
@@ -936,7 +938,7 @@ function renderDailyReports(reports){
  el.innerHTML=reports.slice(0,7).map(function(r){var m=r.last_market||{};return '<div class="reportItem"><b>'+r.date+'</b><div class="pickMeta"><span class="pill">NEAR発生 '+r.near_events+'</span><span class="pill">READY発生 '+r.ready_events+'</span><span class="pill">ピーク有力候補 '+r.peak_qualified_near+'</span><span class="pill">平均 '+fmt(m.avg_score,1)+'点</span></div><div class="pickReason">主なNEAR: '+((r.top_near_tickers||[]).join(", ")||"なし")+'</div></div>'}).join("")
 }
 async function loadDailyReports(){try{var j=await jf("/api/daily-reports?limit=30");renderDailyReports(j.reports||[])}catch(e){document.getElementById("dailyReports").innerHTML='<span class="error">'+lifecycleEscape(e.message)+'</span>'}}
-var pushReadinessVersion=0,pushReadinessController=null,pushReadinessState={status:'CHECKING',observed_ms:null};
+var pushQuietFormKey=null,pushReadinessVersion=0,pushReadinessController=null,pushReadinessState={status:'CHECKING',observed_ms:null};
 function pushQuietWindow(p,now){
  function minutes(v){if(v==null||v==='')return null;if(typeof v!=='string'||!/^([01]\d|2[0-3]):[0-5]\d$/.test(v))return NaN;var bits=v.split(':');return Number(bits[0])*60+Number(bits[1])}
  var start=minutes(p.quiet_start),end=minutes(p.quiet_end);if(Number.isNaN(start)||Number.isNaN(end))return {active:null,detail:'静音時刻を確認できません。'};

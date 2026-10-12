@@ -35,3 +35,5 @@ class PushReadinessUiTests(unittest.TestCase):
     def test_settings_invalidation(self): self.run_case("settings_invalidation")
     def test_privacy_and_escaping(self): self.run_case("privacy_and_escaping")
     def test_bindings_and_scope(self): self.run_case("bindings_and_scope")
+    def test_unsaved_quiet_draft_preserved(self): self.run_case("unsaved_quiet_draft_preserved")
+    def test_quiet_edit_during_check(self): self.run_case("quiet_edit_during_check")
