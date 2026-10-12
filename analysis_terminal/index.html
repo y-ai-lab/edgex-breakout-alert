@@ -1320,7 +1320,6 @@ function renderAnalysisCriteria(r){
 function syncAnalysisWatch(){
  var button=document.getElementById('analysisWatch');if(!button)return;var valid=analysisFresh(lastAnalysis),on=valid&&watch.has(lastAnalysis.ticker);button.disabled=!valid;button.setAttribute('aria-pressed',on?'true':'false');button.textContent=on?'★ お気に入り済み':'☆ お気に入り';
 }
-document.getElementById('analysisWatch').onclick=function(){refreshAnalysisAge();if(!lastAnalysis||!analysisFresh(lastAnalysis))return;var t=lastAnalysis.ticker;watch.has(t)?watch.delete(t):watch.add(t);saveWatch();syncAnalysisWatch();if(typeof renderRows==='function')renderRows()};
 var analysisRequestVersion=0,analysisAbortController=null,analysisExpiryTimer=null;
 function analysisFresh(r){var now=Date.now();return !!r&&Number.isFinite(r._client_received_ms)&&r._client_received_ms>0&&now>=r._client_received_ms&&now-r._client_received_ms<120000&&Number.isFinite(r.data_age_seconds)&&r.data_age_seconds>=0&&r.data_age_seconds+(now-r._client_received_ms)/1000<900}
 function clearAnalysisView(){
@@ -1362,6 +1361,7 @@ setInterval(refreshAnalysisAge,1000);
 document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible')refreshAnalysisAge()});
 document.getElementById('ticker').addEventListener('input',invalidateAnalysisInput);
 function planText(r){var first=validFirstTarget(r);return [r.ticker+" — "+actionJa(planAction(r)),r.stage!=="READY"?"未成立の参考値 — エントリー条件は成立していません。":null,"方向: "+directionJa(r.direction),"状態: "+planStage(r),"Entry目安: "+fmt(r.entry_reference,8),"損切り SL: "+fmt(r.stop_loss,8),first==null?null:"第1利確 TP1: "+fmt(first,8),"最終利確 TP: "+fmt(r.take_profit,8),"RR: "+fmt(r.rr,2),"理由: "+planReason(r)].filter(function(v){return v!=null}).join("\n")}
+document.getElementById('analysisWatch').onclick=function(){refreshAnalysisAge();if(!lastAnalysis||!analysisFresh(lastAnalysis))return;var t=lastAnalysis.ticker;watch.has(t)?watch.delete(t):watch.add(t);saveWatch();syncAnalysisWatch();if(typeof renderRows==='function')renderRows()};
 document.getElementById("analyze").onclick=analyze;document.getElementById("ticker").addEventListener("keydown",function(e){if(e.key==="Enter")analyze()});document.getElementById("toRisk").onclick=openRiskCalculator;document.getElementById("copyPlan").onclick=async function(){refreshAnalysisAge();if(!lastAnalysis||!analysisFresh(lastAnalysis))return;var txt=planText(lastAnalysis);try{await navigator.clipboard.writeText(txt);this.textContent="コピー済み";var b=this;setTimeout(()=>b.textContent="プランをコピー",1200)}catch(e){alert(txt)}};
 document.getElementById("sharePlan").onclick=async function(){refreshAnalysisAge();if(!lastAnalysis||!analysisFresh(lastAnalysis))return;updateUrl("analysis",lastAnalysis.ticker);var data={title:lastAnalysis.ticker+" EdgeX分析",text:planText(lastAnalysis),url:location.href};if(navigator.share){try{await navigator.share(data);return}catch(e){if(e.name==="AbortError")return}}try{await navigator.clipboard.writeText(data.text+"\n"+data.url);this.textContent="共有内容をコピー済み";var b=this;setTimeout(()=>b.textContent="共有",1500)}catch(e){alert(data.text+"\n"+data.url)}};
 

@@ -9,6 +9,7 @@ const c={Number,Date:Clock,Set,document:{getElementById:id=>nodes[id]},lastAnaly
  saveWatch(){saved++},renderRows(){redrawn++},refreshAnalysisAge(){if(c.lastAnalysis&&!c.analysisFresh(c.lastAnalysis)){c.lastAnalysis=null;c.renderAnalysisCriteria(null);c.syncAnalysisWatch()}}};
 vm.createContext(c);
 vm.runInContext(script.slice(script.indexOf('function reviewEntryConditions('),script.indexOf('var analysisRequestVersion=')),c);
+vm.runInContext(script.split('\n').find(line=>line.startsWith("document.getElementById('analysisWatch').onclick=")),c);
 vm.runInContext(script.slice(script.indexOf('function analysisFresh('),script.indexOf('function clearAnalysisView(')),c);
 const base=()=>({ticker:'TESTUSDC',direction:'LONG',trend:'UP',stage:'READY',action:'ENTER',breakout_level:100,breakout_time_ms:now-14400000,retest_touched:true,confirmation_color_ok:true,confirmation_level_ok:true,confirmed:true,confirmation_latest_open:99,confirmation_latest_close:100,entry_reference:100,stop_loss:95,take_profit:110,rr:2,data_age_seconds:0,_client_received_ms:now});
 const review=(r,m=2)=>c.reviewEntryConditions(r,m),check=(r,k,m=2)=>review(r,m).checks.find(x=>x.key===k);
