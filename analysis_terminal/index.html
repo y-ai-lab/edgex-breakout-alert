@@ -357,7 +357,9 @@ button:disabled{opacity:.5;cursor:not-allowed}
 <details class="dashboardDrawer" id="notificationSettings"><summary>エントリー通知</summary><div class="drawerBody">
 <div class="analyticsBox">
   <div class="boxLabel">エントリー通知</div>
-  <div id="pushStatus" class="status compactStatus">確認中…</div>
+  <div id="pushStatus" class="status compactStatus" role="status" aria-live="polite">確認中…</div>
+<div id="pushReadinessChecks" class="sub compactHelp"></div>
+<button class="ghost compactButton" id="pushRecheck" type="button" aria-busy="false">受信条件を再確認</button>
   <button class="ghost compactButton" id="backgroundPush">バックグラウンド通知 OFF</button>
   <div id="pushGuide" class="sub compactHelp"></div>
 </div><details class="dashboardDrawer">
@@ -891,16 +893,20 @@ function renderPushEvents(events){
  el.innerHTML=events.slice(0,8).map(function(e){var ok=e.sent>0,label=e.kind==="ready"?"エントリー可能":e.kind==="daily"?"朝サマリー":e.kind==="candidate"?"候補通知":e.kind==="test"?"テスト通知":e.kind;return '<div class="alertItem '+(ok?"ready":"near")+'"><b>'+label+'</b> — '+(ok?"送信成功":"送信なし")+' '+e.sent+'/'+e.attempted+'<div>'+lifecycleEscape(e.title)+'</div><div class="when">'+new Date(e.created_ms).toLocaleString("ja-JP")+'</div></div>'}).join("");
 }
 async function loadPushEvents(){try{var j=await jf("/api/push/events?limit=20");renderPushEvents(j.events||[])}catch(e){document.getElementById("pushEvents").innerHTML='<span class="error">'+lifecycleEscape(e.message)+'</span>'}}
-async function loadPushPreferences(){
- var cbox=document.getElementById("pushCandidatePref"),dbox=document.getElementById("pushDailyPref"),st=document.getElementById("pushPrefStatus"),sub=await currentPushSubscription();
- if(!sub){cbox.checked=false;dbox.checked=false;cbox.disabled=true;dbox.disabled=true;st.textContent="バックグラウンド通知をONにすると設定できます。";return}
- cbox.disabled=false;dbox.disabled=true;dbox.checked=false;
- try{var p=await pushRequest(sub,"/api/push/preferences?endpoint="+encodeURIComponent(sub.endpoint));pushPreferenceState=p||{};cbox.checked=!!p.candidate_alerts;dbox.checked=false;document.getElementById("quietStart").value=p.quiet_start||"23:00";document.getElementById("quietEnd").value=p.quiet_end||"07:00";renderSnoozeStatus();st.textContent="この端末の設定を同期済み"+(p.last_success_ms?" / 最終送信 "+new Date(p.last_success_ms).toLocaleString("ja-JP"):"")}catch(e){st.textContent="設定を取得できません: "+e.message}
+async function loadPushPreferences(sub,isCurrent,signal){
+ var cbox=document.getElementById('pushCandidatePref'),dbox=document.getElementById('pushDailyPref'),st=document.getElementById('pushPrefStatus');
+ if(!sub){cbox.checked=false;dbox.checked=false;cbox.disabled=true;dbox.disabled=true;st.textContent='バックグラウンド通知をONにすると設定できます。';return null}
+ var p=await pushRequest(sub,'/api/push/preferences?endpoint='+encodeURIComponent(sub.endpoint),{signal:signal,cache:'no-store'});
+ if(!isCurrent())return null;
+ if(!validPushReadinessPreferences(p))throw new Error('INVALID_PUSH_PREFERENCES');
+ pushPreferenceState=Object.assign({},p);cbox.disabled=false;dbox.disabled=true;cbox.checked=p.candidate_alerts;dbox.checked=false;
+ document.getElementById('quietStart').value=p.quiet_start||'23:00';document.getElementById('quietEnd').value=p.quiet_end||'07:00';renderSnoozeStatus();
+ st.textContent='この端末の設定を同期済み'+(p.last_success_ms?' / 最終サーバー送信 '+new Date(p.last_success_ms).toLocaleString('ja-JP'):'');return p;
 }
 async function savePushPreferences(){
  var sub=await currentPushSubscription();if(!sub)return;
  var cbox=document.getElementById("pushCandidatePref"),dbox=document.getElementById("pushDailyPref"),st=document.getElementById("pushPrefStatus");
- try{var payload={endpoint:sub.endpoint,candidate_alerts:cbox.checked,daily_summary:false,snooze_until_ms:pushPreferenceState.snooze_until_ms||null,quiet_start:document.getElementById("quietStart").value||null,quiet_end:document.getElementById("quietEnd").value||null};var p=await pushRequest(sub,"/api/push/preferences",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});pushPreferenceState=Object.assign({},pushPreferenceState,p);renderSnoozeStatus();st.textContent="通知設定を保存しました。"}catch(e){st.textContent="保存できません: "+e.message}
+ try{var payload={endpoint:sub.endpoint,candidate_alerts:cbox.checked,daily_summary:false,snooze_until_ms:pushPreferenceState.snooze_until_ms||null,quiet_start:document.getElementById("quietStart").value||null,quiet_end:document.getElementById("quietEnd").value||null};invalidatePushReadiness();var p=await pushRequest(sub,"/api/push/preferences",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});pushPreferenceState=Object.assign({},pushPreferenceState,p);renderSnoozeStatus();st.textContent="通知設定を保存しました。";await syncBackgroundPushButton()}catch(e){invalidatePushReadiness();st.textContent="保存を確認できません。受信条件を再確認してください。"}
 }
 function nextJst8(){var now=Date.now(),shift=9*60*60*1000,j=new Date(now+shift),y=j.getUTCFullYear(),m=j.getUTCMonth(),d=j.getUTCDate(),target=Date.UTC(y,m,d,-1,0,0,0);if(target<=now)target+=24*60*60*1000;return target}
 function renderSnoozeStatus(){var el=document.getElementById("snoozeStatus");if(!el)return;var until=Number(pushPreferenceState.snooze_until_ms||0);if(until>Date.now())el.innerHTML='<span class="warn">エントリー通知停止中 — '+new Date(until).toLocaleString("ja-JP")+'まで</span>';else el.textContent="エントリー通知は一時停止されていません。"}
@@ -930,25 +936,78 @@ function renderDailyReports(reports){
  el.innerHTML=reports.slice(0,7).map(function(r){var m=r.last_market||{};return '<div class="reportItem"><b>'+r.date+'</b><div class="pickMeta"><span class="pill">NEAR発生 '+r.near_events+'</span><span class="pill">READY発生 '+r.ready_events+'</span><span class="pill">ピーク有力候補 '+r.peak_qualified_near+'</span><span class="pill">平均 '+fmt(m.avg_score,1)+'点</span></div><div class="pickReason">主なNEAR: '+((r.top_near_tickers||[]).join(", ")||"なし")+'</div></div>'}).join("")
 }
 async function loadDailyReports(){try{var j=await jf("/api/daily-reports?limit=30");renderDailyReports(j.reports||[])}catch(e){document.getElementById("dailyReports").innerHTML='<span class="error">'+lifecycleEscape(e.message)+'</span>'}}
-async function loadNotificationCenter(){await Promise.all([loadPushPreferences(),loadPushEvents()])}
+var pushReadinessVersion=0,pushReadinessController=null,pushReadinessState={status:'CHECKING',observed_ms:null};
+function pushQuietWindow(p,now){
+ function minutes(v){if(v==null||v==='')return null;if(typeof v!=='string'||!/^([01]\d|2[0-3]):[0-5]\d$/.test(v))return NaN;var bits=v.split(':');return Number(bits[0])*60+Number(bits[1])}
+ var start=minutes(p.quiet_start),end=minutes(p.quiet_end);if(Number.isNaN(start)||Number.isNaN(end))return {active:null,detail:'静音時刻を確認できません。'};
+ if(start===null||end===null||start===end)return {active:false,detail:'静音時間の設定なし'};
+ try{var parts=new Intl.DateTimeFormat('en-GB',{timeZone:p.timezone||'Asia/Tokyo',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date(now)),values={};parts.forEach(function(x){values[x.type]=x.value});var current=Number(values.hour)*60+Number(values.minute);return {active:start<end?start<=current&&current<end:current>=start||current<end,detail:p.quiet_start+'〜'+p.quiet_end+' / '+(p.timezone||'Asia/Tokyo')};}catch(e){return {active:null,detail:'静音時間のタイムゾーンを確認できません。'}}
+}
+function validPushReadinessPreferences(p){return !!p&&typeof p.candidate_alerts==='boolean'&&p.notification_policy==='READY_ONLY'&&p.daily_summary===false&&(p.snooze_until_ms===null||Number.isInteger(p.snooze_until_ms)&&p.snooze_until_ms>=0)&&['quiet_start','quiet_end'].every(function(k){return p[k]===null||typeof p[k]==='string'})&&typeof p.timezone==='string'}
+function describePushReadiness(state,now){
+ var compat=state.compat||{},permission=state.permission,config=state.config,p=validPushReadinessPreferences(state.preferences)?state.preferences:null,quiet=p?pushQuietWindow(p,now):null,snoozed=!!p&&p.snooze_until_ms>now,expired=state.observed_ms!=null&&(!Number.isFinite(state.observed_ms)||now<state.observed_ms||now-state.observed_ms>=120000),rows=[];
+ function row(label,value){rows.push({label:label,value:value})}
+ row('端末の対応',compat.ios&&!compat.standalone?'ホーム画面のWebアプリから開いてください':compat.supported?'対応':'未対応');
+ row('通知の許可',permission==='granted'?'許可済み':permission==='denied'?'端末・ブラウザ設定で拒否されています':permission==='default'?'まだ許可されていません':'未確認');
+ row('この端末の購読',state.subscribed===true?'登録あり':state.subscribed===false?'登録なし':'未確認');
+ row('サーバー配信',config&&config.notification_policy==='READY_ONLY'&&typeof config.enabled==='boolean'?config.enabled?'現行READYのみ有効':'停止中':'未確認');
+ row('エントリー通知',p?p.candidate_alerts?'ON':'OFF':'設定を未確認');
+ row('一時停止',p?snoozed?new Date(p.snooze_until_ms).toLocaleString('ja-JP')+'まで停止':'停止なし':'未確認');
+ row('静音時間',quiet?(quiet.active===null?'未確認':quiet.active?'現在は静音時間':'現在は静音時間外')+' / '+quiet.detail:'未確認');
+ var status='UNKNOWN',message='受信条件を確認できません。「受信条件を再確認」を押してください。';
+ if(state.status==='CHECKING'){status='CHECKING';message='この端末の受信条件を確認中…'}
+ else if(compat.ios&&!compat.standalone){status='NEEDS_INSTALL';message='iPhoneはホーム画面に追加したWebアプリから通知をONにしてください。'}
+ else if(!compat.supported){status='UNSUPPORTED';message='この開き方ではバックグラウンド通知を利用できません。'}
+ else if(permission==='denied'){status='PERMISSION_DENIED';message='通知が拒否されています。端末・ブラウザ設定で許可してください。'}
+ else if(permission==='default'){status='NEEDS_PERMISSION';message='通知の許可が必要です。「バックグラウンド通知」をONにしてください。'}
+ else if(state.status==='OFFLINE'){status='OFFLINE';message='通信が切れています。接続後に受信条件を再確認してください。'}
+ else if(expired){status='STALE';message='確認情報が古いか端末時刻が変わりました。受信条件を再確認してください。'}
+ else if(state.status==='VERIFIED'&&Number.isFinite(state.observed_ms)&&state.observed_ms>0&&permission==='granted'&&config&&config.notification_policy==='READY_ONLY'&&typeof config.enabled==='boolean'){
+  if(!config.enabled){status='SERVER_DISABLED';message='サーバーのPush配信が停止しています。'}
+  else if(state.subscribed===false){status='NO_SUBSCRIPTION';message='この端末は未登録です。バックグラウンド通知をONにしてください。'}
+  else if(state.subscribed===true&&validPushReadinessPreferences(p)&&quiet.active!==null){
+   if(!p.candidate_alerts){status='PREFERENCES_OFF';message='エントリー通知がOFFです。「エントリー可能のみ」をONにしてください。'}
+   else if(snoozed){status='SNOOZED';message='エントリー通知は一時停止中です。停止期限か解除後に受信対象になります。'}
+   else if(quiet.active){status='QUIET';message='現在は静音時間です。静音時間外の現行READYが通知対象になります。'}
+   else{status='READY_TO_RECEIVE';message='受信条件を確認済み — 現行READYのみが通知対象です。'}
+  }
+ }
+ return {status:status,message:message,rows:rows,observed_ms:state.observed_ms,stale:expired};
+}
+function renderPushReadiness(){
+ var s=document.getElementById('pushStatus'),list=document.getElementById('pushReadinessChecks');if(!s||!list)return;
+ var state=Object.assign({},pushReadinessState||{});if('Notification' in window)state.permission=Notification.permission;if(navigator.onLine===false)state.status='OFFLINE';var view=describePushReadiness(state,Date.now());s.setAttribute('data-state',view.status);s.textContent=view.message;
+ list.innerHTML=view.rows.map(function(row){return '<div><b>'+lifecycleEscape(row.label)+'</b>：'+lifecycleEscape(view.stale?'前回確認分 / '+row.value:row.value)+'</div>'}).join('')+'<div class="sub">'+(view.observed_ms?'確認 '+new Date(view.observed_ms).toLocaleTimeString('ja-JP')+'。':'')+'端末への到着はこの確認だけでは検証できません。画面内通知とバックグラウンド通知は別の設定です。</div>';
+ var b=document.getElementById('backgroundPush');if(b){var compatible=state.compat&&state.compat.supported&&!(state.compat.ios&&!state.compat.standalone);b.disabled=view.status==='CHECKING'||!compatible;b.textContent=state.subscribed===true?'バックグラウンド通知 ON':state.subscribed===false?'バックグラウンド通知 OFF':'バックグラウンド通知 状態を確認';b.classList.toggle('good',view.status==='READY_TO_RECEIVE')}
+}
+function invalidatePushReadiness(){pushReadinessVersion++;if(pushReadinessController)pushReadinessController.abort();pushReadinessState=Object.assign({},pushReadinessState,{status:'UNKNOWN',config:null,subscribed:null,preferences:null,observed_ms:null});var recheck=document.getElementById('pushRecheck');if(recheck){recheck.setAttribute('aria-busy','false');recheck.textContent='受信条件を再確認'}renderPushReadiness()}
+async function loadNotificationCenter(){await Promise.all([syncBackgroundPushButton(),loadPushEvents()])}
 async function syncBackgroundPushButton(){
- var b=document.getElementById("backgroundPush"),s=document.getElementById("pushStatus");if(!b||!s)return;renderPushGuide();var compat=pushCompatibility();
- if(compat.ios&&!compat.standalone){b.textContent="iPhone: ホーム画面追加後にON";s.innerHTML='<span class="warn">Safariの通常タブではバックグラウンドPushを有効化できません。</span>';return}
- if(!compat.supported){b.textContent="バックグラウンド通知 未対応";s.innerHTML='<span class="warn">現在のブラウザ/開き方ではWeb Pushを利用できません。</span>';return}
+ var version=++pushReadinessVersion;if(pushReadinessController)pushReadinessController.abort();var controller=new AbortController();pushReadinessController=controller;
+ var compat=pushCompatibility(),permission=('Notification' in window)?Notification.permission:null,recheck=document.getElementById('pushRecheck'),timer;
+ function current(){return version===pushReadinessVersion&&!controller.signal.aborted&&navigator.onLine!==false}
+ pushReadinessState={status:'CHECKING',observed_ms:null,compat:compat,permission:permission,config:null,subscribed:null,preferences:null};renderPushGuide();renderPushReadiness();recheck.setAttribute('aria-busy','true');recheck.textContent='受信条件を確認中…';document.getElementById('pushCandidatePref').disabled=true;document.getElementById('pushDailyPref').disabled=true;
  try{
-  var cfg=await jf("/api/push/config"),sub=await currentPushSubscription(),on=!!sub;
-  b.textContent="バックグラウンド通知 "+(on?"ON":"OFF");b.classList.toggle("good",on);
-  if(!cfg.enabled){s.innerHTML='<span class="warn">サーバーPushは準備中です。</span>';return}
-  s.innerHTML=on?'<span class="good">有効</span> — アプリを閉じていても現行READYのエントリー可能通知のみ受信します。':'OFF — ONにすると、現行READYのエントリー可能通知のみ受信します。';
-  loadPushPreferences();
- }catch(e){s.innerHTML='<span class="error">通知状態を確認できません: '+lifecycleEscape(e.message)+'</span>'}
+  if(navigator.onLine===false){pushReadinessState.status='OFFLINE';return}
+  if(!compat.supported||compat.ios&&!compat.standalone){pushReadinessState.status='LOCAL_ONLY';return}
+  var deadline=new Promise(function(resolve,reject){timer=setTimeout(function(){reject(new Error('PUSH_CHECK_TIMEOUT'));controller.abort()},8000)});
+  var work=(async function(){
+   var values=await Promise.all([jf('/api/push/config',{signal:controller.signal,cache:'no-store'}),(async function(){var reg=await navigator.serviceWorker.ready;return await reg.pushManager.getSubscription()})()]);if(!current())return null;
+   var config=values[0],sub=values[1];if(!config||typeof config.enabled!=='boolean'||config.notification_policy!=='READY_ONLY')throw new Error('INVALID_PUSH_CONFIG');
+   pushReadinessState.config=config;pushReadinessState.subscribed=!!sub;
+   var preferences=await loadPushPreferences(sub,current,controller.signal);if(!current())return null;return {config:config,subscribed:!!sub,preferences:preferences};
+  })();
+  var result=await Promise.race([work,deadline]);if(!current()||!result)return;
+  pushReadinessState=Object.assign({},pushReadinessState,result,{status:'VERIFIED',observed_ms:Date.now()});
+ }catch(e){if(version===pushReadinessVersion){pushReadinessState.status=navigator.onLine===false?'OFFLINE':'UNKNOWN';pushReadinessState.preferences=null;pushReadinessState.observed_ms=null;document.getElementById('pushPrefStatus').textContent='設定を確認できません。受信条件を再確認してください。'}}
+ finally{clearTimeout(timer);if(version===pushReadinessVersion){recheck.setAttribute('aria-busy','false');recheck.textContent='受信条件を再確認';renderPushReadiness();if(pushReadinessController===controller)pushReadinessController=null}}
 }
 async function toggleBackgroundPush(){
  var b=document.getElementById("backgroundPush"),s=document.getElementById("pushStatus"),compat=pushCompatibility();
  if(compat.ios&&!compat.standalone){alert("iPhoneではSafariでこのページを開き、共有 →「ホーム画面に追加」→「ウェブアプリとして開く」をONにしてください。その後、ホーム画面のEdgeX分析アイコンから開いて「バックグラウンド通知 ON」を押してください。");return}
  if(!compat.supported){alert("現在のブラウザ/開き方ではWeb Pushを利用できません。iPhoneはホーム画面のWebアプリ、Android/PCはPush対応ブラウザで開いてください。");return}
  try{
-  var reg=await navigator.serviceWorker.ready,existing=await reg.pushManager.getSubscription();
+  invalidatePushReadiness();var reg=await navigator.serviceWorker.ready,existing=await reg.pushManager.getSubscription();
   if(existing){
    await pushRequest(existing,"/api/push/unsubscribe",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({endpoint:existing.endpoint})});
    await existing.unsubscribe();pushManagementTokens.delete(existing.endpoint);b.textContent="バックグラウンド通知 OFF";b.classList.remove("good");s.textContent="バックグラウンド通知をOFFにしました。";await loadNotificationCenter();return;
@@ -1654,7 +1713,7 @@ document.getElementById('capitalRefresh').onclick=loadAccountView;
 ['equity','riskPct'].forEach(function(id){document.getElementById(id).addEventListener('input',function(){clearRiskDerived();recalculateAnalysisCapital()})});
 setInterval(function(){if(apiCapitalMode()&&analysisCapitalObserved!==null&&!usableAccountCapital(accountViewSnapshot))syncAnalysisCapital(null)},1000);
 function applyDeepLink(){var u=new URL(location.href),tabName=u.searchParams.get("tab"),ticker=u.searchParams.get("ticker");if(ticker)document.getElementById("ticker").value=ticker.toUpperCase();if(tabName)tab(tabName);if((tabName==="analysis"||ticker)&&ticker)analyze()}
-loadRiskProfile();document.getElementById("globalEntryAction").onclick=function(){tab("dashboard")};renderQuickAccess();initWatchSync();syncCandidateNotifyButton();renderPushGuide();syncBackgroundPushButton();loadNotificationCenter();updateCandleCountdown();setInterval(updateCandleCountdown,1000);setInterval(refreshGlobalEntryAge,10000);setInterval(refreshEntryHeartbeat,60000);document.addEventListener("visibilitychange",function(){if(document.visibilityState==="visible"){refreshGlobalEntryAge();refreshEntryHeartbeat()}});
+loadRiskProfile();document.getElementById("globalEntryAction").onclick=function(){tab("dashboard")};renderQuickAccess();initWatchSync();syncCandidateNotifyButton();renderPushGuide();loadNotificationCenter();updateCandleCountdown();setInterval(updateCandleCountdown,1000);setInterval(refreshGlobalEntryAge,10000);setInterval(refreshEntryHeartbeat,60000);document.addEventListener("visibilitychange",function(){if(document.visibilityState==="visible"){refreshGlobalEntryAge();refreshEntryHeartbeat()}});
 document.addEventListener("visibilitychange",function(){if(document.visibilityState==="visible"){renderLiveExecution(liveExecutionSnapshot);loadLiveExecution()}});
 window.addEventListener('pageshow',function(e){if(e.persisted){refreshGlobalEntryAge();refreshEntryHeartbeat()}});
 renderDashboard();loadLiveExecution();setInterval(function(){renderLiveExecution(liveExecutionSnapshot);if(document.visibilityState==="visible")loadLiveExecution()},15000);
@@ -1671,11 +1730,16 @@ document.getElementById("saveQuiet").onclick=savePushPreferences;
 document.getElementById("pushTest").onclick=sendPushTest;
 document.getElementById("refreshPushEvents").onclick=loadPushEvents;
 document.getElementById("backgroundPush").onclick=toggleBackgroundPush;
+document.getElementById('pushRecheck').onclick=syncBackgroundPushButton;
+document.getElementById('notificationSettings').addEventListener('toggle',function(){if(this.open)syncBackgroundPushButton()});
+setInterval(function(){if(document.visibilityState==='visible')renderPushReadiness()},10000);
+document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible'&&document.getElementById('notificationSettings').open)syncBackgroundPushButton()});
 document.getElementById("candidateNotify").onclick=toggleCandidateNotify;
 document.getElementById("installApp").onclick=async function(){if(deferredInstallPrompt){deferredInstallPrompt.prompt();await deferredInstallPrompt.userChoice;deferredInstallPrompt=null;this.textContent="ホーム画面追加済み/確認"}else{var ios=/iphone|ipad|ipod/i.test(navigator.userAgent);alert(ios?"Safariで開く → 共有 →「ホーム画面に追加」→「ウェブアプリとして開く」をON → 追加。ホーム画面のEdgeX分析アイコンから起動してください。":"ブラウザのメニューから「アプリをインストール」または「ホーム画面に追加」を選んでください。")}};
 if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("/sw.js").then(function(){syncBackgroundPushButton()}).catch(function(){syncBackgroundPushButton()})})}else{syncBackgroundPushButton()}
 bindAnalysisCharts();
 window.addEventListener('offline',handleMarketOffline);window.addEventListener('online',handleMarketOnline);document.getElementById('marketConnectionRetry').onclick=function(){refreshEntryHeartbeat()};if(browserMarketOffline())handleMarketOffline();else renderMarketConnection();
+window.addEventListener('offline',invalidatePushReadiness);window.addEventListener('online',function(){if(document.getElementById('notificationSettings').open)syncBackgroundPushButton()});
 applyDeepLink();startAutoScan();setTimeout(function(){scan(false)},80);
 
 document.getElementById('calc').onclick=async function(){
