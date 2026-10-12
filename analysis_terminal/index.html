@@ -139,6 +139,7 @@ button:disabled{opacity:.5;cursor:not-allowed}
 .conditionCheck{padding:11px;border:1px solid var(--line);border-radius:10px;background:var(--panel)}.conditionCheckHeader{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
 .conditionCheckHeader b{font-size:13px}.conditionCheck p{margin:7px 0 0;font-size:12px;line-height:1.6;color:var(--muted);overflow-wrap:anywhere}.conditionCheck.pass{border-color:rgba(74,222,128,.25)}
 @media(max-width:720px){.conditionChecklist{grid-template-columns:1fr}.conditionPanel{padding:11px}}
+.marketConnection{display:flex;align-items:center;justify-content:space-between;gap:12px;border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:10px 0;background:var(--panel)}.marketConnectionText{min-width:0;font-size:12px;line-height:1.6;overflow-wrap:anywhere}.marketConnection .ghost{flex-shrink:0;font-size:12px;padding:8px 10px}.marketConnection[data-state="OFFLINE"],.marketConnection[data-state="ERROR"],.marketConnection[data-state="RECONNECTING"],.marketConnection[data-state="STALE"]{border-color:rgba(250,204,21,.35)}
 </style>
 </head>
 <body><main>
@@ -151,6 +152,7 @@ button:disabled{opacity:.5;cursor:not-allowed}
   </div>
   <div class="headerChips"><a class="statusChip" href="/btc">BTC 波分析 ↗</a><button id="openQuickStart" type="button" class="statusChip">使い方</button><span class="statusChip">4H + 15M</span><span class="statusChip">15分更新</span></div>
 </div>
+<div id="marketConnection" class="marketConnection" data-state="CONNECTING"><span id="marketConnectionText" class="marketConnectionText" role="status" aria-live="polite">市場データを確認中…</span><button id="marketConnectionRetry" class="ghost" type="button">再確認</button></div>
 <div id="globalEntryBar" class="globalEntryBar waiting" role="status" aria-live="polite">
   <div class="globalEntryMain">
     <span id="globalEntryDot" class="globalEntryDot"></span>
@@ -996,7 +998,7 @@ var entryRenderVersion=0,entryExpiryTimer=null;
 function entryFreshness(j){
  var now=Date.now(),base=j&&j.snapshot_age_seconds,stamp=j&&j._client_rendered_ms;
  if(typeof base!=="number"||!Number.isFinite(base)||base<0||typeof stamp!=="number"||!Number.isFinite(stamp)||stamp<=0||stamp>now)return {age:null,stale:true};
- var age=base+(now-stamp)/1000;return {age:age,stale:age>=120};
+ var age=base+(now-stamp)/1000,transport=typeof marketTransportUnavailable==='function'&&(marketTransportUnavailable()||marketConnectionMismatched(j));return {age:age,stale:age>=120||transport,transport_unavailable:!!transport};
 }
 function renderGlobalEntryBar(j){
  var bar=document.getElementById("globalEntryBar"),label=document.getElementById("globalEntryLabel"),meta=document.getElementById("globalEntryMeta"),action=document.getElementById("globalEntryAction");if(!bar||!label||!meta||!action)return;
@@ -1006,7 +1008,7 @@ function renderGlobalEntryBar(j){
  if(!freshness.stale)entryExpiryTimer=setTimeout(refreshGlobalEntryAge,Math.ceil((120-age)*1000));
  bar.classList.remove("ready","waiting","stale","globalEntryPulse");
  if(freshness.stale){
-  bar.classList.add("stale");label.textContent="データ鮮度を確認";meta.textContent=age==null?"市場データの取得時刻を確認できません":"最終スキャン "+Math.round(age)+"秒前 — 120秒以上のためENTRY判定を強調表示しません";action.textContent="再スキャン";action.onclick=function(){scan(true)};document.title="確認中 | EdgeX";setTodayTabReady(false);return
+  bar.classList.add("stale");label.textContent="データ鮮度を確認";meta.textContent=freshness.transport_unavailable?"通信の復旧と最新スキャンの取得を確認するまでENTRY判定を止めています":age==null?"市場データの取得時刻を確認できません":"最終スキャン "+Math.round(age)+"秒前 — 120秒以上のためENTRY判定を強調表示しません";action.textContent="再スキャン";action.onclick=function(){scan(true)};document.title="確認中 | EdgeX";setTodayTabReady(false);return
  }
  if(ready.length){
   bar.classList.add("ready");var names=ready.slice(0,2).map(x=>x.ticker).join(" / ");label.textContent="READY "+ready.length+"件 — "+names;meta.textContent="戦略条件成立 / スキャン "+Math.round(age)+"秒前 / タップして確認";action.textContent="ENTRYを見る";action.onclick=function(){if(entryFreshness(j).stale){refreshGlobalEntryAge();return}var r=ready[0];document.getElementById("ticker").value=r.ticker;tab("analysis");analyze()};
@@ -1017,6 +1019,7 @@ function renderGlobalEntryBar(j){
  }
 }
 function refreshGlobalEntryAge(){
+ if(typeof renderMarketConnection==='function')renderMarketConnection();
  if(!globalEntrySnapshot)return;
  renderGlobalEntryBar(globalEntrySnapshot);if(entryFreshness(globalEntrySnapshot).stale)renderEntryNow(globalEntrySnapshot);if(typeof renderNearCandidates==="function")renderNearCandidates(globalEntrySnapshot);if(typeof renderDashboard==="function")renderDashboard();if(typeof lastMarketPayload!=="undefined"&&lastMarketPayload&&typeof renderRows==="function"){summaryView(globalEntrySnapshot&&globalEntrySnapshot.summary);renderRows()}
 }
@@ -1026,19 +1029,49 @@ async function refreshEntryHeartbeat(){
  try{
   var j=await freshScreenerRequest("/api/screener?limit=3");j._client_rendered_ms=Date.now();globalEntrySnapshot=j;renderGlobalEntryBar(j);renderEntryNow(j);if(typeof renderNearCandidates==="function")renderNearCandidates(j);if(typeof renderDashboard==="function")renderDashboard()
  }catch(e){
-  refreshGlobalEntryAge()
- }finally{entryHeartbeatBusy=false;if(typeof flushMarketScanQueue==="function")flushMarketScanQueue()}
+  refreshGlobalEntryAge();if(typeof refreshAnalysisAge==='function')refreshAnalysisAge()
+ }finally{entryHeartbeatBusy=false;if(typeof renderMarketConnection==='function')renderMarketConnection();if(typeof flushMarketScanQueue==="function")flushMarketScanQueue()}
+}
+var marketConnectionEpoch=0,marketActiveController=null,marketConnectionState={status:'CONNECTING',success_ms:null,snapshot_age_seconds:null};
+function browserMarketOffline(){return typeof navigator!=='undefined'&&navigator.onLine===false}
+function marketTransportUnavailable(){return browserMarketOffline()||['OFFLINE','ERROR','RECONNECTING'].includes(marketConnectionState.status)}
+function marketConnectionMismatched(j){return !!j&&Number.isInteger(j._client_connection_epoch)&&j._client_connection_epoch!==marketConnectionEpoch}
+function renderMarketConnection(){
+ var box=document.getElementById('marketConnection'),text=document.getElementById('marketConnectionText'),retry=document.getElementById('marketConnectionRetry');if(!box||!text||!retry)return;
+ var st=marketConnectionState.status,age=Number.isFinite(marketConnectionState.success_ms)?(Date.now()-marketConnectionState.success_ms)/1000:null;
+ if(browserMarketOffline())st='OFFLINE';else if(st==='CONNECTED'&&(age===null||age<0||marketConnectionState.snapshot_age_seconds+age>=120))st='STALE';
+ var messages={CONNECTING:'市場データを確認中…',CONNECTED:'市場データ接続中 — 最終取得 '+Math.max(0,Math.floor(age))+'秒前',OFFLINE:'通信が切れています。ENTRYは未確認です。接続が戻ると自動で再確認します。',ERROR:'市場データを取得できません。ENTRYは未確認です。自動更新または「再確認」で取り直します。',RECONNECTING:'接続が戻りました。最新の市場データを再確認中…',STALE:'市場データが古くなっています。最新の条件は未確認です。「再確認」で取り直せます。'};
+ box.dataset.state=st;text.textContent=messages[st]||messages.CONNECTING;retry.disabled=st==='OFFLINE'||entryHeartbeatBusy;retry.textContent=entryHeartbeatBusy?'取得中…':'再確認';
+}
+function markMarketConnectionLost(status){
+ marketConnectionEpoch++;marketConnectionState.status=status;
+ if(marketActiveController)marketActiveController.abort();
+ if(typeof analysisAbortController!=='undefined'&&analysisAbortController)analysisAbortController.abort();
+ renderMarketConnection();
+}
+function invalidateMarketConnectionViews(){refreshGlobalEntryAge();if(typeof refreshAnalysisAge==='function')refreshAnalysisAge()}
+function handleMarketOffline(){if(marketConnectionState.status!=='OFFLINE')markMarketConnectionLost('OFFLINE');invalidateMarketConnectionViews()}
+function handleMarketOnline(){
+ if(browserMarketOffline()){handleMarketOffline();return}
+ markMarketConnectionLost('RECONNECTING');invalidateMarketConnectionViews();
+ if(document.visibilityState!=='visible')return;
+ if(entryHeartbeatBusy){if(marketScanQueued===null)marketScanQueued=false;return}
+ refreshEntryHeartbeat();
 }
 async function freshScreenerRequest(url){
- var controller=new AbortController(),timer=setTimeout(function(){controller.abort()},20000);
+ if(browserMarketOffline()){handleMarketOffline();throw new Error('MARKET_OFFLINE')}
+ var epoch=marketConnectionEpoch,controller=new AbortController(),timer=setTimeout(function(){controller.abort()},20000);marketActiveController=controller;renderMarketConnection();
  try{
   var j=await jf(url,{signal:controller.signal,cache:"no-store"});
   if(typeof j.snapshot_age_seconds==="number"&&j.snapshot_age_seconds>=90&&!/[?&]force=true(?:&|$)/.test(url)){
    var freshUrl=/[?&]force=false(?:&|$)/.test(url)?url.replace('force=false','force=true'):url+'&force=true';
    j=await jf(freshUrl,{signal:controller.signal,cache:"no-store"});
   }
-  return j;
- }finally{clearTimeout(timer)}
+  if(epoch!==marketConnectionEpoch||browserMarketOffline())throw new Error('SUPERSEDED_MARKET_CONNECTION');
+  if(!j||!Number.isFinite(j.snapshot_age_seconds)||j.snapshot_age_seconds<0)throw new Error('INVALID_MARKET_FRESHNESS');
+  j._client_connection_epoch=epoch;marketConnectionState={status:'CONNECTED',success_ms:Date.now(),snapshot_age_seconds:j.snapshot_age_seconds};renderMarketConnection();return j;
+ }catch(e){if(epoch===marketConnectionEpoch)markMarketConnectionLost(browserMarketOffline()?'OFFLINE':'ERROR');throw e}
+ finally{clearTimeout(timer);if(marketActiveController===controller)marketActiveController=null}
 }
 function scenarioRiskParams(r){
  var p={risk_pct:Number(document.getElementById('riskPct').value),entry:r.entry_reference,stop:r.stop_loss};
@@ -1215,6 +1248,7 @@ function screenerQuery(force){var u="/api/screener?limit=200&force="+force+"&sta
 function flushMarketScanQueue(){if(marketScanQueued!==null){var force=marketScanQueued;marketScanQueued=null;scan(force)}}
 function startAutoScan(){if(autoScanTimer)return;autoScanTimer=setInterval(function(){if(document.visibilityState==="visible")scan(false,true)},30000);document.getElementById("autoScan").textContent="自動更新 ON (30秒)";var note=document.getElementById('marketRefreshStatus');if(note)note.textContent='表示中は30秒ごとに自動更新。画面に戻ると再確認します。'}
 async function scan(force,background){
+ if(browserMarketOffline()){handleMarketOffline();return}
  if(background&&document.visibilityState==="hidden")return;
  if(entryHeartbeatBusy){if(!background)marketScanQueued=marketScanQueued===true||!!force;return}
  entryHeartbeatBusy=true;var s=document.getElementById("screenStatus"),u=screenerQuery(force);if(!background)s.textContent="EdgeX全銘柄を取得中…";
@@ -1224,8 +1258,8 @@ async function scan(force,background){
   lastMarketPayload=j;rows=j.results;marketRowsFilterKey=marketFilterKey();processCandidateTransitions(j);
   s.textContent=j.matched+"件表示 / "+j.scanned+"/"+j.universe+"銘柄評価 / 指標評価率 "+fmt(j.coverage_pct,1)+"% / スキャン "+(j.snapshot_age_seconds||0)+"秒前";
   document.getElementById("lastScan").textContent="更新 "+new Date().toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit",second:"2-digit"});renderRows();
- }catch(e){s.textContent='更新できませんでした。自動で再確認します。';refreshGlobalEntryAge()}
- finally{entryHeartbeatBusy=false;flushMarketScanQueue()}
+ }catch(e){s.textContent='更新できませんでした。最新の条件は未確認です。「再確認」で取り直せます。';refreshGlobalEntryAge();if(typeof refreshAnalysisAge==='function')refreshAnalysisAge()}
+ finally{entryHeartbeatBusy=false;renderMarketConnection();flushMarketScanQueue()}
 }
 document.getElementById("scan").onclick=()=>scan(false);document.getElementById("force").onclick=()=>scan(true);document.getElementById("autoScan").onclick=function(){if(autoScanTimer){clearInterval(autoScanTimer);autoScanTimer=null;this.textContent="自動更新 OFF";var note=document.getElementById('marketRefreshStatus');if(note)note.textContent='一覧の自動更新はOFFです。ENTRYの鮮度は引き続き確認します。'}else{startAutoScan();scan(false)}};
 document.getElementById("presetNear").onclick=function(){document.getElementById("stage").value="NEAR";document.getElementById("minScore").value=0;document.getElementById("minRR").value="";renderRows();scan(false)};
@@ -1321,7 +1355,7 @@ function syncAnalysisWatch(){
  var button=document.getElementById('analysisWatch');if(!button)return;var valid=analysisFresh(lastAnalysis),on=valid&&watch.has(lastAnalysis.ticker);button.disabled=!valid;button.setAttribute('aria-pressed',on?'true':'false');button.textContent=on?'★ お気に入り済み':'☆ お気に入り';
 }
 var analysisRequestVersion=0,analysisAbortController=null,analysisExpiryTimer=null;
-function analysisFresh(r){var now=Date.now();return !!r&&Number.isFinite(r._client_received_ms)&&r._client_received_ms>0&&now>=r._client_received_ms&&now-r._client_received_ms<120000&&Number.isFinite(r.data_age_seconds)&&r.data_age_seconds>=0&&r.data_age_seconds+(now-r._client_received_ms)/1000<900}
+function analysisFresh(r){var now=Date.now();return !(typeof marketTransportUnavailable==='function'&&(marketTransportUnavailable()||marketConnectionMismatched(r)))&&!!r&&Number.isFinite(r._client_received_ms)&&r._client_received_ms>0&&now>=r._client_received_ms&&now-r._client_received_ms<120000&&Number.isFinite(r.data_age_seconds)&&r.data_age_seconds>=0&&r.data_age_seconds+(now-r._client_received_ms)/1000<900}
 function clearAnalysisView(){
  lastAnalysis=null;quickRiskVersion++;manualCalcVersion++;clearTimeout(analysisExpiryTimer);analysisExpiryTimer=null;
  ['analysisOut','actionOut','readyActionCard','quickRiskOut','riskOut','analysisIdentity','entryCriteria'].forEach(function(id){document.getElementById(id).innerHTML=''});
@@ -1334,13 +1368,15 @@ function refreshAnalysisAge(){if(lastAnalysis&&!analysisFresh(lastAnalysis)){cle
 function invalidateAnalysisInput(){analysisRequestVersion++;if(analysisAbortController)analysisAbortController.abort();clearAnalysisView();document.getElementById('analyze').disabled=false;document.getElementById('analyze').setAttribute('aria-busy','false');document.getElementById('analysisStatus').textContent='銘柄が変更されました。「分析」で最新状態を確認してください。';}
 async function analyze(){
  var t=document.getElementById("ticker").value.trim(),s=document.getElementById("analysisStatus"),o=document.getElementById("analysisOut"),a=document.getElementById("actionOut");
+ var connectionEpoch=typeof marketConnectionEpoch==='number'?marketConnectionEpoch:null;
  var version=++analysisRequestVersion;if(analysisAbortController)analysisAbortController.abort();var controller=new AbortController();analysisAbortController=controller;var timeout=setTimeout(function(){controller.abort()},30000);
  clearAnalysisView();s.textContent="分析・チャート取得中…";var button=document.getElementById('analyze');button.disabled=true;button.setAttribute('aria-busy','true');
  if(t.length<2){clearTimeout(timeout);button.disabled=false;button.setAttribute('aria-busy','false');s.textContent='BTCなどの銘柄名を入力してください。';return}
  try{
   var pack=await jf("/api/chart?ticker="+encodeURIComponent(t),{signal:controller.signal,cache:'no-store'});if(version!==analysisRequestVersion||document.getElementById('ticker').value.trim()!==t)return;
   if(!pack||!pack.analysis||typeof pack.analysis.ticker!=='string'||!pack.analysis.stage||!pack.series||!Array.isArray(pack.series.HOUR_4)||!Array.isArray(pack.series.MINUTE_15))throw new Error('INVALID_ANALYSIS_RESPONSE');
-  var r=Object.assign({},pack.analysis,{_client_received_ms:Date.now()}),b=r.score_breakdown||{};lastAnalysis=r;addRecentTicker(r.ticker);
+  if(connectionEpoch!==null&&connectionEpoch!==marketConnectionEpoch)throw new Error('SUPERSEDED_MARKET_CONNECTION');
+  var r=Object.assign({},pack.analysis,{_client_received_ms:Date.now(),_client_connection_epoch:connectionEpoch}),b=r.score_breakdown||{};lastAnalysis=r;addRecentTicker(r.ticker);
   if(!analysisFresh(r)){clearAnalysisView();s.textContent='確定足の鮮度を確認できません。「分析」で再確認してください。';return}
   syncAnalysisWatch();
   document.getElementById('analysisIdentity').innerHTML='<b>'+lifecycleEscape(r.ticker)+'</b><span class="pill">'+lifecycleEscape(directionJa(r.direction))+'</span><span class="sub">取得 '+new Date(r._client_received_ms).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit',second:'2-digit'})+'</span>';
@@ -1519,6 +1555,7 @@ document.getElementById("backgroundPush").onclick=toggleBackgroundPush;
 document.getElementById("candidateNotify").onclick=toggleCandidateNotify;
 document.getElementById("installApp").onclick=async function(){if(deferredInstallPrompt){deferredInstallPrompt.prompt();await deferredInstallPrompt.userChoice;deferredInstallPrompt=null;this.textContent="ホーム画面追加済み/確認"}else{var ios=/iphone|ipad|ipod/i.test(navigator.userAgent);alert(ios?"Safariで開く → 共有 →「ホーム画面に追加」→「ウェブアプリとして開く」をON → 追加。ホーム画面のEdgeX分析アイコンから起動してください。":"ブラウザのメニューから「アプリをインストール」または「ホーム画面に追加」を選んでください。")}};
 if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("/sw.js").then(function(){syncBackgroundPushButton()}).catch(function(){syncBackgroundPushButton()})})}else{syncBackgroundPushButton()}
+window.addEventListener('offline',handleMarketOffline);window.addEventListener('online',handleMarketOnline);document.getElementById('marketConnectionRetry').onclick=function(){refreshEntryHeartbeat()};if(browserMarketOffline())handleMarketOffline();else renderMarketConnection();
 applyDeepLink();startAutoScan();setTimeout(function(){scan(false)},80);
 
 document.getElementById('calc').onclick=async function(){
