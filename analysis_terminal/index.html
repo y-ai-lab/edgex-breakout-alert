@@ -6,6 +6,7 @@
 <link rel="manifest" href="/manifest.webmanifest"><link rel="icon" href="/app-icon.svg" type="image/svg+xml">
 <title>EdgeX 分析ターミナル v__APP_VERSION__</title>
 <style>
+.analysisCopyFallback textarea{width:100%;background:#0c1017;color:var(--text);border:1px solid var(--line);border-radius:9px;padding:10px;font:inherit;font-size:16px;resize:vertical}.analysisCopyFallback[hidden]{display:none}
 :root{color-scheme:dark;--bg:#0b0d12;--panel:#131720;--muted:#8d96a8;--line:#252c38;--text:#f3f5f8;--good:#4ade80;--warn:#facc15;--bad:#fb7185;--accent:#7dd3fc}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif}main{max-width:1260px;margin:auto;padding:26px 16px 60px}h1{margin:0 0 5px;font-size:28px}h2{font-size:20px}.sub,.status,label,.k{color:var(--muted)}.tabs,.row,.filters{display:flex;gap:9px;flex-wrap:wrap}.tabs{margin:20px 0}.tab,.primary,.ghost{border-radius:9px;padding:10px 13px;cursor:pointer;font:inherit}.tab,.ghost{border:1px solid var(--line);background:#0f131b;color:var(--text)}.tab.active{border-color:var(--accent);color:var(--accent)}.primary{border:0;background:#e6f6ff;color:#071018;font-weight:700}.panel{display:none;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:17px}.panel.active{display:block}.field{display:flex;flex-direction:column;gap:5px;min-width:130px;flex:1}.field.small{max-width:170px}input,select{background:#0c1017;color:var(--text);border:1px solid var(--line);border-radius:9px;padding:10px}.status{margin:13px 0}.scroll{overflow:auto}table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}th{color:var(--muted)}.badge{padding:3px 7px;border:1px solid var(--line);border-radius:999px;font-size:11px}.READY{color:var(--good)}.CONFIRMATION_WAIT,.RETEST_WAIT{color:var(--warn)}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:10px;margin-top:12px}.card{background:#0e1219;border:1px solid var(--line);border-radius:10px;padding:12px}.v{font-size:17px;margin-top:4px}.error{color:var(--bad)}.section{border-top:1px solid var(--line);margin-top:17px;padding-top:12px}.star{font-size:18px;cursor:pointer}.muted{color:var(--muted)}.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:9px;margin:12px 0}.check{transform:scale(1.15)}.pill{padding:6px 9px;border:1px solid var(--line);border-radius:999px}.right{margin-left:auto}.good{color:var(--good)}.warn{color:var(--warn)}.bad{color:var(--bad)}.resultTP{color:var(--good);font-weight:700}.resultSL{color:var(--bad);font-weight:700}.resultTP1{color:var(--warn);font-weight:700}.resultAMBIGUOUS{color:#f0abfc;font-weight:700}.analyticsGrid{display:grid;grid-template-columns:1fr;gap:12px;margin-top:14px}@media(min-width:980px){.analyticsGrid{grid-template-columns:1fr 1fr}}.analyticsBox{background:#0e1219;border:1px solid var(--line);border-radius:12px;padding:12px}.metricTable td,.metricTable th{font-size:12px}.lowSample{color:var(--warn)}.enoughSample{color:var(--good)}.chartWrap{margin-top:12px;background:#0e1219;border:1px solid var(--line);border-radius:12px;padding:10px}.chartTitle{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}.chart{width:100%;height:310px;display:block}.actionBox{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:12px 0;padding:12px;border:1px solid var(--line);border-radius:10px;background:#0e1219}.actionMain{font-size:18px;font-weight:700}.legend{display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--muted)}.legend span:before{content:"";display:inline-block;width:10px;height:3px;margin-right:5px;vertical-align:middle;background:currentColor}.chartGrid{display:grid;grid-template-columns:1fr;gap:12px}@media(min-width:980px){.chartGrid{grid-template-columns:1fr 1fr}}
 
@@ -287,6 +288,8 @@ button:disabled{opacity:.5;cursor:not-allowed}
 <h2>銘柄分析</h2>
 <div class="row"><div class="field"><label for="ticker">銘柄</label><input id="ticker" value="BTCUSDC"></div><button class="primary" id="analyze">分析</button><button class="ghost" id="toRisk">資金・数量</button><button class="ghost" id="copyPlan" disabled>プランをコピー</button><button class="ghost" id="sharePlan" disabled>共有</button><button class="ghost" id="analysisWatch" type="button" aria-pressed="false" disabled>☆ お気に入り</button></div>
 <div id="analysisStatus" class="status" role="status" aria-live="polite">BTC のような短縮入力でも検索します。</div>
+<div id="analysisExportStatus" class="sub" role="status" aria-live="polite"></div>
+<div id="analysisCopyFallback" class="section analysisCopyFallback" hidden><label id="analysisCopyLabel" for="analysisCopyText">手動でコピーする参考プラン</label><p class="sub">選択したテキストを端末のコピー操作でコピーしてください。利用時には最新の分析を確認してください。</p><textarea id="analysisCopyText" rows="9" readonly spellcheck="false"></textarea><div class="row"><button id="analysisCopySelect" class="ghost" type="button">テキストを選択</button><button id="analysisCopyClose" class="ghost" type="button">閉じる</button></div></div>
 <div id="analysisIdentity" class="analysisIdentity"></div>
 <div id="actionOut"></div>
 <div id="entryCriteria" data-min-rr="__RULE_MIN_RR__"></div>
@@ -1442,13 +1445,13 @@ function drawChart(id,series,levels,title,selectedIndex){
  if(Number.isInteger(selectedIndex)&&selectedIndex>=0&&selectedIndex<series.length){ctx.strokeStyle='#cbd5e1';ctx.setLineDash([2,3]);ctx.beginPath();ctx.moveTo(x(selectedIndex),pad.t);ctx.lineTo(x(selectedIndex),pad.t+ph);ctx.stroke();ctx.setLineDash([])}
  var last=series[series.length-1];ctx.fillStyle="#8d96a8";ctx.fillText(new Date(series[0].time_ms).toLocaleString("ja-JP",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"}),pad.l,h-5);ctx.textAlign="right";ctx.fillText(new Date(last.time_ms).toLocaleString("ja-JP",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"}),pad.l+pw,h-5);ctx.textAlign="left";return true;
 }
-async function copyTextValue(value,button){try{await navigator.clipboard.writeText(String(value));var old=button.textContent;button.textContent="コピー済み";setTimeout(function(){button.textContent=old},900)}catch(e){alert(String(value))}}
+async function copyTextValue(value,button,r){return await exportAnalysisValue(r||lastAnalysis,String(value),button)}
 function renderReadyActionCard(r,risk){
  var el=document.getElementById("readyActionCard");if(!el)return;if(!r||r.stage!=="READY"||(r._client_received_ms!==undefined&&!analysisFresh(r))){el.innerHTML="";return}
  var qty=risk&&risk.size!=null?fmt(risk.size,8):"資金設定後に計算",loss=risk&&risk.max_loss!=null?fmt(risk.max_loss,2)+" USDC":"—",profit=risk&&risk.target_profit!=null?fmt(risk.target_profit,2)+" USDC":"—";
  el.innerHTML='<div class="readyActionCard"><h2>エントリー候補 — '+r.ticker+'</h2><div class="sub">現在の戦略条件をすべて満たしています。この画面の操作では注文を送信しません。自動取引の状態はAPIタブで確認してください。</div><div class="grid">'+card("方向",directionJa(r.direction))+card("RR",fmt(r.rr,2))+card("参考数量",qty)+card("SL時の想定損失",loss)+card("目標利益",profit)+'</div><div class="copyGrid"><button class="copyTile readyCopy" data-value="'+r.entry_reference+'"><div class="k">Entry</div><div class="v">'+fmt(r.entry_reference,8)+'</div></button><button class="copyTile readyCopy" data-value="'+r.stop_loss+'"><div class="k">SL</div><div class="v">'+fmt(r.stop_loss,8)+'</div></button><button class="copyTile readyCopy" data-value="'+r.take_profit+'"><div class="k">TP</div><div class="v">'+fmt(r.take_profit,8)+'</div></button></div><div class="row" style="margin-top:10px"><button class="primary" id="copyReadyPlan">プラン全体をコピー</button><button class="ghost" id="readyRiskTab">資金管理を開く</button></div></div>';
- el.querySelectorAll(".readyCopy").forEach(function(b){b.onclick=function(){refreshAnalysisAge();if(lastAnalysis===r&&analysisFresh(r))copyTextValue(this.dataset.value,this)}});
- var all=document.getElementById("copyReadyPlan");if(all)all.onclick=function(){refreshAnalysisAge();if(lastAnalysis===r&&analysisFresh(r))copyTextValue(planText(r),this)};
+ el.querySelectorAll(".readyCopy").forEach(function(b){b.onclick=function(){refreshAnalysisAge();if(lastAnalysis===r&&analysisFresh(r))copyTextValue(this.dataset.value,this,r)}});
+ var all=document.getElementById("copyReadyPlan");if(all)all.onclick=function(){refreshAnalysisAge();if(lastAnalysis===r&&analysisFresh(r))copyTextValue(planText(r),this,r)};
  var rt=document.getElementById("readyRiskTab");if(rt)rt.onclick=function(){openRiskCalculator()};
 }
 var quickRiskVersion=0;
@@ -1507,11 +1510,11 @@ function renderAnalysisCriteria(r){
 function syncAnalysisWatch(){
  var button=document.getElementById('analysisWatch');if(!button)return;var valid=analysisFresh(lastAnalysis),on=valid&&watch.has(lastAnalysis.ticker);button.disabled=!valid;button.setAttribute('aria-pressed',on?'true':'false');button.textContent=on?'★ お気に入り済み':'☆ お気に入り';
 }
-var analysisRequestVersion=0,analysisAbortController=null,analysisExpiryTimer=null;
+var analysisRequestVersion=0,analysisAbortController=null,analysisExpiryTimer=null,analysisExportVersion=0,analysisExportPending=null;
 function analysisFresh(r){var now=Date.now();return !(typeof marketTransportUnavailable==='function'&&(marketTransportUnavailable()||marketConnectionMismatched(r)))&&!!r&&Number.isFinite(r._client_received_ms)&&r._client_received_ms>0&&now>=r._client_received_ms&&now-r._client_received_ms<120000&&Number.isFinite(r.data_age_seconds)&&r.data_age_seconds>=0&&r.data_age_seconds+(now-r._client_received_ms)/1000<900}
 function clearAnalysisView(){
  if(typeof clearAnalysisCharts==='function')clearAnalysisCharts();
- lastAnalysis=null;quickRiskVersion++;if(typeof invalidateRiskCalculation==='function')invalidateRiskCalculation('個別分析を更新・再確認してから参考数量を計算してください。');else manualCalcVersion++;clearTimeout(analysisExpiryTimer);analysisExpiryTimer=null;
+ clearAnalysisExport();lastAnalysis=null;quickRiskVersion++;if(typeof invalidateRiskCalculation==='function')invalidateRiskCalculation('個別分析を更新・再確認してから参考数量を計算してください。');else manualCalcVersion++;clearTimeout(analysisExpiryTimer);analysisExpiryTimer=null;
  ['analysisOut','actionOut','readyActionCard','quickRiskOut','riskOut','analysisIdentity','entryCriteria'].forEach(function(id){document.getElementById(id).innerHTML=''});
  ['entry','stop','target','step','minOrder','maxOrder','lev'].forEach(function(id){document.getElementById(id).value=''});
  ['copyPlan','sharePlan'].forEach(function(id){document.getElementById(id).disabled=true});
@@ -1551,10 +1554,49 @@ async function analyze(){
 setInterval(refreshAnalysisAge,1000);
 document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible')refreshAnalysisAge()});
 document.getElementById('ticker').addEventListener('input',invalidateAnalysisInput);
-function planText(r){var first=validFirstTarget(r);return [r.ticker+" — "+actionJa(planAction(r)),r.stage!=="READY"?"未成立の参考値 — エントリー条件は成立していません。":null,"方向: "+directionJa(r.direction),"状態: "+planStage(r),"Entry目安: "+fmt(r.entry_reference,8),"損切り SL: "+fmt(r.stop_loss,8),first==null?null:"第1利確 TP1: "+fmt(first,8),"最終利確 TP: "+fmt(r.take_profit,8),"RR: "+fmt(r.rr,2),"理由: "+planReason(r)].filter(function(v){return v!=null}).join("\n")}
-document.getElementById("analyze").onclick=analyze;document.getElementById("ticker").addEventListener("keydown",function(e){if(e.key==="Enter")analyze()});document.getElementById("toRisk").onclick=openRiskCalculator;document.getElementById("copyPlan").onclick=async function(){refreshAnalysisAge();if(!lastAnalysis||!analysisFresh(lastAnalysis))return;var txt=planText(lastAnalysis);try{await navigator.clipboard.writeText(txt);this.textContent="コピー済み";var b=this;setTimeout(()=>b.textContent="プランをコピー",1200)}catch(e){alert(txt)}};
+function planText(r,includeLink){
+ var first=validFirstTarget(r),link=includeLink===false?null:planLink(r),observed=analysisPlanTime(r);
+ return [r.ticker+' — '+actionJa(planAction(r)),'取得時点の参考プラン — 利用時は最新の条件と価格を再分析してください。',r.stage!=='READY'?'未成立の参考値 — エントリー条件は成立していません。':'取得時点ではREADY。現在の成立を保証するものではありません。','分析取得: '+observed,'方向: '+directionJa(r.direction),'状態: '+planStage(r),'Entry目安: '+fmt(r.entry_reference,8),'損切り SL: '+fmt(r.stop_loss,8),first==null?null:'第1利確 TP1: '+fmt(first,8),'最終利確 TP: '+fmt(r.take_profit,8),'RR: '+fmt(r.rr,2)+'（価格差基準・費用未計上）','理由: '+planReason(r),'このプランのコピー・共有では注文を送信しません。',link?'最新の分析を開く: '+link:null].filter(function(v){return v!=null}).join('\n');
+}
+function analysisPlanTime(r){return r&&Number.isFinite(r._client_received_ms)&&r._client_received_ms>0?new Date(r._client_received_ms).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo',hour12:false})+' JST':'未確認'}
+function planLink(r){
+ if(typeof URL!=='function'||typeof location==='undefined'||typeof location.href!=='string'||!r||typeof r.ticker!=='string'||!/^[A-Z0-9][A-Z0-9._-]{0,63}$/.test(r.ticker))return null;
+ try{var url=new URL('/',location.href);if(!['https:','http:'].includes(url.protocol)||url.username||url.password)return null;url.searchParams.set('tab','analysis');url.searchParams.set('ticker',r.ticker);return url.href}catch(e){return null}
+}
+function clearAnalysisExport(message){
+ analysisExportVersion++;var old=analysisExportPending;analysisExportPending=null;if(old&&old.button&&old.button.setAttribute)old.button.setAttribute('aria-busy','false');
+ var field=document.getElementById('analysisCopyText'),box=document.getElementById('analysisCopyFallback'),status=document.getElementById('analysisExportStatus');if(field)field.value='';if(box)box.hidden=true;if(status)status.textContent=message||'';
+}
+function analysisExportCurrent(pending){refreshAnalysisAge();return !!pending&&pending.version===analysisExportVersion&&lastAnalysis===pending.analysis&&analysisFresh(pending.analysis)}
+function beginAnalysisExport(r,button){
+ refreshAnalysisAge();if(!r||lastAnalysis!==r||!analysisFresh(r)||analysisExportPending)return null;
+ clearAnalysisExport();var pending={version:analysisExportVersion,analysis:r,button:button};analysisExportPending=pending;if(button&&button.setAttribute)button.setAttribute('aria-busy','true');document.getElementById('analysisExportStatus').textContent='取得時点の参考プランを準備中…';return pending;
+}
+function finishAnalysisExport(pending){if(analysisExportPending===pending){analysisExportPending=null;if(pending.button&&pending.button.setAttribute)pending.button.setAttribute('aria-busy','false')}}
+function selectAnalysisCopy(){refreshAnalysisAge();if(!lastAnalysis||!analysisFresh(lastAnalysis))return;var field=document.getElementById('analysisCopyText');if(field&&!document.getElementById('analysisCopyFallback').hidden){field.focus();field.select();if(field.setSelectionRange)field.setSelectionRange(0,field.value.length)}}
+async function boundedAnalysisClipboard(value){
+ if(!navigator.clipboard||typeof navigator.clipboard.writeText!=='function')throw new Error('CLIPBOARD_UNAVAILABLE');var timer;
+ try{return await Promise.race([navigator.clipboard.writeText(value),new Promise(function(resolve,reject){timer=setTimeout(function(){reject(new Error('CLIPBOARD_TIMEOUT'))},5000)})])}finally{clearTimeout(timer)}
+}
+async function copyAnalysisSnapshot(pending,value){
+ try{await boundedAnalysisClipboard(value);if(analysisExportCurrent(pending))document.getElementById('analysisExportStatus').textContent=pending.analysis.ticker+' の参考値をコピーしました。分析取得 '+analysisPlanTime(pending.analysis)+'。'}
+ catch(e){if(!analysisExportCurrent(pending))return;var field=document.getElementById('analysisCopyText');field.value=value;document.getElementById('analysisCopyLabel').textContent=pending.analysis.ticker+' — 分析取得 '+analysisPlanTime(pending.analysis);document.getElementById('analysisCopyFallback').hidden=false;document.getElementById('analysisExportStatus').textContent='自動コピーを確認できません。選択したテキストを端末のコピー操作でコピーしてください。';selectAnalysisCopy()}
+}
+async function exportAnalysisValue(r,value,button){var pending=beginAnalysisExport(r,button);if(!pending)return;try{await copyAnalysisSnapshot(pending,String(value))}finally{finishAnalysisExport(pending)}}
+async function shareAnalysisPlan(button){
+ var r=lastAnalysis,pending=beginAnalysisExport(r,button);if(!pending)return;
+ try{
+  var link=planLink(r),data={title:r.ticker+' EdgeX分析',text:planText(r,false)};if(link)data.url=link;
+  if(typeof navigator.share==='function'){try{await navigator.share(data);if(analysisExportCurrent(pending))document.getElementById('analysisExportStatus').textContent='取得時点の参考プランを共有先へ渡しました。利用時には再分析してください。';return}catch(e){if(e.name==='AbortError'){if(analysisExportCurrent(pending))document.getElementById('analysisExportStatus').textContent='共有をキャンセルしました。';return}}}
+  if(analysisExportCurrent(pending))await copyAnalysisSnapshot(pending,planText(r));
+ }finally{finishAnalysisExport(pending)}
+}
+document.getElementById("analyze").onclick=analyze;document.getElementById("ticker").addEventListener("keydown",function(e){if(e.key==="Enter")analyze()});document.getElementById("toRisk").onclick=openRiskCalculator;document.getElementById("copyPlan").onclick=function(){return exportAnalysisValue(lastAnalysis,lastAnalysis?planText(lastAnalysis):'',this)};
+
 document.getElementById('analysisWatch').onclick=function(){refreshAnalysisAge();if(!lastAnalysis||!analysisFresh(lastAnalysis))return;var t=lastAnalysis.ticker;watch.has(t)?watch.delete(t):watch.add(t);saveWatch();syncAnalysisWatch();if(typeof renderRows==='function')renderRows()};
-document.getElementById("sharePlan").onclick=async function(){refreshAnalysisAge();if(!lastAnalysis||!analysisFresh(lastAnalysis))return;updateUrl("analysis",lastAnalysis.ticker);var data={title:lastAnalysis.ticker+" EdgeX分析",text:planText(lastAnalysis),url:location.href};if(navigator.share){try{await navigator.share(data);return}catch(e){if(e.name==="AbortError")return}}try{await navigator.clipboard.writeText(data.text+"\n"+data.url);this.textContent="共有内容をコピー済み";var b=this;setTimeout(()=>b.textContent="共有",1500)}catch(e){alert(data.text+"\n"+data.url)}};
+document.getElementById("sharePlan").onclick=function(){return shareAnalysisPlan(this)};
+document.getElementById('analysisCopySelect').onclick=selectAnalysisCopy;
+document.getElementById('analysisCopyClose').onclick=function(){clearAnalysisExport('手動コピー欄を閉じました。');var button=document.getElementById('copyPlan');if(!button.disabled&&button.focus)button.focus()};
 
 
 document.getElementById("dashScan").onclick=function(){scan(true)};
