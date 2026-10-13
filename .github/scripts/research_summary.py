@@ -216,6 +216,9 @@ def markdown(result):
     lines += ['', f"待ち価格診断: **{audit['status']}**"]
     if audit['summary'] is not None:
         p=audit['summary']
+        if p.get('blocked_price_geometry_candidates'):
+            lines += [f"待ち価格が名目SL/TPの間にないため価格診断保留: {p['blocked_price_geometry_candidates']} 件。元候補・約定・損益・判定は変更していません。",
+                      f"期限切れの距離/TP接触集計の観測対象: {p['expired_price_distance_observations']} 件 / 診断保留: {p['expired_without_price_distance']} 件。保留分を未到達0件・価格距離・遅い接触へ補完しません。"]
         lines += [
             f"公開足から元候補 {audit['original_candidates_reproduced']} 件と診断を再現・照合。",
             f"期限切れ・期限内未到達: {p['expired']} / 待ち価格がロール水準の反対側: {p['trigger_across_roll']} / 確認終値が構造TPより先: {p['target_behind_signal_close']}",

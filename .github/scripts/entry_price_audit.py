@@ -22,7 +22,8 @@ def summarize(directory, *, analyze=None, settings=None):
                            analyze, settings)
     if rebuilt != saved:
         raise ValueError('Saved entry-price diagnostics do not reproduce from public sources')
-    return dict(status='VERIFIED_FROM_FROZEN_PUBLIC_SOURCES',
+    blocked = saved['summary'].get('blocked_price_geometry_candidates', 0)
+    return dict(status='VERIFIED_SOURCES_WITH_BLOCKED_PRICE_DIAGNOSTICS' if blocked else 'VERIFIED_FROM_FROZEN_PUBLIC_SOURCES',
                 source_report_sha256=saved['source_report_sha256'],
                 source_manifest_sha256=saved['source_manifest_sha256'],
                 diagnostics_sha256=hashlib.sha256(raw).hexdigest(),

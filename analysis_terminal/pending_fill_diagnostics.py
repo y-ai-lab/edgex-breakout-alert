@@ -37,23 +37,38 @@ def diagnose(record, row, candles, state_at, *, end_ms):
     side = record['side'];long = side == 'LONG'
     if side not in {'LONG','SHORT'} or not all(math.isfinite(v) and v > 0 for v in (stop,target,trigger)):
         raise ValueError('Invalid frozen price geometry')
-    if not (stop < trigger < target if long else target < trigger < stop):
-        raise ValueError('Trigger outside structural levels')
+    nominal_ordered = stop < trigger < target if long else target < trigger < stop
+    if not nominal_ordered:
+        # The frozen candidate checks the adverse executed entry, not the
+        # nominal waiting price. Verify that exact existing boundary; never
+        # move a price or turn an unsupported price-distance into a result.
+        levels = study.cost_levels(trigger, stop, target, side)
+        entry = levels['entry']
+        if (trigger != study.pullback_trigger(stop, target, side)
+                or not (stop < entry < target if long else target < entry < stop)):
+            raise ValueError('Trigger outside structural levels')
     risk = abs(trigger-stop)
     target_behind_signal = row['entry_reference'] >= target if long else row['entry_reference'] <= target
     result = dict(key=record['key'],setup_id=record['setup_id'],ticker=record['ticker'],
                   original_status=record['status'],original_filled_ms=record['filled_ms'],
                   trigger_on_confirmed_side_of_roll=trigger>row['breakout_level'] if long else trigger<row['breakout_level'],
                   target_behind_signal_close=target_behind_signal,
-                  signal_to_trigger_r=abs(row['entry_reference']-trigger)/risk,
+                  signal_to_trigger_r=abs(row['entry_reference']-trigger)/risk if nominal_ordered else None,
                   closest_distance_before_expiry_r=None,target_touched_before_expiry=False,
                   later_observation=None,late_touch_open_ms=None,
                   late_touch_after_prior_target=None,late_touch_exit_same_bar=None,
                   latest_observed_close_ms=start)
+    if record['status'] == 'EXPIRED' and record['expires_ms'] != start+study.WAIT_BARS*study.STEP:
+        raise ValueError('Expiry differs from frozen protocol')
+    if not nominal_ordered:
+        result.update(price_diagnostic_status='BLOCKED_NOMINAL_TRIGGER_GEOMETRY',
+                      nominal_trigger_between_stop_target=False,
+                      adverse_entry_between_stop_target=True,
+                      target_touched_before_expiry=None,
+                      later_observation='NOT_EVALUATED_NOMINAL_TRIGGER_GEOMETRY')
+        return result  # No price-distance, late touch or hypothetical fill.
     if record['status'] != 'EXPIRED':
         return result
-    if record['expires_ms'] != start+study.WAIT_BARS*study.STEP:
-        raise ValueError('Expiry differs from frozen protocol')
     series={c.time_ms:c for c in candles if c.time_ms+study.STEP<=end_ms}
     distances=[];target_previously_seen=target_behind_signal
     for stamp in range(start,record['expires_ms']+EXTRA_OBSERVATION_BARS*study.STEP,study.STEP):
@@ -95,12 +110,14 @@ def diagnose(record, row, candles, state_at, *, end_ms):
 def summarize(records):
     expired=[r for r in records if r['original_status']=='EXPIRED']
     late=[r for r in expired if r['later_observation']=='LATE_PRICE_TOUCH']
-    distances=[r['closest_distance_before_expiry_r'] for r in expired]
-    return dict(candidates=len(records),expired=len(expired),
+    blocked=[r for r in records if r.get('price_diagnostic_status')=='BLOCKED_NOMINAL_TRIGGER_GEOMETRY']
+    measured_expired=[r for r in expired if r.get('price_diagnostic_status')!='BLOCKED_NOMINAL_TRIGGER_GEOMETRY']
+    distances=[r['closest_distance_before_expiry_r'] for r in measured_expired]
+    result = dict(candidates=len(records),expired=len(expired),
                 trigger_on_confirmed_side_of_roll=sum(r['trigger_on_confirmed_side_of_roll'] for r in records),
                 trigger_across_roll=sum(not r['trigger_on_confirmed_side_of_roll'] for r in records),
                 target_behind_signal_close=sum(r['target_behind_signal_close'] for r in records),
-                expired_target_touched_before_expiry=sum(r['target_touched_before_expiry'] for r in expired),
+                expired_target_touched_before_expiry=sum(r['target_touched_before_expiry'] for r in measured_expired),
                 expired_closest_distance_bins=dict(Counter(distance_bin(v) for v in distances)),
                 expired_closest_distance_median_r=median(distances) if distances else None,
                 expired_later_observations=dict(Counter(r['later_observation'] for r in expired)),
@@ -111,6 +128,17 @@ def summarize(records):
                     not r['late_touch_after_prior_target'] and not r['late_touch_exit_same_bar'] for r in late),
                 counterfactual_fills=None,counterfactual_win_rate=None,counterfactual_avg_r=None,
                 counterfactual_portfolio_roi_pct=None)
+    if blocked:
+        result.update(price_diagnostic_status='PARTIALLY_BLOCKED_NOMINAL_TRIGGER_GEOMETRY',
+                      blocked_price_geometry_candidates=len(blocked),
+                      expired_without_price_distance=len(expired)-len(measured_expired),
+                      expired_price_distance_observations=len(distances))
+        if expired and not measured_expired:
+            for name in ('expired_target_touched_before_expiry','late_price_touches',
+                         'late_touches_after_prior_target','late_touches_with_exit_same_bar',
+                         'late_touches_without_prior_target_or_same_bar_exit'):
+                result[name] = None
+    return result
 
 
 def build(source_dir, report_path, analyze, settings):

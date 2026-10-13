@@ -44,6 +44,25 @@ def fixture(days=1,wins=0,losses=0,uncertain=False):
 
 
 class SummaryTests(unittest.TestCase):
+    def test_blocked_price_diagnostics_do_not_change_original_kill_or_metrics(self):
+        from unittest.mock import patch
+        from analysis_terminal import pending_fill_diagnostics as prices
+        p=prices.summarize([])
+        p.update(candidates=1,expired=1,blocked_price_geometry_candidates=1,
+                 expired_without_price_distance=1,expired_price_distance_observations=0,
+                 price_diagnostic_status='PARTIALLY_BLOCKED_NOMINAL_TRIGGER_GEOMETRY')
+        evidence=dict(status='VERIFIED_SOURCES_WITH_BLOCKED_PRICE_DIAGNOSTICS',
+                      summary=p,original_candidates_reproduced=1)
+        parts=fixture(7,losses=20);before=copy.deepcopy(parts)
+        with patch.object(review.entry_price_audit,'summarize',return_value=evidence):
+            result=self.run_fixture(parts)
+        self.assertEqual(parts,before);self.assertEqual(result['decision'],'KILL')
+        self.assertEqual(result['metrics'],parts[1]['metrics'])
+        self.assertEqual(result['portfolios'],parts[1]['portfolios'])
+        text=review.markdown(result)
+        self.assertIn('価格診断保留: 1 件',text)
+        self.assertIn('保留分を未到達0件・価格距離・遅い接触へ補完しません',text)
+
     def run_fixture(self,parts,*,now=None):
         with tempfile.TemporaryDirectory() as d:
             root=Path(d);(root/'review').mkdir();(root/'source').mkdir()

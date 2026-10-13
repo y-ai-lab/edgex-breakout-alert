@@ -7,6 +7,19 @@ from analysis_terminal import pending_fill_diagnostics as diag
 from analysis_terminal.test_pending_entry_replay import record,candle,row,evaluate,START,STEP
 
 
+def narrow_candidate(side='LONG', *, at_stop=False):
+    item=row(side)
+    target=100.4 if side=='LONG' else 99.6
+    if at_stop:
+        factor=(1-diag.study.FEE)*(1-diag.study.SLIP)/((1+diag.study.FEE)*(1+diag.study.SLIP))
+        if side=='SHORT':factor=1/factor
+        target=300/factor-200
+    item['entry_band']=dict(structural_stop=100,structural_target=target)
+    result=diag.study.candidate(item,diag.study.MODEL,candle_ms=START-STEP)
+    assert result is not None
+    return result,item
+
+
 def expired(side='LONG'):
     r=record(side)
     cs=[candle(START+i*STEP,open=101 if side=='LONG' else 99,
@@ -25,6 +38,57 @@ def diagnostic(r,cs,states=None,end=None):
 
 
 class FillDiagnosticsTests(unittest.TestCase):
+    def test_nominal_trigger_outside_but_adverse_entry_inside_is_explicitly_blocked(self):
+        for side in ('LONG','SHORT'):
+            r,item=narrow_candidate(side)
+            bars=[candle(START+i*STEP,open=100.1,low=100.05,high=100.2,close=100.1)
+                  if side=='LONG' else candle(START+i*STEP,open=99.9,low=99.8,high=99.95,close=99.9)
+                  for i in range(4)]
+            r=evaluate(r,bars);self.assertEqual(r['status'],'EXPIRED');before=copy.deepcopy(r)
+            def unexpected(_):raise AssertionError('Unsupported geometry must not infer subsequent prices')
+            out=diag.diagnose(r,item,bars,unexpected,end_ms=START+8*STEP)
+            self.assertEqual(r,before);self.assertIsNone(out['original_filled_ms'])
+            self.assertEqual(out['price_diagnostic_status'],'BLOCKED_NOMINAL_TRIGGER_GEOMETRY')
+            self.assertTrue(out['adverse_entry_between_stop_target'])
+            for name in ('signal_to_trigger_r','closest_distance_before_expiry_r',
+                         'target_touched_before_expiry','late_touch_open_ms'):
+                self.assertIsNone(out[name])
+
+    def test_zero_nominal_stop_distance_is_not_divided_or_replaced(self):
+        for side in ('LONG','SHORT'):
+            r,item=narrow_candidate(side,at_stop=True)
+            self.assertEqual(r['trigger'],r['stop'])
+            out=diag.diagnose(r,item,[],lambda _:None,end_ms=START+STEP)
+            self.assertIsNone(out['signal_to_trigger_r'])
+            self.assertEqual(out['original_status'],'PENDING')
+
+    def test_malformed_prices_or_changed_boundary_still_fail_closed(self):
+        for side in ('LONG','SHORT'):
+            r,item=narrow_candidate(side)
+            for changes in ({'trigger':r['trigger']+(-.01 if side=='LONG' else .01)},{'target':r['stop']},
+                            {'trigger':float('nan')},{'stop':0}):
+                with self.subTest(side=side,changes=changes),self.assertRaises(ValueError):
+                    diag.diagnose(r|changes,item,[],lambda _:None,end_ms=START+STEP)
+            with self.assertRaisesRegex(ValueError,'Expiry'):
+                diag.diagnose(r|dict(status='EXPIRED',expires_ms=r['expires_ms']+STEP),
+                              item,[],lambda _:None,end_ms=START+8*STEP)
+
+    def test_blocked_distances_are_unknown_not_a_zero_or_a_late_touch(self):
+        ordinary,bars=expired();known,_=diagnostic(ordinary,bars,end=START+4*STEP)
+        r,item=narrow_candidate();r.update(status='EXPIRED')
+        blocked=diag.diagnose(r,item,[],lambda _:None,end_ms=START+8*STEP)
+        s=diag.summarize([known,blocked]);old=diag.summarize([known])
+        self.assertEqual((s['candidates'],s['expired'],s['blocked_price_geometry_candidates']),(2,2,1))
+        self.assertEqual(s['expired_price_distance_observations'],1)
+        self.assertEqual(s['expired_without_price_distance'],1)
+        for key in ('expired_closest_distance_bins','expired_closest_distance_median_r','late_price_touches'):
+            self.assertEqual(s[key],old[key])
+        self.assertIsNone(s['counterfactual_portfolio_roi_pct'])
+        only=diag.summarize([blocked]);self.assertEqual(only['expired_closest_distance_bins'],{})
+        self.assertIsNone(only['expired_closest_distance_median_r'])
+        self.assertIsNone(only['expired_target_touched_before_expiry'])
+        self.assertIsNone(only['late_price_touches'])
+
     def test_original_records_are_immutable_and_late_touch_is_not_fill(self):
         r,cs=expired();before=copy.deepcopy(r)
         cs.append(candle(START+4*STEP,low=r['trigger']-.01,high=102))

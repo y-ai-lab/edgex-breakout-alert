@@ -12,7 +12,7 @@ from analysis_terminal import pending_fill_diagnostics as prices
 from analysis_terminal.replay import rule_fingerprint, strategy_parameters
 from analysis_terminal.test_execution_funnel import report
 from analysis_terminal.test_pending_entry_replay import CONTRACT, START, STEP, candle, row
-from analysis_terminal.test_pending_fill_diagnostics import expired
+from analysis_terminal.test_pending_fill_diagnostics import expired,narrow_candidate
 from analysis_terminal.test_storage import server
 
 
@@ -20,14 +20,29 @@ def analyze(*args, **kwargs):
     return row()
 
 
-def fixture(root):
+def narrow_analyze(*args, **kwargs):
+    return narrow_candidate('SHORT')[1]
+
+
+def fixture(root, *, narrow=False):
     source=root/'source';source.mkdir();(root/'review').mkdir()
     r,_=expired()
     frames={'MINUTE_15':[asdict(candle(START+i*STEP)) for i in range(-180,8)],
             'HOUR_4':[asdict(candle(START+i*16*STEP)) | {'interval':'HOUR_4'} for i in range(-180,0)]}
+    analyze_fn=analyze
+    if narrow:
+        from analysis_terminal import pending_entry_replay as study
+        r,_=narrow_candidate('SHORT')
+        r.update(step_size=.01,min_order_size=.01,max_order_size=1000)
+        for c in frames['MINUTE_15']:
+            c.update(open=99.9,low=99.8,high=99.95,close=99.9)
+        r=study.evaluate(r,[candle(START+i*STEP,open=99.9,low=99.8,high=99.95,close=99.9)
+                            for i in range(4)],{START+i*STEP:r['setup_id'] for i in range(4)},
+                         end_ms=START+8*STEP)
+        analyze_fn=narrow_analyze
     data=source/'candles.json'
     data.write_text(json.dumps(dict(contract=asdict(CONTRACT),**frames)))
-    fingerprint=rule_fingerprint(analyze,server.SETTINGS)
+    fingerprint=rule_fingerprint(analyze_fn,server.SETTINGS)
     ledger=report([r],end=START+8*STEP)
     ledger.update(source_rule_fingerprint=fingerprint,production_rule_fingerprint=fingerprint)
     manifest=dict(dataset='RETROSPECTIVE',eligible_for_live_promotion=False,
@@ -38,13 +53,29 @@ def fixture(root):
     (source/'replay-report.json').write_text(json.dumps(manifest))
     ledger_path=root/'review/pending-entry-report.json'
     ledger_path.write_text(json.dumps(ledger))
-    saved=prices.build(source,ledger_path,analyze,server.SETTINGS)
+    saved=prices.build(source,ledger_path,analyze_fn,server.SETTINGS)
     path=root/'review/pending-fill-diagnostics.json'
     path.write_text(json.dumps(saved))
     return path,saved
 
 
 class EntryPriceAuditTests(unittest.TestCase):
+    def test_supported_frozen_candidate_with_blocked_nominal_geometry_is_disclosed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);path,saved=fixture(root,narrow=True)
+            before={p:p.read_bytes() for p in root.rglob('*.json')}
+            result=audit.summarize(root,analyze=narrow_analyze,settings=server.SETTINGS)
+            self.assertEqual(result['status'],'VERIFIED_SOURCES_WITH_BLOCKED_PRICE_DIAGNOSTICS')
+            self.assertEqual(result['summary']['blocked_price_geometry_candidates'],1)
+            self.assertEqual(result['original_candidates_reproduced'],1)
+            self.assertIsNone(result['summary']['expired_closest_distance_median_r'])
+            self.assertFalse(result['new_samples_added']);self.assertFalse(result['actual_execution_evidence'])
+            for p,raw in before.items():self.assertEqual(p.read_bytes(),raw)
+            changed=deepcopy(saved);changed['summary']['blocked_price_geometry_candidates']=0
+            path.write_text(json.dumps(changed))
+            with self.assertRaisesRegex(ValueError,'do not reproduce'):
+                audit.summarize(root,analyze=narrow_analyze,settings=server.SETTINGS)
+
     def test_actual_reproduction_keeps_inputs_unchanged_and_exports_only_aggregates(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);path,saved=fixture(root)
