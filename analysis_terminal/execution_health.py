@@ -1,7 +1,7 @@
 """Read-only bot-ledger audit. Never orders, re-arms, infers flatness or repairs data."""
 from collections import Counter
 from decimal import Decimal, InvalidOperation
-from analysis_terminal import execution_incidents
+from analysis_terminal import execution_incidents, execution_entry_review
 
 TERMINAL = {"SKIPPED", "NO_FILL", "CLOSED", "EXTERNAL_FLAT_VERIFIED"}
 PENDING = {"PREPARED", "SENDING_ENTRY", "ACKED_ENTRY"}
@@ -10,7 +10,7 @@ EXITING = {"SENDING_CLOSE", "ACKED_CLOSE", "CLOSE_PENDING"}
 KNOWN = TERMINAL | PENDING | PROTECTING | EXITING | {"PROTECTED", "OWNERSHIP_CONFLICT", "OWNERSHIP_UNVERIFIED"}
 LABELS = {
     "EXTERNAL_FLAT_VERIFIED": "隔離後の建玉ゼロ・注文終了を照合（損益未確定）",
-    "SKIPPED": "注文対象外・過去setupの基準記録",
+    "SKIPPED": "注文対象外（詳細理由の記録なし）",
     "NO_FILL": "未約定を照合した記録",
     "CLOSED": "約定照合による決着の記録（Funding別）",
     "PREPARED": "発注意図を保存",
@@ -169,6 +169,8 @@ def report(records, connection, *, now_ms, events=()):
         status = event.get("status") if isinstance(event, dict) else None
         observed = timestamp(event.get("observed_ms"), now_ms) if isinstance(event, dict) else None
         label = LABELS.get(status, "未認識の状態変化（照合が必要）") if isinstance(status, str) else "未認識の状態変化（照合が必要）"
+        if status == "SKIPPED":
+            label = execution_entry_review.label(event.get("skip_code"))
         recent.append({"label": label if observed is not None else "記録時刻の照合が必要な状態変化", "observed_ms": observed})
     return {
         "scope": "BOT_LEDGER_ONLY", "read_only": True, "state": state,

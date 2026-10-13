@@ -231,3 +231,15 @@ v39の3テーブルとv40の操作台帳は追加移行で、既存DB・Push・�
 公式資料: [SDK](https://github.com/edgex-Tech/edgex-python-sdk)、
 [V2注文API](https://edgex-1.gitbook.io/edgex-documentation/api-v2/private-api/order-api)、
 [認証](https://edgex-1.gitbook.io/edgex-documentation/api-v2/authentication)。
+
+
+### Entry rejection audit (v19.0.81)
+
+New SKIPPED records retain an allowlisted `skip_code`. Arm-time baseline
+records use `PRE_ARM_BASELINE`; legacy records remain explicitly reason-unknown.
+`GET /api/live-execution` explains these in the existing health timeline without
+publishing setup identity, ticker, prices, sizes, balances, order IDs or raw errors.
+This is historical evidence, not a new eligibility assessment or fill proof.
+The confirmation-close 120-second deadline is independent of scan freshness.
+A consumed/rejected setup is still never retried at a more favourable price.
+No backfill, trading-control, account-policy, strategy or collector change.

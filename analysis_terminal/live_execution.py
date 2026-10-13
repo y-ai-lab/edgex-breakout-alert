@@ -17,7 +17,7 @@ import uuid
 from zoneinfo import ZoneInfo
 
 from analysis_terminal.edgex_orders import ExecutionError, decimal
-from analysis_terminal import execution_incidents
+from analysis_terminal import execution_incidents, execution_entry_review
 from analysis_terminal.setups import setup_identity
 
 STEP = 900000
@@ -1087,7 +1087,8 @@ class Engine:
                         (identity,),
                     ).fetchone()
                 ):
-                    save(conn, dict(setup_id=identity, status="SKIPPED"), self.clock())
+                    save(conn, dict(setup_id=identity, status="SKIPPED",
+                                    skip_code="PRE_ARM_BASELINE"), self.clock())
             save_state(conn, s)
 
     async def cycle(self, rows=(), *, snapshot_ms=None):
@@ -1175,13 +1176,15 @@ class Engine:
                         armed_ms=s["armed_ms"],
                         snapshot_ms=snapshot_ms,
                     )
-                except (ExecutionError, KeyError, TypeError, ValueError):
+                except (ExecutionError, KeyError, TypeError, ValueError) as exc:
                     # Do not rearm a rejected setup on a later favourable quote.
                     if identity:
                         with self.db_connect() as conn:
                             save(
                                 conn,
-                                dict(setup_id=identity, status="SKIPPED"),
+                                dict(setup_id=identity, status="SKIPPED",
+                                     skip_code=execution_entry_review.rejection_code(
+                                         exc, execution_error=ExecutionError)),
                                 self.clock(),
                             )
                     continue

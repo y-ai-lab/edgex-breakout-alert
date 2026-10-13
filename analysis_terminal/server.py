@@ -4190,7 +4190,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="EdgeX Analysis Terminal",
-    version="19.0.80",
+    version="19.0.81",
     lifespan=lifespan,
 )
 app.add_middleware(push_security.BrowserSecurityMiddleware)
@@ -4678,8 +4678,19 @@ async def live_execution_api():
         success_ms = report.get("last_success_ms")
         report["connection_age_seconds"] = (now_ms-success_ms)/1000 if isinstance(success_ms, (int, float)) else None
         records = live_execution.orders(conn)
-        events = [dict(r) for r in conn.execute(
-            "SELECT observed_ms,status FROM live_execution_events ORDER BY id DESC LIMIT 8")]
+        events = []
+        for event in conn.execute("""SELECT e.observed_ms,e.status,o.payload
+                FROM live_execution_events e LEFT JOIN live_execution_orders o
+                ON o.setup_id=e.setup_id ORDER BY e.id DESC LIMIT 8"""):
+            item = {"observed_ms": event[0], "status": event[1]}
+            if event[1] == "SKIPPED":
+                try:
+                    record = json.loads(event[2])
+                    if isinstance(record, dict) and record.get("status") == "SKIPPED":
+                        item["skip_code"] = record.get("skip_code")
+                except (TypeError, ValueError):
+                    pass  # Old or unreadable records have no verified reason.
+            events.append(item)
         report["health"] = execution_health.report(records, report, now_ms=now_ms, events=events)
         return report
 
