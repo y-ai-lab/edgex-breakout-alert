@@ -8,6 +8,7 @@ import sqlite3
 import sys
 import time
 from collections import Counter
+from copy import deepcopy
 from contextlib import asynccontextmanager, closing, contextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -4189,7 +4190,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="EdgeX Analysis Terminal",
-    version="19.0.78",
+    version="19.0.79",
     lifespan=lifespan,
 )
 app.add_middleware(push_security.BrowserSecurityMiddleware)
@@ -4831,9 +4832,15 @@ async def account_view_history_api(kind: str = Query(pattern="^(positions|collat
     cursor: str = Query(min_length=32, max_length=32), authorization: str | None = Header(default=None)):
     session = _account_view_authorize(authorization)
     async with _account_history_lock:
+        _account_view_authorize(authorization)  # Also recheck after waiting for the lock.
         state = session["cursors"].get(cursor)
         if not state or state["kind"] != kind:
             raise HTTPException(400, "Invalid account history cursor")
+        if "completed_page" in state:
+            saved = state["completed_page"]
+            if saved["next_cursor"] and saved["next_cursor"] not in session["cursors"]:
+                raise HTTPException(409, "History continuation no longer retained; reload account view")
+            return deepcopy(saved)
         if state["pages"] >= 20:
             raise HTTPException(409, "History page limit reached; completeness unverified")
         reader = account_view.STORE.reader
@@ -4844,13 +4851,15 @@ async def account_view_history_api(kind: str = Query(pattern="^(positions|collat
         except Exception:
             raise HTTPException(503, "History data unavailable") from None
         _account_view_authorize(authorization)  # Revocation/expiry also applies after an awaited request.
+        if session["cursors"].get(cursor) is not state:
+            raise HTTPException(409, "History cursor no longer retained; reload account view")
         if state["seen_ids"] & page["ids"] or page["offset"] and page["offset"] in state["seen_offsets"]:
             raise HTTPException(409, "History pagination inconsistency; completeness unverified")
         value = account_view.SESSIONS.page(session, kind, page, state["start"], state["end"])
         if value["next_cursor"]:
             session["cursors"][value["next_cursor"]].update(seen_ids=state["seen_ids"] | page["ids"],
                 seen_offsets=state["seen_offsets"] | {page["offset"]}, pages=state["pages"] + 1)
-        session["cursors"].pop(cursor, None)
+        state["completed_page"] = deepcopy(value)  # Retry the same result; no new REST read.
         return value
 
 

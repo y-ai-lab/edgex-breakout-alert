@@ -4,7 +4,7 @@ const html=fs.readFileSync(process.argv[2],'utf8'),script=html.match(/<script>([
 const source=script.slice(script.indexOf('// Private account values'),script.indexOf('async function checkApiConnections('));
 let now=100000,id=0,timers=new Map(),requests=[],handler=null;
 const nodes={};for(const name of ['accountOrdersCheck','accountOrdersStatus','accountOrdersData','accountViewData','accountViewStatus','accountViewBalances','accountViewPositions','accountViewTrades','accountViewCash','accountViewTradesMore','accountViewCashMore','accountViewOpen','accountViewLock','api'])nodes[name]={hidden:true,innerHTML:'',textContent:'',classList:{contains:()=>true},querySelector:()=>null};
-const history={items:[],complete:false,next_cursor:'synthetic-cursor',window_start_ms:1,window_end_ms:99999};
+const history={items:[],complete:false,next_cursor:'c'.repeat(32),observed_ms:100000,window_start_ms:1,window_end_ms:99999};
 const asset={source:'EDGEX_TRADING_ACCOUNT',read_only:true,positions_scope:'ALL_ACCOUNT_POSITIONS',snapshot_age_seconds:0,observed_ms:now,balance:{equity_usdc:'100',available_usdc:'90'},positions:[],histories:{positions:history,collateral:history}};
 const orders={source:'EDGEX_ACTIVE_CONDITIONAL_ORDERS',read_only:true,complete:true,snapshot_age_seconds:0,observed_ms:now,items:[]};
 const clone=v=>JSON.parse(JSON.stringify(v));

@@ -115,7 +115,7 @@ class ParserTests(unittest.TestCase):
 class APIAuthorityTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.directory=tempfile.TemporaryDirectory();self.addCleanup(self.directory.cleanup)
-        for obj,name,value in ((server,'DB_PATH',Path(self.directory.name)/'test.db'),(server,'VAPID_PRIVATE_KEY',''),(server,'_live_execution_config',fixtures.configuration()),(view,'STORE',view.Store()),(view,'SESSIONS',view.Sessions()),(push_security,'LIMITER',push_security.RateLimiter())):
+        for obj,name,value in ((server,'DB_PATH',Path(self.directory.name)/'test.db'),(server,'VAPID_PRIVATE_KEY',''),(server,'_live_execution_config',fixtures.configuration()),(server,'_account_history_lock',asyncio.Lock()),(view,'STORE',view.Store()),(view,'SESSIONS',view.Sessions()),(push_security,'LIMITER',push_security.RateLimiter())):
             p=patch.object(obj,name,value);p.start();self.addCleanup(p.stop)
         server._init_db()
         self.sub=push_fixtures.subscription()
@@ -208,7 +208,7 @@ class APIAuthorityTests(unittest.IsolatedAsyncioTestCase):
         r=await self.client.get('/api/account/positions',headers=await self.header())
         self.assertEqual(r.status_code,503);self.assertNotIn('positions',r.json())
 
-    async def test_paginated_frozen_window_is_session_scoped_and_single_use(self):
+    async def test_paginated_frozen_window_is_session_scoped_and_retryable(self):
         page=view.STORE.histories['positions'];page['offset']='private-offset'
         header=await self.header()
         r=await self.client.get('/api/account/overview',headers=header);cursor=r.json()['histories']['positions']['next_cursor']
@@ -219,7 +219,81 @@ class APIAuthorityTests(unittest.IsolatedAsyncioTestCase):
         other=await self.header();self.assertEqual((await self.client.get(url,headers=other)).status_code,400)
         r=await self.client.get(url,headers=header);self.assertEqual(r.status_code,200);self.assertTrue(r.json()['complete'])
         reader.history.assert_awaited_once_with('positions',NOW-view.DAY,NOW,'private-offset')
-        self.assertEqual((await self.client.get(url,headers=header)).status_code,400)
+        retry=await self.client.get(url,headers=header)
+        self.assertEqual(retry.status_code,200);self.assertEqual(retry.json(),r.json())
+        reader.history.assert_awaited_once()
+
+    async def history_cursor(self):
+        view.STORE.histories['positions']['offset']='private-next'
+        header=await self.header()
+        cursor=(await self.client.get('/api/account/overview',headers=header)).json()['histories']['positions']['next_cursor']
+        return header,cursor,'/api/account/history?kind=positions&cursor='+cursor
+
+    async def test_retry_uses_original_page_after_upstream_changes(self):
+        header,cursor,url=await self.history_cursor()
+        page=view.history_page(raw_page(id='2',nextPageOffsetData='new-offset'),'123',{},'positions',observed_ms=NOW,start_ms=NOW-view.DAY,end_ms=NOW)
+        page['offset']='new-offset'
+        reader=Mock();reader.history=AsyncMock(return_value=page);view.STORE.reader=reader
+        first=await self.client.get(url,headers=header)
+        self.assertEqual(first.status_code,200)
+        reader.history.return_value=view.history_page(raw_page(id='3'),'123',{},'positions',observed_ms=NOW+10,start_ms=NOW-view.DAY,end_ms=NOW)
+        retry=await self.client.get(url,headers=header)
+        self.assertEqual(first.json(),retry.json());reader.history.assert_awaited_once()
+        self.assertNotIn('private-next',retry.text);self.assertNotIn('new-offset',retry.text)
+
+    async def test_concurrent_retry_calls_upstream_once(self):
+        header,cursor,url=await self.history_cursor()
+        page=view.history_page(raw_page(id='2'),'123',{},'positions',observed_ms=NOW,start_ms=NOW-view.DAY,end_ms=NOW)
+        reader=Mock();reader.history=AsyncMock(return_value=page);view.STORE.reader=reader
+        a,b=await asyncio.gather(self.client.get(url,headers=header),self.client.get(url,headers=header))
+        self.assertEqual(a.status_code,200);self.assertEqual(a.json(),b.json());reader.history.assert_awaited_once()
+
+    async def test_failed_read_keeps_cursor_available_for_retry(self):
+        header,cursor,url=await self.history_cursor()
+        reader=Mock();reader.history=AsyncMock(side_effect=ValueError('synthetic-failure'));view.STORE.reader=reader
+        self.assertEqual((await self.client.get(url,headers=header)).status_code,503)
+        reader.history.side_effect=None
+        reader.history.return_value=view.history_page(raw_page(id='2'),'123',{},'positions',observed_ms=NOW,start_ms=NOW-view.DAY,end_ms=NOW)
+        self.assertEqual((await self.client.get(url,headers=header)).status_code,200)
+
+    async def test_cached_response_is_revoked_on_expiry_logout_or_owner_deletion(self):
+        for action in ('expiry','logout','owner'):
+            if action=='owner':self.assertTrue(server._save_push_subscription(server.PushSubscriptionRequest(subscription=self.sub)))
+            header,cursor,url=await self.history_cursor()
+            reader=Mock();reader.history=AsyncMock(return_value=view.history_page(raw_page(id='2'),'123',{},'positions',observed_ms=NOW,start_ms=NOW-view.DAY,end_ms=NOW));view.STORE.reader=reader
+            self.assertEqual((await self.client.get(url,headers=header)).status_code,200)
+            if action=='expiry':view.SESSIONS.items[header['Authorization'][7:]]['expires']=view.SESSIONS.clock()-1
+            elif action=='logout':await self.client.post('/api/account/logout',headers=header,json={})
+            else:server._delete_push_subscription(self.sub['endpoint'])
+            self.assertIn((await self.client.get(url,headers=header)).status_code,(401,403))
+            reader.history.assert_awaited_once()
+
+    async def test_evicted_next_cursor_does_not_return_an_unusable_cached_chain(self):
+        header,cursor,url=await self.history_cursor()
+        page=view.history_page(raw_page(id='2'),'123',{},'positions',observed_ms=NOW,start_ms=NOW-view.DAY,end_ms=NOW);page['offset']='next2'
+        reader=Mock();reader.history=AsyncMock(return_value=page);view.STORE.reader=reader
+        first=await self.client.get(url,headers=header)
+        session=view.SESSIONS.items[header['Authorization'][7:]];session['cursors'].pop(first.json()['next_cursor'])
+        r=await self.client.get(url,headers=header);self.assertEqual(r.status_code,409)
+        self.assertNotIn('items',r.json());reader.history.assert_awaited_once()
+
+    async def test_cursor_evicted_during_read_is_not_resurrected(self):
+        header,cursor,url=await self.history_cursor()
+        async def evict(*args):
+            view.SESSIONS.items[header['Authorization'][7:]]['cursors'].pop(cursor)
+            return view.history_page(raw_page(id='2'),'123',{},'positions',observed_ms=NOW,start_ms=NOW-view.DAY,end_ms=NOW)
+        reader=Mock();reader.history=AsyncMock(side_effect=evict);view.STORE.reader=reader
+        self.assertEqual((await self.client.get(url,headers=header)).status_code,409)
+
+    async def test_cached_response_still_checks_auth_after_waiting_for_lock(self):
+        header,cursor,url=await self.history_cursor()
+        reader=Mock();reader.history=AsyncMock(return_value=view.history_page(raw_page(id='2'),'123',{},'positions',observed_ms=NOW,start_ms=NOW-view.DAY,end_ms=NOW));view.STORE.reader=reader
+        self.assertEqual((await self.client.get(url,headers=header)).status_code,200)
+        await server._account_history_lock.acquire()
+        task=asyncio.create_task(self.client.get(url,headers=header));await asyncio.sleep(0)
+        view.SESSIONS.items[header['Authorization'][7:]]['expires']=view.SESSIONS.clock()-1
+        server._account_history_lock.release()
+        self.assertEqual((await task).status_code,401);reader.history.assert_awaited_once()
 
     async def test_duplicate_pages_and_repeated_offsets_do_not_claim_complete(self):
         header=await self.header();page=view.STORE.histories['positions'];page['offset']='repeat'
