@@ -10,7 +10,7 @@ const orders={source:'EDGEX_ACTIVE_CONDITIONAL_ORDERS',read_only:true,complete:t
 const clone=v=>JSON.parse(JSON.stringify(v));
 function response(url){return {ok:true,json:async()=>url==='/api/account/session'?{view_token:'a'.repeat(43),read_only:true,expires_in_seconds:600}:url==='/api/account/conditional-orders'?clone(orders):clone(asset)}}
 const context={console,AbortController,Date:class extends Date{static now(){return now}},document:{visibilityState:'visible',getElementById:k=>nodes[k],addEventListener(){}},setInterval(){},setTimeout(fn,ms){const n=++id;timers.set(n,{fn,ms});return n},clearTimeout:n=>timers.delete(n),syncAnalysisCapital(){},apiCapitalMode:()=>false,lifecycleEscape:String,card:(k,v)=>k+':'+v,currentPushSubscription:async()=>({toJSON:()=>({endpoint:'synthetic-device-only'})}),fetch:async(url,opt)=>{requests.push({url,opt});return url==='/api/account/logout'?{ok:true}:handler?handler(url,opt):response(url)}};
-vm.createContext(context);vm.runInContext(source,context);
+context.window={addEventListener(){}};vm.createContext(context);vm.runInContext(source,context);
 function deferred(){let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b});return {promise,resolve,reject}}
 async function settle(){for(let i=0;i<4;i++)await new Promise(setImmediate)}
 function timeout(){const t=[...timers.values()].find(t=>t.ms===8000);assert(t);t.fn()}
@@ -72,5 +72,5 @@ async function rejectPage(value){const before=clone(context.accountViewHistory.p
  }else if(testcase==='unexpected_fields_not_copied'){
   handler=()=>({ok:true,json:async()=>page({unexpected:'do-not-copy',_seen_cursors:['evil']})});await context.moreAccountHistory('positions');assert.equal(context.accountViewHistory.positions.unexpected,undefined);assert(!context.accountViewHistory.positions._seen_cursors.includes('evil'));
  }else throw Error(testcase);
- assert.equal(context.accountViewBusy,false);assert.equal(context.accountReadTickets.size,0);assert.equal(timers.size,0);assert(!requests.some(r=>/createOrder|cancelOrder|withdraw|execution/.test(r.url)));console.log(testcase+': OK');
+ assert.equal(context.accountViewBusy,false);assert.equal(context.accountReadTickets.size,0);assert([...timers.keys()].every(k=>k===context.accountPrivateExpiryTimer),'Only the private expiry timer may remain');assert(!requests.some(r=>/createOrder|cancelOrder|withdraw|execution/.test(r.url)));console.log(testcase+': OK');
 })().catch(e=>{console.error(e);process.exitCode=1});

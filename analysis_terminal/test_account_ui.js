@@ -22,7 +22,7 @@ const context={Date:class extends Date{static now(){return now}},Number,Math,JSO
  fetch:async(url,opt)=>{requests.push({url,opt});if(url==='/api/account/logout')return {ok:true};if(fail)throw Error('offline');if(statusFailure)return {ok:false,status:statusFailure};if(release){const gate=release;release=null;await gate.promise}return {ok:true,json:async()=>url==='/api/account/session'?{view_token:'a'.repeat(43),expires_in_seconds:600,read_only:true}:url==='/api/account/conditional-orders'?JSON.parse(JSON.stringify(orders)):url.startsWith('/api/account/history')?{...history,items:[{...row,record_key:'b'.repeat(64)}],complete:true,next_cursor:null}:JSON.parse(JSON.stringify(asset))}},
  jf:async(url,opt={})=>{requests.push({url,opt});if(fail)throw Error('private-error');if(url==='/api/account/session')return {view_token:'a'.repeat(43),expires_in_seconds:600,read_only:true};if(release){const gate=release;release=null;await gate.promise}if(url.startsWith('/api/account/history'))return {...history,items:[{...row,record_key:'b'.repeat(64)}],complete:true,next_cursor:null};return JSON.parse(JSON.stringify(asset))}
 };
-vm.createContext(context);vm.runInContext(source,context);
+context.window={addEventListener(){}};vm.createContext(context);vm.runInContext(source,context);
 async function settle(){for(let i=0;i<4;i++)await new Promise(setImmediate)}
 (async()=>{
  await context.loadAccountView();assert(!nodes.accountViewData.hidden);assert(nodes.accountViewBalances.innerHTML.includes('95.00'));assert(nodes.accountViewBalances.innerHTML.includes('100.00'));assert(nodes.accountViewBalances.innerHTML.includes('未確認'));

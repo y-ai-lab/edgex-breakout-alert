@@ -20,7 +20,7 @@ const context={Date:class extends Date{static now(){return now}},Number,Math,JSO
  localStorage:{removeItem:k=>storage.push(k)},currentPushSubscription:async()=>({toJSON:()=>({keys:{auth:'SYNTHETIC'}})}),
  fetch:async(url,opt)=>{requests.push({url,opt});if(gate){const g=gate;gate=null;await g.promise}return {ok:!failure,status:failure,json:async()=>url==='/api/account/risk'?{...result}:JSON.parse(JSON.stringify(asset))}},
  jf:async(url,opt)=>{requests.push({url,opt});if(url==='/api/account/session')return {read_only:true,view_token:'a'.repeat(43),expires_in_seconds:600};if(gate){const g=gate;gate=null;await g.promise}return {...result,capital_source:undefined}}
-};vm.createContext(context);vm.runInContext(privateCode+capitalCode+scenarioCode+quickCode+calcCode,context);
+};context.window={addEventListener(){}};vm.createContext(context);vm.runInContext(privateCode+capitalCode+scenarioCode+quickCode+calcCode,context);
 function setup(){context.accountViewSession={token:'a'.repeat(43),expires:now+600000};context.accountViewSnapshot=JSON.parse(JSON.stringify(asset));context.accountViewSnapshot._received_ms=now;context.accountViewSnapshot.observed_ms=100000;context.syncAnalysisCapital(context.accountViewSnapshot)}
 async function tick(){await new Promise(setImmediate)}
 (async()=>{

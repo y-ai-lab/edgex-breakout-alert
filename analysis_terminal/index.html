@@ -477,9 +477,23 @@ var accountViewSession=null,accountViewSnapshot=null,accountViewBusy=false,accou
 var accountOrdersSnapshot=null,accountOrdersBusy=false;
 var accountReadTickets=new Set(),accountViewReadVersion=0,accountOrdersReadVersion=0;
 var accountHistoryNotices={},accountHistoryRestart={};
+var accountPrivateExpiryTimer=null,accountPrivacyLastMs=null;
 function accountMoney(value){if(value==null||value===''||!Number.isFinite(Number(value)))return '未確認';return Number(value).toLocaleString('ja-JP',{maximumFractionDigits:2,minimumFractionDigits:2})}
 function accountExact(value){return value==null?'未確認':lifecycleEscape(String(value))}
 function accountFresh(j){var age=j&&Number.isFinite(j._received_ms)?Date.now()-j._received_ms:Infinity;return !!j&&Number.isFinite(j.snapshot_age_seconds)&&j.snapshot_age_seconds>=0&&age>=0&&age+j.snapshot_age_seconds*1000<30000}
+function refreshAccountPrivacyAge(){
+ clearTimeout(accountPrivateExpiryTimer);accountPrivateExpiryTimer=null;var now=Date.now();
+ if(!accountViewSession){accountPrivacyLastMs=null;return}
+ if(!Number.isFinite(accountViewSession.expires)||now>=accountViewSession.expires||(accountPrivacyLastMs!==null&&now<accountPrivacyLastMs)){
+  lockAccountView(accountPrivacyLastMs!==null&&now<accountPrivacyLastMs?'端末の時刻が変わったため口座情報をロックしました。再度表示してください。':'閲覧期限が切れました。再度表示してください。');return;
+ }
+ accountPrivacyLastMs=now;
+ if(accountViewSnapshot&&!accountFresh(accountViewSnapshot)){accountViewSnapshot=null;renderAccountPositions(null)}
+ if(accountOrdersSnapshot&&!accountFresh(accountOrdersSnapshot)){accountOrdersSnapshot=null;renderAccountOrders(null)}
+ var remaining=accountViewSession.expires-now;
+ [accountViewSnapshot,accountOrdersSnapshot].forEach(function(j){if(j)remaining=Math.min(remaining,30000-j.snapshot_age_seconds*1000-(now-j._received_ms))});
+ accountPrivateExpiryTimer=setTimeout(refreshAccountPrivacyAge,Math.max(1,Math.ceil(remaining)));
+}
 function updateAccountTable(el,html){
  // Freshness ticks must not replace an unchanged table or interrupt scrolling.
  if(el.innerHTML===html)return;
@@ -487,7 +501,7 @@ function updateAccountTable(el,html){
  el.innerHTML=html;
  var current=el.querySelector('.scroll');if(current){current.scrollLeft=left;current.scrollTop=top}
 }
-function clearAccountValues(){accountViewSnapshot=null;accountOrdersSnapshot=null;renderAccountOrders(null);syncAnalysisCapital(null);accountViewHistory={};accountHistoryNotices={};accountHistoryRestart={};document.getElementById('accountViewData').hidden=true;['accountViewBalances','accountViewPositions','accountViewTrades','accountViewCash'].forEach(function(id){document.getElementById(id).innerHTML=''});['accountViewTradesMore','accountViewCashMore'].forEach(function(id){var button=document.getElementById(id);button.hidden=true;button.disabled=false;button.textContent='続きを読む'})}
+function clearAccountValues(){clearTimeout(accountPrivateExpiryTimer);accountPrivateExpiryTimer=null;accountPrivacyLastMs=null;accountViewSnapshot=null;accountOrdersSnapshot=null;renderAccountOrders(null);syncAnalysisCapital(null);accountViewHistory={};accountHistoryNotices={};accountHistoryRestart={};document.getElementById('accountViewData').hidden=true;['accountViewBalances','accountViewPositions','accountViewTrades','accountViewCash'].forEach(function(id){document.getElementById(id).innerHTML=''});['accountViewTradesMore','accountViewCashMore'].forEach(function(id){var button=document.getElementById(id);button.hidden=true;button.disabled=false;button.textContent='続きを読む'})}
 function lockAccountView(message){if(typeof executionControlSession!=='undefined'&&executionControlSession)lockExecutionControls();var old=accountViewSession;accountViewSession=null;accountViewEpoch++;accountViewReadVersion++;accountOrdersReadVersion++;accountViewBusy=false;accountOrdersBusy=false;accountReadTickets.forEach(function(t){t.cancel()});clearAccountValues();document.getElementById('accountViewStatus').textContent=message||'口座情報を非表示にしました。';if(old)fetch('/api/account/logout',{method:'POST',headers:{Authorization:'Bearer '+old.token,'Content-Type':'application/json'},body:'{}',keepalive:true}).catch(function(){})}
 async function accountReadFetch(url,options){
  var controller=new AbortController(),started=Date.now(),rejectRead,timer;
@@ -530,12 +544,12 @@ async function loadAccountView(){
  if(accountViewBusy)return;accountViewBusy=true;var task=++accountViewReadVersion,epoch=++accountViewEpoch,st=document.getElementById('accountViewStatus');st.textContent='登録端末と口座を確認中…';
  try{
   if(!accountViewSession||Date.now()>=accountViewSession.expires){var deviceTimer,sub;try{sub=await Promise.race([currentPushSubscription(),new Promise(function(_,reject){deviceTimer=setTimeout(function(){reject(new Error('DEVICE'))},8000)})])}finally{clearTimeout(deviceTimer)};if(epoch!==accountViewEpoch)return;if(!sub)throw new Error('DEVICE');var s=await accountReadFetch('/api/account/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({subscription:sub.toJSON()})});if(epoch!==accountViewEpoch)return;if(s.read_only!==true||typeof s.view_token!=='string'||!/^[A-Za-z0-9_-]{43}$/.test(s.view_token)||s.expires_in_seconds!==600)throw new Error('AUTH');accountViewSession={token:s.view_token,expires:Date.now()+600000}}
-  var j=await accountRequest('/api/account/overview');if(epoch!==accountViewEpoch)return;j._received_ms=Date.now();accountViewSnapshot=j;renderAccountPositions(j);accountHistoryNotices={};accountHistoryRestart={};accountViewHistory={};['positions','collateral'].forEach(function(kind){var h=j.histories&&j.histories[kind];if(validAccountHistory(kind,h,50))accountViewHistory[kind]=h});renderAccountHistory('positions');renderAccountHistory('collateral');
+  var j=await accountRequest('/api/account/overview');if(epoch!==accountViewEpoch)return;j._received_ms=Date.now();accountViewSnapshot=j;renderAccountPositions(j);refreshAccountPrivacyAge();if(epoch!==accountViewEpoch||!accountViewSession)return;accountHistoryNotices={};accountHistoryRestart={};accountViewHistory={};['positions','collateral'].forEach(function(kind){var h=j.histories&&j.histories[kind];if(validAccountHistory(kind,h,50))accountViewHistory[kind]=h});renderAccountHistory('positions');renderAccountHistory('collateral');
  }catch(e){if(epoch===accountViewEpoch)lockAccountView(e.message==='ACCOUNT_TIMEOUT'?'口座の取得が8秒でタイムアウトしました。「口座情報を表示・更新」で再試行してください。残高・建玉は未確認です。':e.status===503?'取引所の最新口座データを取得できません。時間をおいて再取得してください。欠損をゼロ残高・建玉なしとは扱いません。':'口座を取得できません。登録済みの元の端末で再確認してください。欠損をゼロ残高・建玉なしとは扱いません。')}finally{if(task===accountViewReadVersion){accountViewBusy=false;renderAccountHistory('positions');renderAccountHistory('collateral')}}
 }
 async function refreshAccountPositions(){
  if(accountViewBusy||!accountViewSession)return;if(Date.now()>=accountViewSession.expires){lockAccountView('閲覧期限が切れました。再度表示してください。');return}accountViewBusy=true;var task=++accountViewReadVersion,epoch=accountViewEpoch;
- try{var j=await accountRequest('/api/account/positions');if(epoch!==accountViewEpoch)return;j._received_ms=Date.now();accountViewSnapshot=j;renderAccountPositions(j)}catch(e){if(epoch===accountViewEpoch){if(e.status===401||e.status===403)lockAccountView('閲覧認証が無効になりました。口座情報をロックしました。');else{accountViewSnapshot=null;renderAccountPositions(null)}}}finally{if(task===accountViewReadVersion)accountViewBusy=false}
+ try{var j=await accountRequest('/api/account/positions');if(epoch!==accountViewEpoch)return;j._received_ms=Date.now();accountViewSnapshot=j;renderAccountPositions(j);refreshAccountPrivacyAge()}catch(e){if(epoch===accountViewEpoch){if(e.status===401||e.status===403)lockAccountView('閲覧認証が無効になりました。口座情報をロックしました。');else{accountViewSnapshot=null;renderAccountPositions(null);refreshAccountPrivacyAge()}}}finally{if(task===accountViewReadVersion)accountViewBusy=false}
 }
 async function moreAccountHistory(kind){
  if((kind==='positions'||kind==='collateral')&&accountHistoryRestart[kind])return loadAccountView();
@@ -552,8 +566,10 @@ async function moreAccountHistory(kind){
 }
 
 document.getElementById('accountViewOpen').onclick=loadAccountView;document.getElementById('accountViewLock').onclick=function(){lockAccountView()};document.getElementById('accountViewTradesMore').onclick=function(){moreAccountHistory('positions')};document.getElementById('accountViewCashMore').onclick=function(){moreAccountHistory('collateral')};
-setInterval(function(){if(accountViewSnapshot&&!accountFresh(accountViewSnapshot))renderAccountPositions(accountViewSnapshot);if(accountViewSession&&document.visibilityState==='visible'&&(document.getElementById('api').classList.contains('active')||apiCapitalMode()))refreshAccountPositions()},15000);
-document.addEventListener('visibilitychange',function(){if(document.visibilityState!=='visible'&&accountViewSession)lockAccountView('画面を離れたため口座情報をロックしました。再度表示してください。')});
+setInterval(function(){refreshAccountPrivacyAge();if(accountViewSession&&document.visibilityState==='visible'&&(document.getElementById('api').classList.contains('active')||apiCapitalMode()))refreshAccountPositions()},15000);
+document.addEventListener('visibilitychange',function(){if(document.visibilityState!=='visible'&&accountViewSession)lockAccountView('画面を離れたため口座情報をロックしました。再度表示してください。');else if(document.visibilityState==='visible')refreshAccountPrivacyAge()});
+window.addEventListener("pagehide",function(){if(accountViewSession)lockAccountView('画面を離れたため口座情報をロックしました。再度表示してください。')});
+window.addEventListener("pageshow",refreshAccountPrivacyAge);
 function renderAccountOrders(j){
  var status=document.getElementById('accountOrdersStatus'),data=document.getElementById('accountOrdersData');
  if(!j||!accountViewSession||Date.now()>=accountViewSession.expires||j.source!=='EDGEX_ACTIVE_CONDITIONAL_ORDERS'||j.read_only!==true||j.complete!==true||!Array.isArray(j.items)||!accountFresh(j)){data.innerHTML='';status.textContent='条件注文は未確認です。口座を表示してSL/TPを確認してください。';return}
@@ -563,10 +579,10 @@ function renderAccountOrders(j){
 async function checkAccountOrders(){
  if(accountOrdersBusy)return;accountOrdersBusy=true;var task=++accountOrdersReadVersion,epoch=accountViewEpoch;
  accountOrdersSnapshot=null;renderAccountOrders(null);document.getElementById('accountOrdersStatus').textContent='取引所の条件注文を確認中…';
- try{var j=await accountRequest('/api/account/conditional-orders');if(epoch!==accountViewEpoch)return;j._received_ms=Date.now();accountOrdersSnapshot=j;renderAccountOrders(j)}catch(e){if(epoch===accountViewEpoch){if(e.status===401||e.status===403)lockAccountView('閲覧認証が無効になりました。');else renderAccountOrders(null)}}finally{if(task===accountOrdersReadVersion)accountOrdersBusy=false}
+ try{var j=await accountRequest('/api/account/conditional-orders');if(epoch!==accountViewEpoch)return;j._received_ms=Date.now();accountOrdersSnapshot=j;renderAccountOrders(j);refreshAccountPrivacyAge()}catch(e){if(epoch===accountViewEpoch){if(e.status===401||e.status===403)lockAccountView('閲覧認証が無効になりました。');else renderAccountOrders(null)}}finally{if(task===accountOrdersReadVersion)accountOrdersBusy=false}
 }
 document.getElementById('accountOrdersCheck').onclick=checkAccountOrders;
-setInterval(function(){if(accountOrdersSnapshot)renderAccountOrders(accountOrdersSnapshot)},1000);
+setInterval(function(){refreshAccountPrivacyAge();if(accountOrdersSnapshot)renderAccountOrders(accountOrdersSnapshot)},1000);
 async function checkApiConnections(){
  var st=document.getElementById('apiCheckStatus'),out=document.getElementById('apiCheckResults'),button=document.getElementById('checkApi');if(!st||!out||!button)return;
  var version=++apiCheckRequest;button.disabled=true;st.textContent='APIを確認中…';out.innerHTML='';
