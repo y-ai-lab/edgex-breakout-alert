@@ -12,6 +12,7 @@ class AccountReadLifecycleTests(unittest.TestCase):
                                  str(ROOT/'index.html'), case],
                                 capture_output=True, text=True, timeout=15)
         self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
+        self.assertIn(case+': OK', result.stdout, 'The async case must reach its final assertions')
 
     def test_fetch_deadline(self): self.run_case('fetch_deadline')
     def test_body_deadline(self): self.run_case('body_deadline')
