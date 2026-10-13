@@ -8,7 +8,7 @@ import sqlite3
 import sys
 import time
 from collections import Counter
-from contextlib import asynccontextmanager, contextmanager
+from contextlib import asynccontextmanager, closing, contextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
 from statistics import mean
@@ -39,6 +39,7 @@ from analysis_terminal import pending_evidence
 from analysis_terminal import vwap_live
 from analysis_terminal import vwap_evidence
 from analysis_terminal import captured_ledger
+from analysis_terminal import captured_evidence
 from analysis_terminal import live_execution
 from analysis_terminal import account_view
 from analysis_terminal import account_risk
@@ -4188,7 +4189,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="EdgeX Analysis Terminal",
-    version="19.0.76",
+    version="19.0.77",
     lifespan=lifespan,
 )
 app.add_middleware(push_security.BrowserSecurityMiddleware)
@@ -4923,19 +4924,25 @@ async def captured_shadow_ledger_api(
     source: Literal['pending', 'vwap'],
     limit: int = Query(default=250, ge=1, le=500),
     cursor: str | None = Query(default=None, max_length=1024),
+    include_evidence: bool = Query(default=False),
 ):
     try:
-        request = captured_ledger.read_request(source=source, limit=limit, cursor=cursor,
+        scope = source+'-evidence' if include_evidence else source
+        request = captured_ledger.read_request(source=scope, limit=limit, cursor=cursor,
                                               now_ms=int(time.time()*1000))
         engine, evidence = (pending_live, pending_evidence) if source == 'pending' else (vwap_live, vwap_evidence)
-        with sqlite3.connect(DB_PATH.resolve().as_uri()+'?mode=ro', uri=True) as conn:
+        with closing(sqlite3.connect(DB_PATH.resolve().as_uri()+'?mode=ro', uri=True)) as conn:
             conn.row_factory = sqlite3.Row
             conn.execute('PRAGMA query_only = ON')
             conn.execute('BEGIN')
             review = engine.review(conn, now_ms=request.snapshot_ms, limit=0)
-            proof = evidence.review(conn, now_ms=request.snapshot_ms, limit=0)
+            proof = evidence.review(conn, now_ms=request.snapshot_ms, limit=500 if include_evidence else 0)
             review['observation_evidence'] = {k:v for k,v in proof.items() if k != 'latest'}
-            return captured_ledger.page(request, review, engine.records(conn))
+            records = engine.records(conn)
+            if include_evidence:
+                records, review['evidence_audit'] = captured_evidence.attach(conn,
+                    source=source, now_ms=request.snapshot_ms, records=records, proof_review=proof)
+            return captured_ledger.page(request, review, records)
     except captured_ledger.LedgerError as exc:
         raise HTTPException(exc.status, exc.code) from None
     except (ValueError, TypeError, KeyError, sqlite3.Error):

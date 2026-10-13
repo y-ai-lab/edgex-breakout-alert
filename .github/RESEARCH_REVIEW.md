@@ -167,3 +167,13 @@ DB・収集器・条件・時計の起点・評価器・週次workflow・古いK
 詳細は[捕捉台帳の監査仕様](../analysis_terminal/CAPTURED_LEDGER.md)。
 本番の取得・検算結果、価格・口座policy・cursor・raw本文は作業環境内だけに保持し、
 GitHubのartifactや研究サマリーへ複製しない。署名・注文・ON/OFF・通知を呼ばない。
+
+## 捕捉台帳と元の約定前証跡の同時全件照合（v19.0.77）
+
+`/api/captured-shadow-ledger?source=pending&include_evidence=true`（VWAPも対応）は、
+同じSQLite読み取り時点で元台帳と全件証跡を取得する。証跡の500件制限を超える場合も、
+封印済みreviewerを元の行のRAM内投影へ適用し、既存判定との一致を要求する。
+scopeを分けた署名cursorと全件SHAで途中更新・モード混在を拒否する。
+欠損・導入前・不一致は保持し、過去の観測を生成しない。元collector/evaluator/protocol、
+metrics、口座、通知、DB schemaは変更しない。証跡照合は追加の独立サンプルではない。
+本番の証跡・状態・価格・口座policy・cursor・本文は作業環境にだけ保存する。

@@ -13,6 +13,7 @@ import re
 import secrets
 
 SOURCES = ('pending', 'vwap')
+EVIDENCE_SOURCES = ('pending-evidence', 'vwap-evidence')
 TTL_MS = 120000
 _SIGNING_KEY = secrets.token_bytes(32)  # Process-only; restart invalidates cursors.
 
@@ -48,7 +49,7 @@ def _token(payload):
 
 
 def read_request(*, source, limit, now_ms, cursor=None):
-    if (source not in SOURCES or type(limit) is not int or not 1 <= limit <= 500
+    if (source not in SOURCES+EVIDENCE_SOURCES or type(limit) is not int or not 1 <= limit <= 500
             or type(now_ms) is not int or now_ms <= 0):
         raise LedgerError(400, 'INVALID_LEDGER_REQUEST')
     if cursor is None:

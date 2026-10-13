@@ -1,4 +1,4 @@
-# 捕捉Shadow台帳の全件監査（v19.0.76）
+# 捕捉Shadow台帳の全件監査（v19.0.77）
 
 `GET /api/captured-shadow-ledger?source=pending&limit=500`
 （`source=vwap`も対応）は、既存の実時間捕捉研究台帳を読み取る。
@@ -45,8 +45,29 @@ SHAは`{"source":source,"review":元review（latest=[]、ledger_pageなし）,
 separators=(',',':')、allow_nan=False、ensure_ascii=FalseでUTF-8化して計算する。
 別の言語でfloatの表現が異なる場合、SHA不一致を良い値へ修復せず明示する。
 
-既存の観測証跡APIの詳細表示上限500は変更していない。
-証跡概要が全件であることと、詳細の全件照合は別。詳細が不足すれば不足を明示する。
+## 元台帳と約定前証跡を同時に全件照合する
+
+`include_evidence=true`を付けると、各latest行に`prefill_observation_evidence`を
+追加し、元の研究proposalの証跡詳細を500件超でも取得できる。
+比較対照モデルにはnull（NOT_APPLICABLE_TO_COMPARISON_MODEL）を返す。
+proposalに証跡がない場合はnullで補完せず、元reviewerの欠損・導入前・未開始判定を返す。
+既存の証跡APIの上限500、include_evidence未指定時の出力は維持する。
+
+台帳・証跡・metaは同じ読み取りtransactionで取得する。封印済みreviewerのコードを
+変更せず、元の行をRAM内に最大500台帳行ずつ投影し、そのreviewerで判定する。
+この一時DBはディスク・元DBに保存せず、処理後に閉じる。元の指標を再計算・修正せず、
+全件証跡件数/状態集計/既存500件の詳細との不一致があれば503で停止する。
+VWAPのfalse/null状態・元のidentity/hash・起点不一致もそのまま保持する。
+
+証跡付きcursorのscope/sourceはpending-evidence/vwap-evidence。
+リクエストのsourceは引き続きpending/vwapで、全ページでinclude_evidence=trueを付ける。
+証跡なしcursorとは混在できない（400）。SHAのsourceにはledger_page.sourceを使う。
+reviewは追加されたevidence_auditを含め、全recordsは証跡詳細を含めて計算する。
+evidence_audit.stored_evidence_sha256は、signal_key/close_ms昇順の元証跡テーブル全行を
+tupleのリストとして同じcanonical JSONでハッシュ化する。無効・範囲外・孤立した証跡の
+変更も再取得の対象とし、同じ集計状態のままの更新を見逃さない。
+証跡が一致しても板約定・利益・本番昇格の根拠にはしない。
+
 旧UNAVAILABLE_BEFORE_AUDITや欠損を再構成せず、AMBIGUOUS/OPEN/DATA_GAP・
 保留資金・ROI nullを維持する。旧API、元週、replay、後追い、日次更新を別サンプルとして足さない。
 
