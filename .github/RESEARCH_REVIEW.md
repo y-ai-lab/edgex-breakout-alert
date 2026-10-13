@@ -155,3 +155,15 @@ entryが構造内にあることを検査する。二つの価格を同じ価格
 研究テストと固定workflow/評価器/protocol保持を確認してからmainへ反映する。
 本番の売買条件・通知・ON/OFF・署名・注文・口座policy・DB・Pushは変更しない。
 本番のレスポンス・口座・運用メタデータをGitHubへ複製しない。
+
+## 本番捕捉台帳の表示上限を超えた独立監査（v19.0.76）
+
+既存の捕捉Shadow APIはlatest最大500件で、全件metricsは表示数に依存しない。
+新しい読取専用`/api/captured-shadow-ledger`は、元の全件review/台帳を変更せず、
+署名付き短期cursorと全件SHAで同じsnapshotだけを分割取得する。
+DB・収集器・条件・時計の起点・評価器・週次workflow・古いKILLには変更しない。
+更新・再起動・期限切れ時は再取得し、途中ページから全体成績を推定しない。
+本番の全件照合と公開RESTのreplayは独立サンプルとして足さない。
+詳細は[捕捉台帳の監査仕様](../analysis_terminal/CAPTURED_LEDGER.md)。
+本番の取得・検算結果、価格・口座policy・cursor・raw本文は作業環境内だけに保持し、
+GitHubのartifactや研究サマリーへ複製しない。署名・注文・ON/OFF・通知を呼ばない。
