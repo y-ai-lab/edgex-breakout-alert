@@ -101,6 +101,8 @@ async def fetch_snapshots(ids, intervals=None, timeout=25.0):
         for (ref_id, interval), candles in raw.items():
             if ref_id != ref.contract_id:
                 continue
+            if any(c.contract_id != ref_id or c.interval != interval for c in candles):
+                raise ValueError('REFERENCE_STREAM_IDENTITY_MISMATCH')
             out[cid, interval] = [replace(c, contract_id=cid, contract_name=client.contracts[cid].contract_name)
                                  for c in candles]
     return out

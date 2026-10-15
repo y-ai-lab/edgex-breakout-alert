@@ -157,6 +157,13 @@ class AsyncTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result[('variational:BTC','MINUTE_15')][0].contract_id,'variational:BTC')
         self.assertEqual(result[('variational:BTC','MINUTE_15')][0].close,original.close)
 
+    async def test_mixed_reference_stream_cannot_be_relabelled_as_another_market(self):
+        from dataclasses import replace
+        original=s.core.scanner.Candle('1','BTCUSDC','MINUTE_15',NOW//900000*900000-900000,100,102,98,101,1000,100000,10)
+        for bad in (replace(original,contract_id='2'),replace(original,interval='HOUR_4')):
+            with patch.object(s.client,'get_contracts',AsyncMock(return_value={})),patch.object(s.client,'reference_by_id',{'variational:BTC':s.core.scanner.Contract('1','BTCUSDC','USDC',True,True)}),patch.object(s.client,'contracts',{'variational:BTC':contract()}),patch.object(s,'REFERENCE_FETCH',AsyncMock(return_value={('1','MINUTE_15'):[original,bad]})):
+                with self.assertRaises(ValueError):await s.fetch_snapshots(['variational:BTC'])
+
     async def test_native_stats_shared_cache(self):
         response=Mock(status_code=200)
         response.json.return_value={'listings':[listing()]}
