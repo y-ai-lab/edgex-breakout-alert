@@ -23,7 +23,7 @@ analyze=async function(){
  var out=document.getElementById('venueAnalysis');out.textContent='Omniの公開価格を確認中…';
  var native=jf('/api/variational/market?ticker='+encodeURIComponent(ticker)).then(function(j){
   if(id!==venueRequest)return;var m=j.market;
-  out.innerHTML='<b>'+esc(m.ticker)+' — Variational Omni</b><p class="sub">Mark '+esc(number(m.mark_price))+' USD（価格そのものの更新時刻は不明） / 公開統計取得 '+esc(new Date(m.stats_observed_ms).toLocaleString('ja-JP'))+'</p><p class="sub">参考Bid '+esc(number(m.indicative_bid))+' / Ask '+esc(number(m.indicative_ask))+'（確約価格ではありません） / quote時刻 '+esc(m.quote_updated_ms==null?'不明':new Date(m.quote_updated_ms).toLocaleString('ja-JP'))+'</p><p class="sub">以下のEntry・SL・TP・RR・チャート・数量はEdgeX参考足の値です。Omniの発注数量単位・最小数量・スプレッド・Fundingを別途確認してください。</p>';
+  out.innerHTML='<b>'+esc(m.ticker)+' — Variational Omni</b><p class="sub">Mark '+esc(number(m.mark_price))+' USD（価格そのものの更新時刻は不明） / 公開統計取得 '+esc(new Date(m.stats_observed_ms).toLocaleString('ja-JP'))+'</p><p class="sub">参考Bid '+esc(number(m.indicative_bid))+' / Ask '+esc(number(m.indicative_ask))+'（確約価格ではありません） / quote時刻 '+esc(m.quote_updated_ms==null?'不明':new Date(m.quote_updated_ms).toLocaleString('ja-JP'))+'</p><p class="sub">Omni Funding '+esc(m.funding_rate==null?'不明':(Number(m.funding_rate)*100).toFixed(4)+'%')+' / 周期 '+esc(m.funding_interval_s==null?'不明':Number(m.funding_interval_s)/3600+'h')+' / OI Long '+esc(number(m.long_open_interest))+' / Short '+esc(number(m.short_open_interest))+' USD</p><p class="sub">以下のEntry・SL・TP・RR・チャート・数量はEdgeX参考足の値です。Omniの発注数量単位・最小数量・スプレッド・Fundingを別途確認してください。</p>';
  }).catch(function(){if(id===venueRequest)out.textContent='Omni価格を取得できません。以下はEdgeX参考足のみで、Omniの現在価格は未確認です。'});
  await originalAnalyze();await native;
 };

@@ -2,7 +2,7 @@
 import re
 from pathlib import Path
 
-BANNER = '''<aside id="venueDisclosure" class="analyticsBox" role="note"><b>Variational Omni · 参考足で分析</b><p class="sub">市場価格・Funding・OIはVariationalの公開情報です。4H・15M・BTCチャートとEntry / SL / TP / RRはEdgeXの参考足で計算します。READYは参考足の条件成立で、Omniでのエントリー可否・約定・保護注文を保証しません。</p></aside>'''
+BANNER = '''<aside id="venueDisclosure" class="analyticsBox" role="note"><b>Variational Omni · 参考足で分析</b><p class="sub">Omniの公開価格・Funding・OIはAPI欄と個別分析上部に表示します。銘柄一覧の価格・出来高・騰落、4H・15M・BTCチャート、Entry / SL / TP / RRはEdgeXの参考足で計算します。READYは参考足の条件成立で、Omniでのエントリー可否・約定・保護注文を保証しません。</p></aside>'''
 API = '''<div class="analyticsBox" id="variationalApiInfo"><h3>Variational 市場データ</h3><p class="sub">公開統計APIを使用しています。取引・署名・口座APIには接続しません。提示quoteは最大600秒キャッシュされる参考値で、確約価格ではありません。価格の更新時刻が不明な場合は不明と表示します。</p><a href="https://omni.variational.io" target="_blank" rel="noopener noreferrer">Omniで価格・建玉・SL/TPを確認 ↗</a><div id="venueCoverage" class="status" role="status">確認中…</div><label for="venueSearch">Variationalの全銘柄を検索</label><input id="venueSearch" placeholder="BTC / ETH / 銘柄名" maxlength="64"><div id="venueMarketTable" class="scroll" style="max-height:360px"></div></div>'''
 STYLE = '''<style>
 #executionControlUnlock,#executionControlLock,#executionControlOn,#executionControlOff,#executionControlRefresh,#executionControlReconcile,#executionControlStatus,#executionControlNextStep,#accountViewDetails,#liveExecutionDetails,#capitalRefresh,#capitalStatus {display:none!important}
@@ -20,7 +20,7 @@ def render(html, *, btc=False):
     html = html.replace('EdgeX','Variational').replace('EDGEX MARKET WORKSPACE','VARIATIONAL MARKET WORKSPACE')
     html = html.replace('edgex','variational')
     html = html.replace('pro.variational.exchange/en-US/portfolio/overview','omni.variational.io')
-    html = html.replace('エントリー可能','参考条件成立').replace('ENTRY NOW','ENTRY NOW · 参考')
+    html = html.replace('現在価格','参考価格').replace('エントリー可能','参考条件成立').replace('ENTRY NOW','ENTRY NOW · 参考')
     html = html.replace('エントリー候補とAPI自動取引の稼働状態を確認できます。','Omniの市場情報とEdgeX参考足の条件成立を確認できます。')
     html = html.replace('v19.0.81','v1.0.0')
     html = html.replace('</head>',STYLE+'</head>')
