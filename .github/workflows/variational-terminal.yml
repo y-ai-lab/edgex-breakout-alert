@@ -1,0 +1,31 @@
+name: Variational terminal safety checks
+on:
+  pull_request:
+    paths: ['variational_terminal/**', 'analysis_terminal/**', 'app.py', '.github/workflows/variational-terminal.yml']
+  push:
+    branches: [main, 'feature/variational-*']
+    paths: ['variational_terminal/**', 'analysis_terminal/**', 'app.py', '.github/workflows/variational-terminal.yml']
+permissions:
+  contents: read
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    env:
+      EDGEX_EXEC_MODE: 'OFF'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: python -m pip install -r analysis_terminal/test-requirements.txt
+      - run: python -m compileall -q variational_terminal
+      # Separate processes prevent the isolated app's runtime bindings from
+      # changing the original terminal's test configuration.
+      - run: python -m unittest discover -s variational_terminal -p 'test_*.py' -q
+      - run: python -m unittest discover -s analysis_terminal -p 'test_*.py' -q
+      - run: python -m unittest discover -s tests -q
+      - run: python -m unittest discover -s .github/scripts -p 'test_*.py' -q
