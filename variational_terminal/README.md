@@ -11,7 +11,9 @@ execution or a port of EdgeX performance results.
   underlying, market basis, liquidity or instrument specification; check the asset
   on Omni before use. Unmapped markets remain in the full Omni market listing.
 - All pages prominently disclose reference prices. Quotes can be cached for up to
-  600s; fetch time is not mark/quote update time. `native_entry_ready` is always
+  600s; fetch time is not mark/quote update time. Funding is displayed as the
+  API raw value with its calculation window: the API field rate basis is not
+  verified, so no per-period percentage, APR or funding payment is inferred. `native_entry_ready` is always
   false. These indications do not certify a tradable RFQ.
 - Own database, VAPID key and subscriptions. No imported EdgeX histories,
   subscriptions, account funds, secrets or orders. Own persistent volume required.

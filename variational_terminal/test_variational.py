@@ -41,6 +41,8 @@ class StatsTests(unittest.TestCase):
     def test_precision_and_optional_fields(self):
         m=parse_stats({'listings':[listing(),dict(ticker='ETH')]},observed_ms=NOW)
         self.assertEqual(m['BTC']['mark_price'],'100.123456789012345')
+        self.assertEqual(m['BTC']['funding_rate'],'0')
+        self.assertEqual(m['BTC']['funding_rate_basis'],'UNVERIFIED_API_UNIT')
         self.assertIsNone(m['ETH']['mark_price'])
         self.assertIsNone(m['ETH']['mark_updated_ms'])
         self.assertIsNone(m['ETH']['indicative_bid'])
@@ -51,6 +53,12 @@ class StatsTests(unittest.TestCase):
         self.assertIsNone(numeric('-1',positive=True))
         self.assertIsNone(numeric('0',positive=True))
         self.assertEqual(numeric('-0.05'),'-0.05')
+
+    def test_ui_does_not_invent_funding_rate_period_or_units(self):
+        js=Path(s.__file__).with_name('venue.js').read_text()
+        self.assertNotIn('Number(m.funding_rate)*100',js)
+        self.assertIn('Funding API値',js)
+        self.assertIn('単位は未確認',js)
 
     def test_invalid_stats_and_duplicate_symbols(self):
         for raw in ({},dict(listings=[]),dict(listings=[listing(),listing()]),dict(listings=[dict(ticker='<script>')])):

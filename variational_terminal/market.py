@@ -54,6 +54,7 @@ def parse_stats(raw, *, observed_ms):
         markets[ticker] = dict(ticker=ticker, name=str(item.get('name') or ticker)[:150],
             mark_price=numeric(item.get('mark_price'), positive=True),
             volume_24h=numeric(item.get('volume_24h')), funding_rate=numeric(item.get('funding_rate')),
+            funding_rate_basis='UNVERIFIED_API_UNIT',
             funding_interval_s=numeric(item.get('funding_interval_s'), positive=True),
             long_open_interest=numeric(oi.get('long_open_interest')),
             short_open_interest=numeric(oi.get('short_open_interest')),
