@@ -13,3 +13,12 @@ function event(request){return {request,respondWith(p){this.response=p},waitUnti
  fail=true;n=event({url:'https://variational.example/btc',method:'GET',mode:'navigate'});handlers.fetch(n);assert.equal(await n.response,offline);
  assert(handlers.push&&handlers.notificationclick);console.log('Offline fallback, cache isolation and notification handlers passed');
 })().catch(e=>{console.error(e);process.exitCode=1});
+// An already installed v1 worker must not return its old SVG-only manifest for
+// the versioned manifest URL rendered by the upgraded app.
+(async()=>{
+ const h={};const legacy={URL,location:{origin:'https://variational.example'},self:{addEventListener(t,fn){h[t]=fn}},
+  caches:{match:async req=>req.url.endsWith('/manifest.webmanifest')?{legacy:true}:undefined},fetch:async()=>({fresh:true})};
+ vm.runInNewContext(fs.readFileSync(__dirname+'/../analysis_terminal/sw.js','utf8'),legacy);
+ const request={url:'https://variational.example/manifest.webmanifest?v=1.0.1',method:'GET',mode:'cors'};
+ const e=event(request);h.fetch(e);assert.equal((await e.response).fresh,true);
+})().catch(e=>{console.error(e);process.exitCode=1});

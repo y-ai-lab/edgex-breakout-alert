@@ -5,6 +5,11 @@ from pathlib import Path
 BANNER = '''<aside id="venueDisclosure" class="analyticsBox" role="note"><b>Variational Omni · 参考足で分析</b><p class="sub">Omniの公開価格・Funding・OIはAPI欄と個別分析上部に表示します。銘柄一覧の価格・出来高・騰落、4H・15M・BTCチャート、Entry / SL / TP / RRはEdgeXの参考足で計算します。READYは参考足の条件成立で、Omniでのエントリー可否・約定・保護注文を保証しません。</p></aside>'''
 API = '''<div class="analyticsBox" id="variationalApiInfo"><h3>Variational 市場データ</h3><p class="sub">公開統計APIを使用しています。取引・署名・口座APIには接続しません。提示quoteは最大600秒キャッシュされる参考値で、確約価格ではありません。価格の更新時刻が不明な場合は不明と表示します。FundingはAPI原値と計算窓を表示し、率の期間単位が未確認のため支払率・年率へ換算しません。</p><a href="https://omni.variational.io" target="_blank" rel="noopener noreferrer">Omniで価格・建玉・SL/TPを確認 ↗</a><div id="venueCoverage" class="status" role="status">確認中…</div><label for="venueSearch">Variationalの全銘柄を検索</label><input id="venueSearch" placeholder="BTC / ETH / 銘柄名" maxlength="64"><div id="venueMarketTable" class="scroll" style="max-height:360px"></div></div>'''
 STYLE = '''<style>
+#pwaInstall{margin:12px 0;padding:14px;border:1px solid #334155;border-radius:14px;background:#101620}
+#pwaInstall .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+#pwaInstall .sub,#pwaInstallGuide .sub{color:#aab4c4;font-size:13px;line-height:1.7}
+#pwaInstall .primary,#pwaInstallGuide .primary{background:#e1f3fc;color:#0b0d12;font:inherit;font-weight:700;min-height:44px;border:0;border-radius:10px;padding:10px 16px}
+#pwaInstallGuide{font:inherit;line-height:1.7}#pwaInstallGuide::backdrop{background:rgba(0,0,0,.65)}
 #executionControlUnlock,#executionControlLock,#executionControlOn,#executionControlOff,#executionControlRefresh,#executionControlReconcile,#executionControlStatus,#executionControlNextStep,#accountViewDetails,#liveExecutionDetails,#capitalRefresh,#capitalStatus {display:none!important}
 #api>.analyticsBox:has(#executionControlOn),#dashboard>.analyticsBox:has(#liveExecutionBadge){display:none!important}
 #api>.dashboardHero>.sub {display:none}
@@ -25,7 +30,12 @@ def render(html, *, btc=False):
     html = re.sub(r'v19\.0\.\d+', 'v1.0.1', html)
     install_html = Path(__file__).with_name('install.html').read_text()
     install_script = Path(__file__).with_name('install.js').read_text()
-    html = html.replace('</head>', STYLE+'<link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png"><script>\n'+install_script+'\n</script></head>')
+    # A versioned manifest bypasses the previous worker's SVG-only manifest cache.
+    # Keep the manifest id/start_url stable so existing installations retain identity.
+    html = re.sub(r'<link\s+rel="manifest"[^>]*>', '', html)
+    if 'name="apple-mobile-web-app-capable"' not in html:
+        html = html.replace('</head>','<meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Variational"></head>')
+    html = html.replace('</head>', STYLE+'<link rel="manifest" href="/manifest.webmanifest?v=1.0.1"><link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png"><script>\n'+install_script+'\n</script></head>')
     if '<div class="appHeader">' in html:
         html = html.replace('<div class="appHeader">',install_html+'<div class="appHeader">',1)
     else:
