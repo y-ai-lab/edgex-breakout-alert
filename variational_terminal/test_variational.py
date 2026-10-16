@@ -219,4 +219,60 @@ class AsyncTests(unittest.IsolatedAsyncioTestCase):
             subprocess.run(['node'],input=check,text=True,check=True,capture_output=True)
 
 
+class PwaTests(unittest.IsolatedAsyncioTestCase):
+    async def test_installable_manifest_icons_and_existing_identity(self):
+        import struct
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=s.app),base_url='https://variational.example') as c:
+            response=await c.get('/manifest.webmanifest')
+            self.assertEqual(response.status_code,200)
+            self.assertIn('application/manifest+json',response.headers['content-type'])
+            m=response.json()
+            self.assertEqual(m['id'],'/?tab=dashboard')
+            self.assertEqual(m['id'],m['start_url'])
+            self.assertEqual(m['scope'],'/')
+            self.assertEqual(m['display'],'standalone')
+            for icon in m['icons']:
+                r=await c.get(icon['src']);self.assertEqual(r.status_code,200)
+                if icon['type']=='image/png':
+                    self.assertTrue(r.content.startswith(b'\x89PNG\r\n\x1a\n'))
+                    width,height=struct.unpack('>II',r.content[16:24])
+                    self.assertEqual(icon['sizes'],f'{width}x{height}')
+            apple=await c.get('/icons/apple-touch-icon.png')
+            self.assertEqual(struct.unpack('>II',apple.content[16:24]),(180,180))
+            self.assertEqual((await c.get('/icons/secret.pem')).status_code,404)
+
+    async def test_install_controls_on_main_and_btc_pages(self):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=s.app),base_url='https://variational.example') as c:
+            for path in ['/','/btc']:
+                r=await c.get(path)
+                self.assertEqual(r.status_code,200)
+                self.assertEqual(r.text.count('id="pwaInstallButton"'),1)
+                self.assertIn('rel="apple-touch-icon"',r.text)
+                self.assertIn('pwaInstallGuide',r.text)
+                self.assertIn('ホーム画面',r.text)
+                self.assertIn('v1.0.1',r.text)
+                nonce=re.search("script-src 'nonce-([^']+)'",r.headers['content-security-policy']).group(1)
+                self.assertTrue(all(n==nonce for n in re.findall('<script nonce="([^"]+)"',r.text)))
+
+    async def test_offline_page_contains_no_prices_or_ready_actions(self):
+        r=await s.offline_page()
+        html=r.body.decode()
+        self.assertIn('オフライン',html)
+        self.assertIn('最新の市場データとエントリー可否を確認できません',html)
+        self.assertNotIn('entryNowZone',html)
+        self.assertNotIn('READY',html)
+        self.assertNotIn('<script',html)
+
+    async def test_install_state_and_worker_cache_logic(self):
+        for script in ['test_install_ui.js','test_service_worker.js']:
+            result=subprocess.run(['node',str(Path(s.__file__).with_name(script))],text=True,capture_output=True)
+            self.assertEqual(result.returncode,0,result.stderr)
+
+    async def test_service_worker_script_syntax(self):
+        r=await s.service_worker()
+        subprocess.run(['node'],input='new Function('+json.dumps(r.body.decode())+');',text=True,check=True,capture_output=True)
+        self.assertEqual(r.headers['service-worker-allowed'],'/')
+        self.assertEqual(r.headers['cache-control'],'no-cache')
+
+
 if __name__=='__main__':unittest.main()

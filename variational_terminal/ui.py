@@ -22,8 +22,14 @@ def render(html, *, btc=False):
     html = html.replace('pro.variational.exchange/en-US/portfolio/overview','omni.variational.io')
     html = html.replace('現在価格','参考価格').replace('エントリー可能','参考条件成立').replace('ENTRY NOW','ENTRY NOW · 参考')
     html = html.replace('エントリー候補とAPI自動取引の稼働状態を確認できます。','Omniの市場情報とEdgeX参考足の条件成立を確認できます。')
-    html = html.replace('v19.0.81','v1.0.0')
-    html = html.replace('</head>',STYLE+'</head>')
+    html = re.sub(r'v19\.0\.\d+', 'v1.0.1', html)
+    install_html = Path(__file__).with_name('install.html').read_text()
+    install_script = Path(__file__).with_name('install.js').read_text()
+    html = html.replace('</head>', STYLE+'<link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png"><script>\n'+install_script+'\n</script></head>')
+    if '<div class="appHeader">' in html:
+        html = html.replace('<div class="appHeader">',install_html+'<div class="appHeader">',1)
+    else:
+        html = html.replace('<body>','<body>'+install_html,1)
     if btc:
         html = html.replace('<body>','<body>'+BANNER)
         return html

@@ -1,0 +1,18 @@
+{
+  "id": "/?tab=dashboard",
+  "name": "Variational 分析ターミナル",
+  "short_name": "Variational",
+  "description": "Omni市場情報と明示された参考足の分析・候補通知・履歴",
+  "lang": "ja",
+  "start_url": "/?tab=dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0b0d12",
+  "theme_color": "#0b0d12",
+  "icons": [
+    {"src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+    {"src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"},
+    {"src": "/app-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any"}
+  ]
+}

@@ -24,7 +24,7 @@ from analysis_terminal import server as core
 from variational_terminal.market import StatsClient, PROVENANCE, view
 from variational_terminal.ui import render
 
-VERSION = '1.0.0'
+VERSION = '1.0.1'
 ORIGIN = os.getenv('VARIATIONAL_PUBLIC_ORIGIN', 'http://localhost:8000').rstrip('/')
 DB_PATH = Path(os.getenv('VARIATIONAL_DB_PATH', '/data/variational_terminal.db'))
 if DB_PATH.name == 'analysis_terminal.db':
@@ -336,14 +336,13 @@ async def btc_page():
 
 @app.get('/manifest.webmanifest')
 async def manifest():
-    content = json.loads((Path(core.__file__).parent/'manifest.webmanifest').read_text())
-    content.update(name='Variational 分析ターミナル',short_name='Variational',description='Omni市場情報と明示された参考足の分析')
-    return JSONResponse(content,media_type='application/manifest+json')
+    content = json.loads(Path(__file__).with_name('manifest.webmanifest').read_text())
+    return JSONResponse(content,media_type='application/manifest+json',headers={'Cache-Control':'no-cache'})
 
 
 @app.get('/sw.js')
 async def service_worker():
-    text = (Path(core.__file__).parent/'sw.js').read_text().replace('edgex','variational').replace('EdgeX','Variational')
+    text = Path(__file__).with_name('sw.js').read_text()
     from fastapi.responses import Response
     return Response(text,media_type='application/javascript',headers={'Cache-Control':'no-cache','Service-Worker-Allowed':'/'})
 
@@ -351,6 +350,19 @@ async def service_worker():
 @app.get('/app-icon.svg')
 async def icon():
     return FileResponse(Path(__file__).with_name('app-icon.svg'),media_type='image/svg+xml')
+
+
+@app.get('/icons/{name}')
+async def pwa_icon(name: str):
+    if name not in {'icon-192.png','icon-512.png','apple-touch-icon.png'}:
+        raise HTTPException(404,'Icon not found')
+    return FileResponse(Path(__file__).with_name('icons')/name,media_type='image/png',
+                        headers={'Cache-Control':'public, max-age=3600'})
+
+
+@app.get('/offline.html')
+async def offline_page():
+    return core.push_security.html_response(Path(__file__).with_name('offline.html').read_text())
 
 
 if __name__ == '__main__':

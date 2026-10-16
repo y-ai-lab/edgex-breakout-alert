@@ -1,0 +1,11 @@
+<section id="pwaInstall" class="analyticsBox" aria-label="アプリのインストール">
+  <div class="row" style="justify-content:space-between"><b>ホーム画面から使う</b><button id="pwaInstallButton" type="button" class="primary">アプリの追加方法</button></div>
+  <p id="pwaInstallStatus" class="sub" role="status" aria-live="polite">スマホやPCに追加し、アプリとして起動できます。</p>
+  <button id="pwaInstallHelp" type="button" class="ghost">iPhone・Android・PCの追加方法</button>
+</section>
+<dialog hidden id="pwaInstallGuide" aria-labelledby="pwaInstallTitle" style="max-width:min(500px,calc(100vw - 48px));background:#101620;color:#eef2f7;border:1px solid #334155;border-radius:18px;padding:24px">
+  <h2 id="pwaInstallTitle">Variationalをアプリとして追加</h2>
+  <p id="pwaInstallSteps" style="line-height:1.8"></p>
+  <p class="sub">追加後はホーム画面やアプリ一覧のVアイコンから開けます。分析にはインターネット接続が必要です。通知は追加後にアプリ内でONにしてください。</p>
+  <button id="pwaInstallClose" type="button" class="primary">閉じる</button>
+</dialog>

@@ -36,3 +36,14 @@ Watch paths: `/variational_terminal/**`, `/analysis_terminal/**`, `/app.py`,
 Tests: `python -m unittest discover -s variational_terminal -p 'test_*.py' -v`.
 The original analysis/research tests must also pass unchanged. Browser testing
 covers all four tabs, mobile layout, analysis charts and JavaScript console errors.
+
+
+## Install as an app
+
+Open the HTTPS app URL in Safari (iPhone/iPad) or Chrome/Edge (Android/PC).
+Use the visible install button; if the browser does not offer a native prompt,
+the button shows platform-specific Add to Home Screen instructions. Installed
+windows use standalone display. Existing app identity and service-worker URL are
+preserved; no subscription reset or automatic notification permission request.
+192/512 PNG icons and an Apple 180 PNG are provided. Offline navigation displays
+an unavailable-data page; API data and candidate pages are never cached.
