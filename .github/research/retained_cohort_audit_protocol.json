@@ -1,0 +1,52 @@
+{
+  "protocol": "retained_original_closed_outcomes_audit_v1",
+  "purpose": "Offline continuity audit of previously viewed retained public research archives; no new hypothesis, market fetch, original reconstruction, artifact reupload or latest-run replacement.",
+  "registration_base_sha": "20788cdbe0b64a2550d0baf2660703888a850619",
+  "cohort_start_ms": 1791331200000,
+  "cohort_end_ms": 1791936000000,
+  "retained_end_ms": 1792368000000,
+  "fixed_cutoff_ms": 1792540800000,
+  "first_main_run_id": 38514910609,
+  "first_main_sha": "3393db09c5ea9447455d6935f31cfc938b65c50a",
+  "archives": {
+    "frozen": {
+      "artifact_id": 11871366807,
+      "sha256": "888e9b352e0fb95a07e589a1448dac24b509bc4967abd70b7d63e3cacae0d806"
+    },
+    "source": {
+      "artifact_id": 11872175802,
+      "sha256": "7935362d625a3340b3b68995345bcaea0c19e66407563cd882591d382754e68c"
+    },
+    "retained": {
+      "artifact_id": 12164327517,
+      "sha256": "f3b852c19ebce573446a5ba1b29af9a3ab0a15498ab741e245f75eaf9e2010ab"
+    }
+  },
+  "original_report_sha256": "40d27d433b9a8c483d79efb5a258c77f82fab074aeca1f5c82369ea09954c617",
+  "original_source_sha256": "59ee6c43efff7ff6e0342bad35229cbcd922a6736027a3f52f0999e43b589dcb",
+  "retained_followup_report_sha256": "285667c7c5c5b5cd1086a1cbb6da251a91022779c880f6b6277c94eadd0d20d8",
+  "frozen_dependencies_sha256": {
+    "app.py": "b1f4d4d15dc1ce4665f0f9f776de050059b60fb18faa4cf1583b04bf02a6c4af",
+    "analysis_terminal/pending_entry_replay.py": "111686641afe5e61c64311fa730716b5198d3a74e34440e06f48d99da3c53df8",
+    "analysis_terminal/pending_entry_protocol.json": "1ed8af4b9bb0dd7281e80a21956677bb6d9e315f47fb0c00689992662a29ee0f",
+    "analysis_terminal/pending_followup.py": "c859e6f1502c10272e14f7282cc7e0b95cac9e3ce83da8bd9dc775bcf768ce81",
+    "analysis_terminal/pending_followup_protocol.json": "a00ab5015403ec7e489efed2882b37cacec42fb8666ba8fbd2e5c6d9767ff356",
+    "analysis_terminal/execution_funnel.py": "8159e9ae6362d6f71227c944580e4ad0d954e56033b98b926ca688b1b17d19da",
+    ".github/workflows/strategy-research.yml": "f350735b1f014149e6cb3bf311fdc8e2d47f47ede7e70f3d9e86f7d6910319bc"
+  },
+  "sequence": [
+    "Verify all pinned ZIP bytes and original seal/source equality.",
+    "Reproduce original complete weekly ledger from its original full market source before reading retained outcomes.",
+    "Reproduce retained followup, candle manifest and immutable non-OPEN records.",
+    "Refuse completion if any originally filled OPEN still has OPEN status in the reproduced retained report.",
+    "After the original fixed cutoff only, run the unchanged original evaluator with exactly the same saved candles to the fixed cutoff.",
+    "Require every candidate row, outcome, metric and portfolio to equal retained results; only calendar cutoff/completion metadata may advance.",
+    "Write separate exclusive local audit output; keep first main final artifact status unavailable and latest missing review blocked."
+  ],
+  "unresolved": "AMBIGUOUS/DATA_GAP and unfilled PENDING remain censored with original capital locked; no inference, expiry or release. A completed observation horizon is not complete outcomes or practical qualification.",
+  "no_network": true,
+  "changes_live_rules": false,
+  "automatic_promotion": false,
+  "real_orders_enabled": false,
+  "new_independent_samples": false
+}
